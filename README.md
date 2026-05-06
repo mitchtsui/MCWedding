@@ -32,11 +32,23 @@ Both HTML files are **fully self-contained** — no build step, no dependencies,
 2. Run `supabase/schema_seed.sql` in the Supabase SQL Editor
    - Creates both tables, seeds all 198 guests, **and** generates a unique invitation code per guest, sets up RLS, and creates the public RPCs (`lookup_invitation`, `lookup_seats`, `submit_rsvp`).
    - The script is idempotent — safe to run multiple times.
-3. Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY` in **both**:
-   - `wedding-invitation.html`
-   - `seating-planner.html`
+3. In Vercel → Project → **Settings → Environment Variables**, add:
+   - `SUPABASE_URL` → `https://yourproject.supabase.co`
+   - `SUPABASE_ANON_KEY` → the anon public JWT (starts `eyJ…`)
 
-> Until credentials are added, both files run in demo mode. The RSVP page accepts `?code=MC-DEMO1` (single guest) or `?code=MC-DEMO2` (couple) for end-to-end UI testing without a database.
+   Both values come from Supabase → Project Settings → API. Apply to all environments (Production / Preview / Development).
+4. Redeploy on Vercel (or push any commit) so `/api/config.js` picks up the new vars.
+5. In Supabase → **Authentication → URL Configuration**:
+   - **Site URL** → your Vercel domain (e.g. `https://mcwedding.vercel.app`)
+   - **Redirect URLs** → add `https://your-domain/seating-planner.html`
+
+   Without this, the seating-planner magic link won't redirect correctly.
+
+> The HTML files load `/api/config.js`, a Vercel serverless function that reads the env vars at runtime and exposes them on `window`. Nothing secret is hardcoded; the anon key is designed to be public (security comes from RLS).
+>
+> Until env vars are set, both files run in demo mode. The RSVP page accepts `?code=MC-DEMO1` (single guest) or `?code=MC-DEMO2` (couple) for end-to-end UI testing without a database.
+
+> **Local dev**: static-server tools won't run `/api/*.js`. Use `vercel dev` (from the Vercel CLI) to serve the project including the serverless function locally.
 
 ### 3. Pair couples onto a shared invitation code (optional)
 
@@ -126,9 +138,10 @@ Row-level security is enabled. Public users can read `guests` and insert to `rsv
 ## Pending before go-live
 
 - [ ] Run `supabase/schema_seed.sql` in the Supabase SQL Editor
-- [ ] Add Supabase credentials to `wedding-invitation.html` **and** `seating-planner.html`
+- [ ] Add `SUPABASE_URL` + `SUPABASE_ANON_KEY` to Vercel env vars
+- [ ] Add the Vercel domain to Supabase Auth → Site URL + Redirect URLs
 - [ ] Pair couples onto shared codes via `pair_invitation()`
-- [ ] Export `invitation_print_list` and write codes onto physical invitations
+- [ ] Generate the per-guest URL list (see SQL below) and distribute
 - [ ] Sign in to seating planner and assign tables/seats
 - [ ] Upload pre-wedding photos to Gallery section
 - [ ] Confirm 22 pending guests

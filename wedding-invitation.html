@@ -1583,11 +1583,15 @@
   <p>November 12, 2026 &nbsp;·&nbsp; The Peninsula Hong Kong</p>
 </footer>
 
+<!-- Loads SUPABASE_URL / SUPABASE_ANON_KEY onto window from Vercel env vars -->
+<script src="/api/config.js"></script>
+
 <script>
   // ─── SUPABASE CONFIG ───
-  // Replace these with your actual Supabase credentials
-  const SUPABASE_URL = 'YOUR_SUPABASE_URL';
-  const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+  // Values are injected by /api/config.js (reads from Vercel env vars).
+  // If unset, the page falls back to demo mode.
+  const SUPABASE_URL      = (typeof window !== 'undefined' && window.SUPABASE_URL)      || '';
+  const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || '';
 
   // ─── INVITATION CODE FLOW ───
   // Reads ?code=MC-XXXXX from the URL, looks up the household,
@@ -1612,7 +1616,7 @@
   }
 
   async function rpc(fn, body) {
-    if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !SUPABASE_URL) {
+    if (!SUPABASE_URL || !SUPABASE_ANON_KEY) {
       // Demo mode — return a mock response so the flow is visible without DB.
       return demoRpc(fn, body);
     }

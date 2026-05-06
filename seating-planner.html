@@ -6,6 +6,8 @@
 <title>Seating Planner — Christy & Mitchell</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Loads SUPABASE_URL / SUPABASE_ANON_KEY onto window from Vercel env vars -->
+<script src="/api/config.js"></script>
 <style>
   :root {
     --bg: #EAE5DB;
@@ -514,9 +516,9 @@
 
 <script>
 // ─── SUPABASE CONFIG ───
-// Replace with your project credentials.
-const SUPABASE_URL      = 'YOUR_SUPABASE_URL';
-const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+// Values injected by /api/config.js (reads from Vercel env vars).
+const SUPABASE_URL      = (typeof window !== 'undefined' && window.SUPABASE_URL)      || '';
+const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || '';
 
 const ADMIN_ALLOWLIST = [
   'christychowtc@gmail.com',
@@ -552,7 +554,7 @@ function escHtml(s) {
 
 // ─── AUTH ───
 function isConfigured() {
-  return SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY' && SUPABASE_URL && SUPABASE_ANON_KEY;
+  return !!(SUPABASE_URL && SUPABASE_ANON_KEY);
 }
 
 function initSupabase() {
@@ -569,7 +571,7 @@ async function bootstrap() {
   if (!sb) {
     document.getElementById('auth-msg').className = 'auth-msg error';
     document.getElementById('auth-msg').textContent =
-      'Supabase not configured. Replace SUPABASE_URL / SUPABASE_ANON_KEY in this file.';
+      'Supabase not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel env vars.';
     return;
   }
 
