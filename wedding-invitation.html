@@ -59,14 +59,37 @@
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--divider);
-    display: flex;
-    justify-content: center;
-    gap: 2.5rem;
-    padding: 0.9rem 2rem;
+    padding: 0.7rem 2rem;
     transition: box-shadow 0.3s;
   }
   nav.scrolled { box-shadow: 0 2px 12px rgba(44,40,32,0.06); }
-  nav a {
+  .nav-burger {
+    display: none;
+    flex-direction: column;
+    justify-content: space-between;
+    width: 22px; height: 16px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    padding: 0;
+  }
+  .nav-burger span {
+    display: block;
+    height: 2px;
+    background: var(--text);
+    width: 100%;
+    transition: transform 0.2s, opacity 0.2s;
+  }
+  nav.open .nav-burger span:nth-child(1) { transform: translateY(7px) rotate(45deg); }
+  nav.open .nav-burger span:nth-child(2) { opacity: 0; }
+  nav.open .nav-burger span:nth-child(3) { transform: translateY(-7px) rotate(-45deg); }
+  .nav-list {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 2.5rem;
+  }
+  .nav-link {
     font-family: 'Raleway', sans-serif;
     font-size: 0.7rem;
     font-weight: 500;
@@ -74,11 +97,52 @@
     text-transform: uppercase;
     color: var(--text-mid);
     text-decoration: none;
-    padding-bottom: 2px;
+    padding: 6px 0;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
     border-bottom: 1px solid transparent;
     transition: color 0.2s, border-color 0.2s;
+    white-space: nowrap;
   }
-  nav a:hover, nav a.active { color: var(--text); border-bottom-color: var(--olive); }
+  .nav-link:hover, .nav-link.active { color: var(--text); border-bottom-color: var(--olive); }
+  .nav-dropdown { position: relative; }
+  .nav-menu {
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    min-width: 280px;
+    padding: 0.4rem 0;
+    margin-top: 0.6rem;
+    display: none;
+    z-index: 110;
+    box-shadow: 0 6px 20px rgba(44,40,32,0.08);
+  }
+  .nav-dropdown.open .nav-menu { display: block; }
+  .nav-menu a {
+    display: block;
+    padding: 0.7rem 1.1rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.66rem;
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    text-decoration: none;
+    white-space: nowrap;
+    border-bottom: 0;
+    transition: background 0.15s, color 0.15s;
+  }
+  .nav-menu a:hover { background: var(--bg-card); color: var(--text); }
+  .nav-menu a.active { color: var(--olive); }
+  .caret { font-size: 0.55rem; transition: transform 0.2s; }
+  .nav-dropdown.open .caret { transform: rotate(180deg); }
 
   /* ─── SECTIONS ─── */
   section { padding: 6rem 2rem; }
@@ -866,18 +930,54 @@
      ═══════════════════════════════════════ */
   @media (max-width: 700px) {
 
-    /* ── NAV ── */
+    /* ── NAV — hamburger + accordion ── */
     nav {
-      padding: 0.6rem 1rem;
-      justify-content: flex-start;
-      overflow-x: auto;
-      -webkit-overflow-scrolling: touch;
-      scrollbar-width: none;
-      gap: 1.4rem;
-      flex-wrap: nowrap;
+      padding: 0.7rem 1.2rem;
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      justify-content: space-between;
     }
-    nav::-webkit-scrollbar { display: none; }
-    nav a { font-size: 0.58rem; letter-spacing: 0.14em; white-space: nowrap; }
+    .nav-burger { display: flex; }
+    .nav-list {
+      display: none;
+      flex-direction: column;
+      width: 100%;
+      gap: 0;
+      padding-top: 0.6rem;
+      align-items: stretch;
+    }
+    nav.open .nav-list { display: flex; }
+    .nav-link {
+      padding: 0.85rem 0.4rem;
+      border-bottom: 1px solid var(--divider);
+      width: 100%;
+      justify-content: space-between;
+      text-align: left;
+      font-size: 0.62rem;
+    }
+    .nav-link:hover, .nav-link.active {
+      border-bottom-color: var(--divider);
+    }
+    .nav-link.active { color: var(--olive); }
+    .nav-dropdown { width: 100%; }
+    .nav-menu {
+      position: static;
+      transform: none;
+      box-shadow: none;
+      border: none;
+      margin: 0;
+      width: 100%;
+      background: var(--bg-card);
+      padding: 0;
+      min-width: 0;
+    }
+    .nav-menu a {
+      padding: 0.75rem 1.4rem;
+      font-size: 0.58rem;
+      border-bottom: 1px dotted var(--divider);
+    }
+    .nav-menu a:last-child { border-bottom: none; }
 
     /* ── SECTIONS ── */
     section { padding: 3.5rem 1.2rem; }
@@ -1007,14 +1107,35 @@
 
 <!-- ─── NAV ─── -->
 <nav id="nav">
-  <a href="#home" class="active">Home</a>
-  <a href="#story">Our Story</a>
-  <a href="#chambolle">Chambolle</a>
-  <a href="#wedding-day">Wedding Day</a>
-  <a href="#travel">Travel</a>
-  <a href="#gallery">Gallery</a>
-  <a href="#qa">Q &amp; A</a>
-  <a href="#rsvp">RSVP</a>
+  <button class="nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false" onclick="toggleNav()">
+    <span></span><span></span><span></span>
+  </button>
+  <div class="nav-list" id="nav-list">
+    <a href="#home" class="nav-link active" onclick="closeNav()">Home</a>
+
+    <div class="nav-dropdown" data-dropdown="scroll-past">
+      <button class="nav-link nav-trigger" onclick="toggleDropdown(event,'scroll-past')">
+        Feel Free to Scroll Past <span class="caret">▾</span>
+      </button>
+      <div class="nav-menu">
+        <a href="#story"     onclick="closeNav()">A Timeline Nobody Requested</a>
+        <a href="#chambolle" onclick="closeNav()">Our Child (Don't Argue)</a>
+        <a href="#gallery"   onclick="closeNav()">Photos We Paid Too Much For</a>
+      </div>
+    </div>
+
+    <div class="nav-dropdown" data-dropdown="actually-read">
+      <button class="nav-link nav-trigger" onclick="toggleDropdown(event,'actually-read')">
+        Please Actually Read This <span class="caret">▾</span>
+      </button>
+      <div class="nav-menu">
+        <a href="#wedding-day" onclick="closeNav()">Show Up or Explain Yourself</a>
+        <a href="#travel"      onclick="closeNav()">Find Your Own Way</a>
+        <a href="#qa"          onclick="closeNav()">Read Before You Text Us</a>
+        <a href="#rsvp"        onclick="closeNav()">RSVP</a>
+      </div>
+    </div>
+  </div>
 </nav>
 
 <!-- ─── HERO ─── -->
@@ -1064,11 +1185,12 @@
       </div>
       <div class="story-body reveal">
         <div class="eyebrow">Our Story</div>
-        <div class="story-quote">"Ten years passed almost quietly — somewhere between the ordinary days and the unforgettable ones."</div>
-        <p>We met at university, when days were measured in semesters and coffee breaks, and the future felt both distant and full of promise.</p>
-        <p>What began as shared lectures and long conversations slowly became a life lived side by side. Over ten years, we grew — from students into working adults, from familiar streets to building a home in the UK.</p>
-        <p>We learned that love is not just found in big moments, but in showing up, again and again, through change, uncertainty, and everyday life.</p>
-        <p>So after ten years together, we decided it was time to say "yes" — not to something new, but to what we had been choosing all along. And yes… we're finally making it official.</p>
+        <h2 class="section-title">A Timeline <em>Nobody Requested</em></h2>
+        <div class="story-quote">"Ten years. One corgi. Zero regrets (probably)."</div>
+        <p>We met at university — back when the biggest decisions were which lectures to skip and which instant noodles to buy. It was not love at first sight. Christy made good decisions. Mitchell made Christy's decisions slightly more interesting.</p>
+        <p>What followed was a decade of building a life together — new cities, new jobs, one very opinionated corgi — held together by the kind of love that doesn't announce itself loudly, but simply refuses to leave.</p>
+        <p>We grew up, more or less. We won't pretend every day was poetic. Some days were very much about whose turn it was to do the dishes. But we kept showing up for each other, through the mundane and the meaningful, and somewhere along the way it became the best thing either of us ever accidentally did.</p>
+        <p>After a decade of practice runs, we decided to make it permanent. This is that wedding. You're invited. Please come — we've already paid for your dinner.</p>
       </div>
     </div>
   </div>
@@ -1080,8 +1202,11 @@
     <div class="chambolle-card reveal">
       <div class="chambolle-info">
         <div class="eyebrow">A Quick Introduction</div>
-        <h2 class="section-title">Meet <em>Chambolle</em></h2>
-        <p style="color: var(--text-mid); font-size: 1rem;">Pembroke Welsh Corgi. Named after the village in Burgundy that started one of our favourite shared passions. Chief Greeter and General Manager of Household Morale.</p>
+        <h2 class="section-title">Our Child <em>(Don't Argue)</em></h2>
+        <p style="color: var(--text-mid); font-size: 1rem;">Meet Chambolle. He is a Pembroke Welsh Corgi. He is also, legally and emotionally, our child — and we will not be taking questions.</p>
+        <p style="color: var(--text-mid); font-size: 1rem; margin-top: 0.8rem;">Named after the village in Burgundy that started one of our most expensive hobbies. (The wine, not the dog. Though honestly, similar budget.)</p>
+        <p style="color: var(--text-mid); font-size: 1rem; margin-top: 0.8rem;">He did not attend the engagement. He was not consulted on the venue. He has opinions about the seating plan that we have chosen to ignore.</p>
+        <p style="color: var(--text-mid); font-size: 1rem; margin-top: 0.8rem;">He will not be at the wedding. He is devastated. We are not sorry.</p>
       </div>
       <div class="chambolle-photo">
         <div class="chambolle-slideshow" id="chambolle-slideshow">
@@ -1130,22 +1255,22 @@
         <div class="timeline-item reveal">
           <div class="timeline-time">17:00 – 18:00</div>
           <div>
-            <div class="timeline-title">Guest Arrival</div>
-            <div class="timeline-desc">Guests are welcome to arrive early and enjoy light refreshments. Complimentary Mahjong will be available while you mingle and settle in before the ceremony.</div>
+            <div class="timeline-title">Show Up &amp; Play Mahjong</div>
+            <div class="timeline-desc">Arrive early. There will be food. There will be drinks. There will be Mahjong — and yes, it is complimentary, so please do not ask. This is your window to mingle, settle in, and mentally prepare for what is about to happen. We recommend arriving on time. We know you won't. The Mahjong will be waiting.</div>
           </div>
         </div>
         <div class="timeline-item reveal">
           <div class="timeline-time">18:30 – 19:30</div>
           <div>
-            <div class="timeline-title">Wedding Ceremony</div>
-            <div class="timeline-desc">Together with our families, we invite you to celebrate our wedding at The Salisbury Room.</div>
+            <div class="timeline-title">The Point of No Return</div>
+            <div class="timeline-desc">This is it. Ten years, one corgi, and a considerable amount of convincing later — we are doing this. Together with our families, we invite you to witness the moment it becomes official, permanent, and legally complicated to undo. The Salisbury Room, The Peninsula Hong Kong. Please be seated. Please don't cry before we do.</div>
           </div>
         </div>
         <div class="timeline-item reveal">
           <div class="timeline-time">19:45 – 23:00</div>
           <div>
-            <div class="timeline-title">Dinner Reception</div>
-            <div class="timeline-desc">As the evening unfolds, we invite you to gather with us for a dinner celebration filled with warmth, gratitude, and joy. A traditional Chinese wedding banquet will be served, paired with a thoughtfully curated wine list selected by Mitchell himself.</div>
+            <div class="timeline-title">The Part You Actually Came For</div>
+            <div class="timeline-desc">A traditional Chinese wedding banquet, because some things should never be compromised. The wine list has been personally curated by Mitchell, who spent an unreasonable amount of time on this and would like you to notice. There will be warmth, gratitude, joy, and multiple courses. Pace yourself. It's a long night and the wine is very good.</div>
           </div>
         </div>
       </div>
@@ -1157,9 +1282,12 @@
 <section id="travel">
   <div class="container">
     <div class="section-divider reveal"></div>
-    <div style="text-align:center;margin-bottom:3rem;" class="reveal">
+    <div style="text-align:center;margin-bottom:2rem;" class="reveal">
       <div class="eyebrow">Getting There</div>
       <h2 class="section-title">The Peninsula <em>Hong Kong</em></h2>
+    </div>
+    <div style="text-align:center;max-width:640px;margin:0 auto 2.5rem;color:var(--text-mid);font-size:1rem;line-height:1.7;" class="reveal">
+      <p>The venue is The Salisbury Room at The Peninsula Hong Kong, Salisbury Road, Tsim Sha Tsui, Kowloon. It is one of Hong Kong's most iconic hotels and has been standing since 1928, so it should not be difficult to find. We believe in you.</p>
     </div>
     <div class="map-wrapper reveal">
       <iframe
@@ -1191,9 +1319,9 @@
       </div>
     </div>
 
-    <div style="margin-top:2rem;text-align:center;color:var(--text-mid);font-size:0.95rem;" class="reveal">
-      <p><strong>MTR:</strong> Tsim Sha Tsui Station (East Tsim Sha Tsui exit J) — 3 min walk</p>
-      <p style="margin-top:0.4rem;"><strong>Taxi:</strong> Ask for "半島酒店" (The Peninsula Hotel), Tsim Sha Tsui</p>
+    <div style="margin-top:2rem;text-align:center;color:var(--text-mid);font-size:0.95rem;line-height:1.65;" class="reveal">
+      <p><strong>MTR:</strong> Tsim Sha Tsui Station (East Tsim Sha Tsui exit J) — 3 min walk. This is the easiest option. Use it.</p>
+      <p style="margin-top:0.6rem;"><strong>Taxi:</strong> Tell the driver <strong>半島酒店</strong>, Tsim Sha Tsui. If you attempt to pronounce it in English, results may vary.</p>
     </div>
   </div>
 </section>
@@ -1248,41 +1376,21 @@
 
       <div class="qa-item reveal">
         <button class="qa-question" onclick="toggleQA(this)">
-          <span>When should I RSVP by?</span>
-          <span class="qa-icon">+</span>
-        </button>
-        <div class="qa-answer">
-          <p>We kindly ask that you RSVP by <strong>12 September 2026</strong> — two months before the wedding. This helps us finalise seating, catering, and the wine order (which Mitchell takes very seriously). You can submit your RSVP directly on this page.</p>
-        </div>
-      </div>
-
-      <div class="qa-item reveal">
-        <button class="qa-question" onclick="toggleQA(this)">
-          <span>Can I bring a plus-one?</span>
-          <span class="qa-icon">+</span>
-        </button>
-        <div class="qa-answer">
-          <p>Due to venue capacity, we are only able to accommodate guests who are named on the invitation. If your invitation includes a plus-one, you'll have the option to add their name when you RSVP. If you're unsure, please feel free to reach out to us directly.</p>
-        </div>
-      </div>
-
-      <div class="qa-item reveal">
-        <button class="qa-question" onclick="toggleQA(this)">
-          <span>Will Chambolle be there?</span>
-          <span class="qa-icon">+</span>
-        </button>
-        <div class="qa-answer">
-          <p>Chambolle has been informed of his role as Chief Morale Officer and has expressed strong opinions about attending. Sadly, The Peninsula's strict no-Corgi policy means he will be sitting this one out — likely in his little castle in 2 Merino Gardens, deeply unimpressed. He sends his love and expects stinky treats upon our return.</p>
-        </div>
-      </div>
-
-      <div class="qa-item reveal">
-        <button class="qa-question" onclick="toggleQA(this)">
           <span>What time should I arrive?</span>
           <span class="qa-icon">+</span>
         </button>
         <div class="qa-answer">
-          <p>Doors open at <strong>17:00</strong>. We recommend arriving between 17:00 and 18:00 to enjoy a drink, settle in, and get a good seat for the ceremony, which begins at <strong>18:30</strong>. The Salisbury Room is located within The Peninsula Hotel — simply follow the signage from the main lobby.</p>
+          <p>Doors open at <strong>17:00</strong>. We recommend arriving between 17:00 and 18:00 — there are drinks, there is Mahjong, and frankly it's a better use of your time than circling the lobby looking confused. The ceremony begins at <strong>18:30</strong> sharp. The Salisbury Room is inside The Peninsula Hotel. Follow the signs. You'll be fine. Probably.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span>When should I RSVP by?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p><strong>12 September 2026.</strong> That is two months before the wedding, which we consider more than reasonable. This deadline exists because Christy is personally managing the seating plan, the catering, and approximately one thousand other things simultaneously — and she would very much like to know if you're coming before she loses her mind entirely. Please do not make her chase you. RSVP directly on this page.</p>
         </div>
       </div>
 
@@ -1292,7 +1400,27 @@
           <span class="qa-icon">+</span>
         </button>
         <div class="qa-answer">
-          <p>Mitchell has put considerable thought into the wine for the evening. For red, he secured an auction lot from the <strong>Hospices de Beaune 2024</strong> — one of Burgundy's most prestigious annual sales — so expect something rather special. For white, the selection comes from his favourite label, <strong>00 Wine</strong>, a place close to his heart having gone for the harvest there last year. If you have a particular preference or allergy, do let us know in the RSVP notes.</p>
+          <p>Glad you asked. Mitchell has been waiting for this question. For red, he secured an auction lot from the <strong>Hospices de Beaune 2024</strong> — one of Burgundy's most prestigious annual sales — so yes, it will be special, and yes, he will probably mention it. For white, the selection is from his favourite label, <strong>00 Wine</strong> — a place close to his heart, he went for the harvest there himself. If you have a preference or allergy, note it in your RSVP. If you have opinions about his choices, keep them to yourself.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span>Will Chambolle be there?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>He will not. The Peninsula operates a strict no-Corgi policy, a decision we find deeply questionable but have chosen not to litigate. Chambolle has been informed. He has opinions. He will be at home in his little castle, deeply unimpressed, waiting for stinky treats upon our return. He sends his love, conditionally.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" onclick="toggleQA(this)">
+          <span>Can I bring a plus-one?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>Short answer: only if you're named on the invitation. The venue has a capacity, Christy has a seating plan, Mitchell has a wine order, and none of these things have room for surprise guests. If your invitation includes a plus-one, you'll be able to add their name when you RSVP. If you're unsure, ask us directly.</p>
         </div>
       </div>
 
@@ -1977,19 +2105,56 @@
   updateCountdown();
   setInterval(updateCountdown, 1000);
 
-  // ─── NAV SCROLL ───
+  // ─── NAV SCROLL + ACTIVE STATE ───
   window.addEventListener('scroll', () => {
     document.getElementById('nav').classList.toggle('scrolled', scrollY > 50);
-    // active section
     const sections = ['home','story','chambolle','wedding-day','travel','gallery','qa','rsvp'];
     let active = 'home';
     for (const id of sections) {
       const el = document.getElementById(id);
       if (el && el.getBoundingClientRect().top <= 80) active = id;
     }
-    document.querySelectorAll('nav a').forEach(a => {
+    // Highlight matching submenu link
+    document.querySelectorAll('.nav-menu a').forEach(a => {
       a.classList.toggle('active', a.getAttribute('href') === '#' + active);
     });
+    // Highlight Home if home is active
+    document.querySelector('.nav-link[href="#home"]')?.classList.toggle('active', active === 'home');
+    // Highlight parent dropdown trigger if any of its items is active
+    document.querySelectorAll('.nav-dropdown').forEach(dd => {
+      const trigger = dd.querySelector('.nav-trigger');
+      const hasActive = !!dd.querySelector('.nav-menu a.active');
+      trigger?.classList.toggle('active', hasActive);
+    });
+  });
+
+  // ─── NAV TOGGLE (mobile + dropdowns) ───
+  function toggleNav() {
+    const nav  = document.getElementById('nav');
+    const open = nav.classList.toggle('open');
+    document.getElementById('nav-burger').setAttribute('aria-expanded', open);
+    if (!open) {
+      document.querySelectorAll('.nav-dropdown.open').forEach(d => d.classList.remove('open'));
+    }
+  }
+  function closeNav() {
+    document.getElementById('nav').classList.remove('open');
+    document.getElementById('nav-burger').setAttribute('aria-expanded', 'false');
+    document.querySelectorAll('.nav-dropdown.open').forEach(d => d.classList.remove('open'));
+  }
+  function toggleDropdown(e, name) {
+    e.stopPropagation();
+    const dd = document.querySelector(`.nav-dropdown[data-dropdown="${name}"]`);
+    if (!dd) return;
+    document.querySelectorAll('.nav-dropdown').forEach(d => {
+      if (d !== dd) d.classList.remove('open');
+    });
+    dd.classList.toggle('open');
+  }
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.nav-dropdown') && !e.target.closest('.nav-burger')) {
+      document.querySelectorAll('.nav-dropdown.open').forEach(d => d.classList.remove('open'));
+    }
   });
 
   // ─── REVEAL ON SCROLL ───
