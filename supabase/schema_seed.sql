@@ -673,3 +673,76 @@ WHERE r.message IS NOT NULL
 ORDER BY r.submitted_at DESC;
 
 GRANT SELECT ON admin_messages TO authenticated;
+
+
+-- ============================================================
+-- Phase 4: Name + side lookup (alternative to code-based RSVP)
+-- ============================================================
+
+-- 19. Trigram similarity for fuzzy name matching
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+CREATE INDEX IF NOT EXISTS guests_name_trgm_idx
+  ON guests USING gin (lower(name) gin_trgm_ops);
+
+-- 20. find_guest(name, side) → returns up to 5 fuzzy-matched candidates.
+--     Used by the "Find me" lookup on the website (no URL code required).
+--     Each candidate carries its invitation_code so the frontend can
+--     reuse the existing lookup_invitation / submit_rsvp flow.
+CREATE OR REPLACE FUNCTION find_guest(p_name TEXT, p_side TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  norm    TEXT;
+  matches JSONB;
+BEGIN
+  IF p_name IS NULL OR length(trim(p_name)) = 0 THEN
+    RETURN jsonb_build_object('matches', '[]'::jsonb);
+  END IF;
+
+  norm := lower(trim(p_name));
+
+  WITH ranked AS (
+    SELECT
+      g.id,
+      g.name,
+      g.side,
+      g.invitation_code,
+      g.rsvp_status,
+      similarity(lower(g.name), norm) AS score,
+      (lower(g.name) = norm) AS exact
+    FROM guests g
+    WHERE (p_side IS NULL OR p_side = '' OR g.side = p_side)
+      AND (
+        lower(g.name) = norm
+        OR lower(g.name) LIKE '%' || norm || '%'
+        OR similarity(lower(g.name), norm) > 0.25
+      )
+    ORDER BY exact DESC, score DESC
+    LIMIT 5
+  )
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'id',    id,
+      'name',  name,
+      'side',  side,
+      'code',  invitation_code,
+      'score', round(score::numeric, 3),
+      'exact', exact,
+      'has_rsvpd', EXISTS (SELECT 1 FROM rsvp r WHERE r.guest_id = ranked.id)
+    )
+    ORDER BY exact DESC, score DESC
+  )
+  INTO matches
+  FROM ranked;
+
+  RETURN jsonb_build_object(
+    'matches', COALESCE(matches, '[]'::jsonb)
+  );
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION find_guest(TEXT, TEXT) TO anon, authenticated;
