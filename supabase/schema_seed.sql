@@ -614,3 +614,62 @@ FROM guests
 WHERE invitation_code IS NOT NULL;
 
 GRANT SELECT ON invitation_print_list TO authenticated;
+
+
+-- ============================================================
+-- Phase 3: Admin retrieval views for guest submissions
+-- (RLS on rsvp/guests still applies — only admin emails can read)
+-- ============================================================
+
+-- 16. Master review feed: every RSVP joined with guest details and seat.
+CREATE OR REPLACE VIEW admin_rsvps AS
+SELECT
+  r.submitted_at,
+  g.guest_number,
+  g.name             AS guest_name,
+  g.side,
+  g.group_name,
+  r.attendance,
+  r.email,
+  r.plus_one_name,
+  r.dietary,
+  r.song_request,
+  r.message,
+  g.table_number,
+  g.seat_number,
+  g.invitation_code
+FROM rsvp r
+LEFT JOIN guests g ON g.id = r.guest_id
+ORDER BY r.submitted_at DESC;
+
+GRANT SELECT ON admin_rsvps TO authenticated;
+
+-- 17. Song requests only (for the band).
+CREATE OR REPLACE VIEW admin_song_requests AS
+SELECT
+  r.submitted_at,
+  g.name AS requested_by,
+  g.side,
+  r.song_request
+FROM rsvp r
+LEFT JOIN guests g ON g.id = r.guest_id
+WHERE r.song_request IS NOT NULL
+  AND length(trim(r.song_request)) > 0
+ORDER BY r.submitted_at DESC;
+
+GRANT SELECT ON admin_song_requests TO authenticated;
+
+-- 18. Messages to the couple only.
+CREATE OR REPLACE VIEW admin_messages AS
+SELECT
+  r.submitted_at,
+  g.name AS from_name,
+  g.side,
+  r.message
+FROM rsvp r
+LEFT JOIN guests g ON g.id = r.guest_id
+WHERE r.message IS NOT NULL
+  AND length(trim(r.message)) > 0
+ORDER BY r.submitted_at DESC;
+
+GRANT SELECT ON admin_messages TO authenticated;
