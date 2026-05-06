@@ -1481,30 +1481,12 @@
 
     <div class="rsvp-container">
 
-      <!-- State 1: Name + side lookup -->
-      <div id="rsvp-lookup" class="rsvp-state reveal">
-        <div class="form-group">
-          <label class="form-label">Your full name</label>
-          <input type="text" class="form-input" id="lookup-name"
-                 placeholder="As it appears on our guest list"
-                 onkeydown="if(event.key==='Enter')lookupByName()">
-        </div>
-        <div class="form-group">
-          <label class="form-label">You are a guest of *</label>
-          <div class="attendance-toggle">
-            <button class="att-btn active" data-side="女方" onclick="setSide('女方')">Christy's side</button>
-            <button class="att-btn"        data-side="男方" onclick="setSide('男方')">Mitchell's side</button>
-          </div>
-        </div>
-        <button class="form-submit" id="lookup-btn" onclick="lookupByName()">Find Me</button>
-        <div id="lookup-error" style="margin-top:1rem;color:#8B3A3A;font-family:'Raleway',sans-serif;font-size:0.7rem;letter-spacing:0.12em;display:none;"></div>
-
-        <div id="lookup-candidates" style="display:none;margin-top:2rem;">
-          <label class="form-label">Did you mean?</label>
-          <div class="member-picker" id="candidate-picker"></div>
-          <div style="text-align:center;margin-top:0.8rem;">
-            <button class="seat-edit-link" onclick="cancelCandidates()">None of these — try again</button>
-          </div>
+      <!-- State 1: No code in URL -->
+      <div id="rsvp-no-code" class="rsvp-state reveal">
+        <div class="rsvp-card">
+          <h3>Personalised Invitation</h3>
+          <p>To RSVP and view your seat, please use the personalised link printed on your invitation card.</p>
+          <p style="margin-top:1rem;font-size:0.85rem;">Lost your link? Please reach out to Christy or Mitchell directly and we'll resend it.</p>
         </div>
       </div>
 
@@ -1587,7 +1569,6 @@
           <p class="seat-card-note">Seats are pre-arranged. If anything looks wrong, please reach out to us.</p>
           <div class="seat-card-actions">
             <button class="seat-edit-link" onclick="editRsvp()">Update my RSVP</button>
-            <button class="seat-edit-link" onclick="notMe()" style="margin-left:0.6rem;">Not me?</button>
           </div>
         </div>
       </div>
@@ -1627,133 +1608,11 @@
   }
 
   function setRsvpState(stateId) {
-    ['rsvp-lookup','rsvp-loading','rsvp-invalid','rsvp-form-wrap','seat-card']
+    ['rsvp-no-code','rsvp-loading','rsvp-invalid','rsvp-form-wrap','seat-card']
       .forEach(id => {
         const el = document.getElementById(id);
         if (el) el.classList.toggle('active', id === stateId);
       });
-  }
-
-  // ─── localStorage helpers (return-visit memory) ───
-  const LS_KEY = 'mc_invitation_code';
-  function getStoredCode() {
-    try { return localStorage.getItem(LS_KEY) || null; } catch (e) { return null; }
-  }
-  function setStoredCode(code) {
-    try { localStorage.setItem(LS_KEY, code); } catch (e) {}
-  }
-  function clearStoredCode() {
-    try { localStorage.removeItem(LS_KEY); } catch (e) {}
-  }
-
-  // ─── Name + side lookup state ───
-  let SELECTED_SIDE = '女方';
-  function setSide(s) {
-    SELECTED_SIDE = s;
-    document.querySelectorAll('#rsvp-lookup .att-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.side === s);
-    });
-  }
-
-  async function lookupByName() {
-    const name = document.getElementById('lookup-name').value.trim();
-    const errEl = document.getElementById('lookup-error');
-    errEl.style.display = 'none';
-    document.getElementById('lookup-candidates').style.display = 'none';
-
-    if (!name) {
-      errEl.textContent = 'Please enter your name.';
-      errEl.style.display = 'block';
-      return;
-    }
-
-    const btn = document.getElementById('lookup-btn');
-    btn.disabled = true;
-    btn.textContent = 'SEARCHING…';
-
-    try {
-      const res = await rpc('find_guest', { p_name: name, p_side: SELECTED_SIDE });
-      const matches = (res && res.matches) || [];
-
-      if (matches.length === 0) {
-        errEl.textContent = 'No match found. Please check the spelling, or contact Christy or Mitchell directly.';
-        errEl.style.display = 'block';
-        return;
-      }
-
-      // High-confidence single match → proceed automatically
-      if (matches.length === 1 && (matches[0].exact || matches[0].score >= 0.85)) {
-        await proceedToForm(matches[0].code);
-        return;
-      }
-
-      renderCandidates(matches);
-    } catch (e) {
-      console.error(e);
-      errEl.textContent = 'Something went wrong. Please try again.';
-      errEl.style.display = 'block';
-    } finally {
-      btn.disabled = false;
-      btn.textContent = 'Find Me';
-    }
-  }
-
-  function renderCandidates(matches) {
-    const picker = document.getElementById('candidate-picker');
-    picker.innerHTML = '';
-    matches.forEach(m => {
-      const opt = document.createElement('div');
-      opt.className = 'member-option';
-      opt.innerHTML = `
-        <span>${escHtml(m.name)} <span class="meta">${escHtml(m.side || '')}</span></span>
-        ${m.has_rsvpd ? '<span class="badge">Replied</span>' : ''}
-      `;
-      opt.onclick = () => proceedToForm(m.code);
-      picker.appendChild(opt);
-    });
-    document.getElementById('lookup-candidates').style.display = 'block';
-  }
-
-  function cancelCandidates() {
-    document.getElementById('lookup-candidates').style.display = 'none';
-    document.getElementById('lookup-name').focus();
-  }
-
-  // Drives the rest of the flow once a code has been resolved
-  // (either from URL, localStorage, or name lookup).
-  async function proceedToForm(code) {
-    setRsvpState('rsvp-loading');
-    try {
-      const inv = await rpc('lookup_invitation', { p_code: code });
-      if (!inv || !inv.found) {
-        document.getElementById('invalid-code-display').textContent = code;
-        setRsvpState('rsvp-invalid');
-        return;
-      }
-      INVITATION = inv;
-      setStoredCode(code);
-
-      const seats = await rpc('lookup_seats', { p_code: code });
-      if (seats && seats.available) {
-        renderSeatCard(seats.members);
-        setRsvpState('seat-card');
-      } else {
-        renderMemberPicker(inv.members);
-        setRsvpState('rsvp-form-wrap');
-      }
-    } catch (e) {
-      console.error(e);
-      setRsvpState('rsvp-invalid');
-    }
-  }
-
-  // Clears localStorage and returns to the lookup screen — for shared devices.
-  function notMe() {
-    clearStoredCode();
-    INVITATION = null;
-    SELECTED_MEMBER = null;
-    document.getElementById('lookup-name').value = '';
-    setRsvpState('rsvp-lookup');
   }
 
   async function rpc(fn, body) {
@@ -1819,20 +1678,6 @@
       sessionStorage.setItem('demo-rsvp-' + code, '1');
       return Promise.resolve({ success: true });
     }
-    if (fn === 'find_guest') {
-      const q    = (body?.p_name || '').toLowerCase();
-      const side = body?.p_side || '';
-      const all = [
-        { id: 'demo-1',  name: 'Demo Guest',  side: '女方', code: 'MC-DEMO1' },
-        { id: 'demo-2a', name: 'Mark Chan',   side: '男方', code: 'MC-DEMO2' },
-        { id: 'demo-2b', name: 'Sarah Chan',  side: '男方', code: 'MC-DEMO2' }
-      ];
-      const matches = all
-        .filter(g => !side || g.side === side)
-        .filter(g => g.name.toLowerCase().includes(q))
-        .map(g => ({ ...g, score: 1.0, exact: g.name.toLowerCase() === q, has_rsvpd: false }));
-      return Promise.resolve({ matches });
-    }
     return Promise.resolve({});
   }
 
@@ -1882,25 +1727,20 @@
   }
 
   async function initRsvpFlow() {
-    // Priority: URL code > localStorage > name+side lookup
-    const code = readCodeFromUrl() || getStoredCode();
-    if (!code) {
-      setRsvpState('rsvp-lookup');
-      return;
-    }
+    const code = readCodeFromUrl();
+    if (!code) { setRsvpState('rsvp-no-code'); return; }
 
     setRsvpState('rsvp-loading');
     try {
       const inv = await rpc('lookup_invitation', { p_code: code });
       if (!inv || !inv.found) {
-        // Stored code is stale — wipe it and fall back to lookup
-        clearStoredCode();
-        setRsvpState('rsvp-lookup');
+        document.getElementById('invalid-code-display').textContent = code;
+        setRsvpState('rsvp-invalid');
         return;
       }
       INVITATION = inv;
-      setStoredCode(code);
 
+      // If anyone in the household has already RSVP'd, fetch seats and show the card.
       const seats = await rpc('lookup_seats', { p_code: code });
       if (seats && seats.available) {
         renderSeatCard(seats.members);
@@ -1911,7 +1751,8 @@
       }
     } catch (e) {
       console.error('RSVP lookup failed:', e);
-      setRsvpState('rsvp-lookup');
+      document.getElementById('invalid-code-display').textContent = code;
+      setRsvpState('rsvp-invalid');
     }
   }
 
