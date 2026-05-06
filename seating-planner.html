@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seating Planner — Christy & Mitchell</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root {
     --bg: #EAE5DB;
@@ -15,12 +16,14 @@
     --text-light: #8A7E77;
     --accent: #7A4F5A;
     --accent-light: #C4A0AB;
+    --olive: #686B38;
     --divider: #C8BFB2;
     --white: #FAF7F2;
     --table-empty: #E4DDD4;
     --table-full: #A09890;
     --drag-over: rgba(122,79,90,0.12);
     --shadow: 0 2px 16px rgba(44,40,32,0.08);
+    --error: #8B3A3A;
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body {
@@ -33,6 +36,70 @@
     display: flex;
     flex-direction: column;
   }
+
+  /* ─── AUTH GATE ─── */
+  .auth-gate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    background: var(--bg);
+    padding: 2rem;
+  }
+  .auth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 2.5rem 2rem;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+  }
+  .auth-card h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    margin-bottom: 0.6rem;
+  }
+  .auth-card p {
+    color: var(--text-mid);
+    font-size: 0.85rem;
+    margin-bottom: 1.4rem;
+    line-height: 1.5;
+  }
+  .auth-input {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+    margin-bottom: 0.8rem;
+  }
+  .auth-input:focus { border-color: var(--text-mid); }
+  .auth-btn {
+    width: 100%;
+    padding: 0.7rem;
+    background: var(--text);
+    color: var(--bg);
+    border: none;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .auth-btn:hover:not(:disabled) { background: var(--text-mid); }
+  .auth-msg {
+    margin-top: 1rem;
+    font-size: 0.78rem;
+    color: var(--text-mid);
+    line-height: 1.5;
+  }
+  .auth-msg.error { color: var(--error); }
 
   /* ─── HEADER ─── */
   header {
@@ -58,11 +125,7 @@
     color: var(--text-light);
     margin-top: 0.1rem;
   }
-  .header-stats {
-    display: flex;
-    gap: 1.5rem;
-    align-items: center;
-  }
+  .header-stats { display: flex; gap: 1.5rem; align-items: center; }
   .stat-chip {
     text-align: center;
     font-size: 0.6rem;
@@ -80,7 +143,8 @@
     margin-bottom: 0.1rem;
     letter-spacing: 0;
   }
-  .header-actions { display: flex; gap: 0.6rem; }
+  .header-actions { display: flex; gap: 0.6rem; align-items: center; }
+  .who { font-size: 0.62rem; letter-spacing: 0.12em; color: var(--text-light); margin-right: 0.4rem; }
   .btn {
     padding: 0.5rem 1rem;
     font-family: 'Raleway', sans-serif;
@@ -97,16 +161,24 @@
   .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
   .btn-primary:hover { background: var(--text-mid); border-color: var(--text-mid); }
 
-  /* ─── LAYOUT ─── */
-  .app-body {
-    display: flex;
-    flex: 1;
-    overflow: hidden;
+  /* Sync indicator */
+  .sync-indicator {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    transition: color 0.2s;
   }
+  .sync-indicator.saving { color: var(--accent); }
+  .sync-indicator.saved  { color: var(--olive); }
+  .sync-indicator.error  { color: var(--error); }
 
-  /* ─── LEFT PANEL: GUEST LIST ─── */
+  /* ─── LAYOUT ─── */
+  .app-body { display: flex; flex: 1; overflow: hidden; }
+
+  /* ─── LEFT PANEL ─── */
   .sidebar {
-    width: 260px;
+    width: 280px;
     flex-shrink: 0;
     background: var(--bg-panel);
     border-right: 1px solid var(--divider);
@@ -114,11 +186,7 @@
     flex-direction: column;
     overflow: hidden;
   }
-  .sidebar-header {
-    padding: 1rem;
-    border-bottom: 1px solid var(--divider);
-    flex-shrink: 0;
-  }
+  .sidebar-header { padding: 1rem; border-bottom: 1px solid var(--divider); flex-shrink: 0; }
   .sidebar-title {
     font-size: 0.62rem;
     letter-spacing: 0.18em;
@@ -126,43 +194,25 @@
     color: var(--text-mid);
     margin-bottom: 0.6rem;
   }
-  .guest-add {
-    display: flex;
-    gap: 0.4rem;
-  }
-  .guest-input {
+  .filter-row { display: flex; gap: 0.4rem; margin-bottom: 0.4rem; }
+  .filter-chip {
     flex: 1;
-    padding: 0.45rem 0.6rem;
-    background: var(--bg-card);
+    padding: 0.35rem 0.5rem;
+    font-size: 0.6rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    text-align: center;
+    background: transparent;
     border: 1px solid var(--divider);
-    font-family: 'Raleway', sans-serif;
-    font-size: 0.72rem;
-    color: var(--text);
-    outline: none;
-  }
-  .guest-input:focus { border-color: var(--text-mid); }
-  .guest-input::placeholder { color: var(--text-light); }
-  .add-btn {
-    padding: 0.45rem 0.7rem;
-    background: var(--text);
-    color: var(--bg);
-    border: none;
-    font-size: 1rem;
+    color: var(--text-mid);
     cursor: pointer;
-    transition: background 0.15s;
-    line-height: 1;
+    transition: background 0.15s, color 0.15s;
   }
-  .add-btn:hover { background: var(--text-mid); }
-
-  .sidebar-search {
-    padding: 0.5rem 1rem;
-    border-bottom: 1px solid var(--divider);
-    flex-shrink: 0;
-  }
+  .filter-chip.active { background: var(--text); color: var(--bg); border-color: var(--text); }
   .search-input {
     width: 100%;
     padding: 0.4rem 0.6rem;
-    background: transparent;
+    background: var(--bg-card);
     border: 1px solid var(--divider);
     font-family: 'Raleway', sans-serif;
     font-size: 0.7rem;
@@ -170,7 +220,6 @@
     outline: none;
   }
   .search-input:focus { border-color: var(--text-mid); }
-  .search-input::placeholder { color: var(--text-light); }
 
   .guest-list {
     flex: 1;
@@ -180,6 +229,15 @@
   .guest-list::-webkit-scrollbar { width: 4px; }
   .guest-list::-webkit-scrollbar-track { background: transparent; }
   .guest-list::-webkit-scrollbar-thumb { background: var(--divider); }
+
+  .group-label {
+    padding: 0.6rem 0.6rem 0.3rem;
+    font-size: 0.56rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    font-weight: 600;
+  }
 
   .guest-item {
     display: flex;
@@ -194,69 +252,43 @@
     user-select: none;
   }
   .guest-item:hover { border-color: var(--divider); }
-  .guest-item.dragging {
-    opacity: 0.5;
-    cursor: grabbing;
-  }
-  .guest-item.seated {
-    opacity: 0.45;
-    background: var(--bg);
-  }
+  .guest-item.dragging { opacity: 0.5; cursor: grabbing; }
+  .guest-item.seated { opacity: 0.45; background: var(--bg); }
+  .guest-item.declined { opacity: 0.35; text-decoration: line-through; }
   .guest-item.hidden { display: none; }
   .guest-avatar {
-    width: 26px; height: 26px;
+    width: 24px; height: 24px;
     border-radius: 50%;
     display: flex; align-items: center; justify-content: center;
-    font-size: 0.65rem;
+    font-size: 0.6rem;
     font-weight: 600;
     flex-shrink: 0;
     color: white;
   }
   .guest-name {
     flex: 1;
-    font-size: 0.75rem;
+    font-size: 0.74rem;
     color: var(--text);
     white-space: nowrap;
     overflow: hidden;
     text-overflow: ellipsis;
   }
+  .guest-side {
+    font-size: 0.6rem;
+    color: var(--text-light);
+    flex-shrink: 0;
+  }
   .guest-seat-label {
-    font-size: 0.58rem;
+    font-size: 0.56rem;
     color: var(--text-light);
-    letter-spacing: 0.08em;
+    letter-spacing: 0.06em;
     flex-shrink: 0;
   }
-  .guest-del {
-    width: 18px; height: 18px;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.7rem;
-    color: var(--text-light);
-    cursor: pointer;
-    border-radius: 50%;
-    flex-shrink: 0;
-    transition: background 0.15s, color 0.15s;
-  }
-  .guest-del:hover { background: #D4A0A0; color: white; }
 
-  .unassigned-label {
-    padding: 0.5rem 0.6rem 0.3rem;
-    font-size: 0.58rem;
-    letter-spacing: 0.14em;
-    text-transform: uppercase;
-    color: var(--text-light);
-  }
-
-  /* ─── MAIN: FLOOR PLAN ─── */
-  .floor-plan {
-    flex: 1;
-    overflow: auto;
-    padding: 1.5rem;
-    position: relative;
-  }
+  /* ─── FLOOR PLAN ─── */
+  .floor-plan { flex: 1; overflow: auto; padding: 1.5rem; position: relative; }
   .floor-plan::-webkit-scrollbar { width: 6px; height: 6px; }
-  .floor-plan::-webkit-scrollbar-track { background: transparent; }
   .floor-plan::-webkit-scrollbar-thumb { background: var(--divider); border-radius: 3px; }
-
   .room-label {
     font-size: 0.58rem;
     letter-spacing: 0.22em;
@@ -264,26 +296,18 @@
     color: var(--text-light);
     margin-bottom: 1rem;
   }
-
   .tables-grid {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
     gap: 1.2rem;
-    min-width: 700px;
   }
 
-  /* ─── TABLE ─── */
+  /* ─── TABLE CARD ─── */
   .table-card {
     background: var(--bg-card);
     border: 1px solid var(--divider);
     padding: 0.8rem;
     transition: border-color 0.15s, box-shadow 0.15s;
-    position: relative;
-  }
-  .table-card.drag-over {
-    border-color: var(--accent);
-    box-shadow: 0 0 0 3px var(--drag-over);
-    background: var(--bg-panel);
   }
   .table-card.full { border-color: var(--table-full); }
 
@@ -294,116 +318,74 @@
     margin-bottom: 0.5rem;
   }
   .table-name {
-    font-size: 0.62rem;
+    font-size: 0.7rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-mid);
     font-weight: 600;
   }
-  .table-count {
-    font-size: 0.6rem;
-    letter-spacing: 0.08em;
-    color: var(--text-light);
-  }
+  .table-count { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-light); }
   .table-count.at-capacity { color: var(--accent); font-weight: 600; }
 
-  /* Round table SVG graphic */
-  .table-visual {
-    display: flex;
-    justify-content: center;
-    margin-bottom: 0.6rem;
-  }
-  .table-circle {
-    position: relative;
-    width: 80px; height: 80px;
-  }
-  .table-circle svg { width: 100%; height: 100%; }
+  /* Round table SVG */
+  .table-visual { display: flex; justify-content: center; margin-bottom: 0.6rem; }
+  .table-visual svg { display: block; }
 
-  /* Seats in table visual */
-  .seat-dot {
-    r: 4;
-    transition: fill 0.2s;
-  }
-
-  /* Guest chips in table */
-  .table-guests {
-    min-height: 28px;
-    display: flex;
-    flex-wrap: wrap;
+  /* 12 numbered seat slots */
+  .seats-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
     gap: 3px;
   }
-  .table-guest-chip {
+  .seat-slot {
     display: flex;
     align-items: center;
-    gap: 3px;
-    padding: 2px 5px 2px 3px;
+    gap: 4px;
+    padding: 4px 6px;
     background: var(--bg);
     border: 1px solid var(--divider);
-    font-size: 0.6rem;
+    font-size: 0.62rem;
     color: var(--text-mid);
-    cursor: grab;
-    max-width: 90px;
-    transition: border-color 0.15s;
-    white-space: nowrap;
-    overflow: hidden;
+    min-height: 22px;
+    transition: border-color 0.15s, background 0.15s;
   }
-  .table-guest-chip:hover { border-color: var(--accent-light); }
-  .table-guest-chip.dragging { opacity: 0.4; }
-  .chip-avatar {
-    width: 14px; height: 14px;
-    border-radius: 50%;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.45rem;
-    font-weight: 700;
-    color: white;
-    flex-shrink: 0;
+  .seat-slot.drag-over {
+    border-color: var(--accent);
+    background: var(--drag-over);
   }
-  .chip-name {
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-  .chip-remove {
+  .seat-slot.empty { color: var(--text-light); font-style: italic; }
+  .seat-slot.filled { cursor: grab; background: var(--bg-card); }
+  .seat-slot.dragging { opacity: 0.4; }
+
+  .seat-num {
     font-size: 0.55rem;
     color: var(--text-light);
+    flex-shrink: 0;
+    min-width: 12px;
+    letter-spacing: 0.04em;
+  }
+  .seat-name-text {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    color: var(--text);
+  }
+  .seat-remove {
+    font-size: 0.7rem;
+    color: var(--text-light);
     cursor: pointer;
     flex-shrink: 0;
-    padding-left: 2px;
+    opacity: 0;
+    transition: opacity 0.15s, color 0.15s;
+    padding: 0 2px;
   }
-  .chip-remove:hover { color: #8B3A3A; }
-
-  .table-empty-hint {
-    width: 100%;
-    text-align: center;
-    font-size: 0.6rem;
-    letter-spacing: 0.1em;
-    color: var(--text-light);
-    padding: 0.3rem 0;
-    pointer-events: none;
-  }
-
-  /* Table name edit */
-  .table-name-input {
-    background: transparent;
-    border: none;
-    border-bottom: 1px solid transparent;
-    font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--text-mid);
-    font-weight: 600;
-    outline: none;
-    width: 100%;
-    cursor: pointer;
-  }
-  .table-name-input:focus {
-    border-bottom-color: var(--accent-light);
-    cursor: text;
-  }
+  .seat-slot.filled:hover .seat-remove { opacity: 1; }
+  .seat-remove:hover { color: var(--error); }
 
   /* ─── PRINT ─── */
   @media print {
-    .sidebar, header .header-actions { display: none; }
+    .sidebar, header .header-actions, .auth-gate { display: none; }
     body { overflow: auto; height: auto; }
     .app-body { overflow: visible; }
     .floor-plan { overflow: visible; }
@@ -423,7 +405,7 @@
     background: var(--bg-card);
     border: 1px solid var(--divider);
     padding: 2rem;
-    max-width: 480px;
+    max-width: 520px;
     width: 90%;
     max-height: 80vh;
     overflow-y: auto;
@@ -434,13 +416,15 @@
     font-weight: 400;
     margin-bottom: 1.2rem;
   }
-  .modal-table-summary {
-    margin-bottom: 0.6rem;
-    padding-bottom: 0.6rem;
-    border-bottom: 1px solid var(--divider);
-  }
+  .modal-table-summary { margin-bottom: 0.6rem; padding-bottom: 0.6rem; border-bottom: 1px solid var(--divider); }
   .modal-table-summary:last-child { border-bottom: none; }
-  .mts-name { font-size: 0.65rem; letter-spacing: 0.14em; text-transform: uppercase; font-weight: 600; color: var(--text-mid); }
+  .mts-name {
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    font-weight: 600;
+    color: var(--text-mid);
+  }
   .mts-guests { font-size: 0.72rem; color: var(--text); margin-top: 0.25rem; line-height: 1.6; }
   .modal-close {
     margin-top: 1.5rem;
@@ -455,74 +439,71 @@
     text-transform: uppercase;
     cursor: pointer;
   }
-
-  /* Tooltip */
-  .tooltip {
-    position: fixed;
-    background: var(--text);
-    color: var(--bg);
-    font-size: 0.62rem;
-    letter-spacing: 0.08em;
-    padding: 0.3rem 0.6rem;
-    pointer-events: none;
-    z-index: 1000;
-    transform: translate(-50%, -120%);
-    white-space: nowrap;
-    opacity: 0;
-    transition: opacity 0.15s;
-  }
-  .tooltip.show { opacity: 1; }
 </style>
 </head>
 <body>
 
-<!-- ─── HEADER ─── -->
-<header>
-  <div>
-    <div class="header-title">Seating Planner — <em>Christy &amp; Mitchell</em></div>
-    <div class="header-meta">November 12, 2026 · The Salisbury Room, Peninsula Hong Kong</div>
-  </div>
-  <div class="header-stats">
-    <div class="stat-chip"><strong id="stat-total">0</strong>Guests</div>
-    <div class="stat-chip"><strong id="stat-seated">0</strong>Seated</div>
-    <div class="stat-chip"><strong id="stat-unassigned">0</strong>Unassigned</div>
-    <div class="stat-chip"><strong>15</strong>Tables</div>
-  </div>
-  <div class="header-actions">
-    <button class="btn" onclick="openSummary()">View Summary</button>
-    <button class="btn" onclick="clearAll()">Clear All</button>
-    <button class="btn btn-primary" onclick="window.print()">Print Plan</button>
-  </div>
-</header>
-
-<div class="app-body">
-  <!-- ─── SIDEBAR ─── -->
-  <div class="sidebar">
-    <div class="sidebar-header">
-      <div class="sidebar-title">Guest List</div>
-      <div class="guest-add">
-        <input type="text" class="guest-input" id="new-guest-input" placeholder="Add guest name…" onkeydown="if(event.key==='Enter')addGuest()">
-        <button class="add-btn" onclick="addGuest()">+</button>
-      </div>
-    </div>
-    <div class="sidebar-search">
-      <input type="text" class="search-input" id="search-input" placeholder="Search guests…" oninput="filterGuests()">
-    </div>
-    <div class="guest-list" id="guest-list"
-      ondragover="event.preventDefault()"
-      ondrop="dropOnSidebar(event)">
-      <div class="unassigned-label" id="sidebar-empty" style="display:none;">No guests yet — add one above.</div>
-    </div>
-  </div>
-
-  <!-- ─── FLOOR PLAN ─── -->
-  <div class="floor-plan">
-    <div class="room-label">The Salisbury Room · Floor Plan</div>
-    <div class="tables-grid" id="tables-grid"></div>
+<!-- ─── AUTH GATE ─── -->
+<div id="auth-gate" class="auth-gate">
+  <div class="auth-card">
+    <h1>Seating Planner</h1>
+    <p>Christy &amp; Mitchell — admin only.<br>Sign in via magic link.</p>
+    <input type="email" class="auth-input" id="auth-email" placeholder="Your email">
+    <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">Send Magic Link</button>
+    <div class="auth-msg" id="auth-msg"></div>
   </div>
 </div>
 
-<!-- ─── SUMMARY MODAL ─── -->
+<!-- ─── APP (hidden until authenticated) ─── -->
+<div id="app" style="display:none;flex:1;flex-direction:column;overflow:hidden;">
+  <header>
+    <div>
+      <div class="header-title">Seating Planner — <em>Christy &amp; Mitchell</em></div>
+      <div class="header-meta">November 12, 2026 · The Salisbury Room, Peninsula Hong Kong</div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip"><strong id="stat-total">0</strong>Guests</div>
+      <div class="stat-chip"><strong id="stat-seated">0</strong>Seated</div>
+      <div class="stat-chip"><strong id="stat-unassigned">0</strong>Unassigned</div>
+      <div class="stat-chip"><strong>15</strong>Tables</div>
+    </div>
+    <div class="header-actions">
+      <span class="who" id="who"></span>
+      <span class="sync-indicator" id="sync"></span>
+      <button class="btn" onclick="reload()">Reload</button>
+      <button class="btn" onclick="openSummary()">Summary</button>
+      <button class="btn" onclick="signOut()">Sign Out</button>
+      <button class="btn btn-primary" onclick="window.print()">Print</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+    <!-- Sidebar -->
+    <div class="sidebar">
+      <div class="sidebar-header">
+        <div class="sidebar-title">Guests</div>
+        <div class="filter-row">
+          <button class="filter-chip active" data-filter="unassigned" onclick="setFilter('unassigned')">Unassigned</button>
+          <button class="filter-chip" data-filter="all" onclick="setFilter('all')">All</button>
+          <button class="filter-chip" data-filter="seated" onclick="setFilter('seated')">Seated</button>
+        </div>
+        <input type="text" class="search-input" id="search-input" placeholder="Search by name…" oninput="renderSidebar()">
+      </div>
+      <div class="guest-list" id="guest-list"
+        ondragover="event.preventDefault()"
+        ondrop="dropOnSidebar(event)">
+      </div>
+    </div>
+
+    <!-- Floor plan -->
+    <div class="floor-plan">
+      <div class="room-label">The Salisbury Room · Floor Plan</div>
+      <div class="tables-grid" id="tables-grid"></div>
+    </div>
+  </div>
+</div>
+
+<!-- Summary modal -->
 <div class="modal-overlay" id="modal-overlay" onclick="if(event.target===this)closeModal()">
   <div class="modal">
     <h3>Seating Summary</h3>
@@ -531,18 +512,26 @@
   </div>
 </div>
 
-<!-- ─── DRAG GHOST TOOLTIP ─── -->
-<div class="tooltip" id="tooltip"></div>
-
 <script>
-// ─── STATE ───
-const MAX_SEATS = 12;
-const TABLE_COUNT = 15;
+// ─── SUPABASE CONFIG ───
+// Replace with your project credentials.
+const SUPABASE_URL      = 'YOUR_SUPABASE_URL';
+const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
 
-let guests = [];       // { id, name, tableId: null|number }
-let tables = [];       // { id, name, guestIds[] }
-let dragData = null;   // { guestId, fromTableId: null|number }
-let guestIdCounter = 1;
+const ADMIN_ALLOWLIST = [
+  'christychowtc@gmail.com',
+  'mitchell.tsui.mc@gmail.com'
+];
+
+const TABLE_COUNT = 15;
+const SEATS_PER_TABLE = 12;
+
+let sb = null;          // supabase client
+let session = null;     // auth session
+let guests = [];        // [{ id, name, group_name, side, rsvp_status, table_number, seat_number, ... }]
+let filter = 'unassigned';
+let dragData = null;    // { guestId, fromTable, fromSeat }
+let saveTimer = null;
 
 const AVATAR_COLORS = [
   '#7A4F5A','#5A6E7A','#7A6E50','#5A7A5A','#7A5A6A',
@@ -550,40 +539,154 @@ const AVATAR_COLORS = [
 ];
 function avatarColor(name) {
   let h = 0;
-  for (let c of name) h = (h * 31 + c.charCodeAt(0)) & 0xFFFF;
+  for (let c of name || '') h = (h * 31 + c.charCodeAt(0)) & 0xFFFF;
   return AVATAR_COLORS[h % AVATAR_COLORS.length];
 }
 function initials(name) {
-  return name.trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+  return (name || '').trim().split(/\s+/).map(w=>w[0]).slice(0,2).join('').toUpperCase();
+}
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 }
 
-// ─── INIT ───
-function init() {
-  // Default table names
-  const defaultNames = [
-    'Table 1','Table 2','Table 3','Table 4','Table 5',
-    'Table 6','Table 7','Table 8','Table 9','Table 10',
-    'Table 11','Table 12','Table 13','Table 14','Table 15'
-  ];
-  tables = Array.from({length: TABLE_COUNT}, (_, i) => ({
-    id: i + 1,
-    name: defaultNames[i],
-    guestIds: []
-  }));
+// ─── AUTH ───
+function isConfigured() {
+  return SUPABASE_URL !== 'YOUR_SUPABASE_URL' && SUPABASE_ANON_KEY !== 'YOUR_SUPABASE_ANON_KEY' && SUPABASE_URL && SUPABASE_ANON_KEY;
+}
 
-  // Sample guests to get started
-  const sampleGuests = [
-    'Christy\'s Parents','Mitchell\'s Parents','Best Man','Maid of Honour',
-    'Uncle James','Aunt Sarah','Cousin Emily','Old Friend Tom',
-    'Work Colleague Amy','Neighbour David'
-  ];
-  sampleGuests.forEach(n => addGuestData(n));
+function initSupabase() {
+  if (!isConfigured()) return null;
+  if (!window.supabase) { console.error('Supabase SDK not loaded'); return null; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, detectSessionInUrl: true, autoRefreshToken: true }
+  });
+  return sb;
+}
 
+async function bootstrap() {
+  initSupabase();
+  if (!sb) {
+    document.getElementById('auth-msg').className = 'auth-msg error';
+    document.getElementById('auth-msg').textContent =
+      'Supabase not configured. Replace SUPABASE_URL / SUPABASE_ANON_KEY in this file.';
+    return;
+  }
+
+  // detectSessionInUrl handles the magic-link callback automatically.
+  const { data: { session: s } } = await sb.auth.getSession();
+  if (s) {
+    enterApp(s);
+  }
+
+  sb.auth.onAuthStateChange((_event, newSession) => {
+    if (newSession) enterApp(newSession);
+    else exitApp();
+  });
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('auth-email').value.trim().toLowerCase();
+  const msg = document.getElementById('auth-msg');
+  msg.className = 'auth-msg';
+
+  if (!email) { msg.textContent = 'Please enter your email.'; msg.className = 'auth-msg error'; return; }
+  if (!ADMIN_ALLOWLIST.includes(email)) {
+    msg.textContent = 'This email is not authorised.';
+    msg.className = 'auth-msg error';
+    return;
+  }
+
+  const btn = document.getElementById('auth-btn');
+  btn.disabled = true;
+  btn.textContent = 'Sending…';
+
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+
+  btn.disabled = false;
+  btn.textContent = 'Send Magic Link';
+
+  if (error) {
+    msg.className = 'auth-msg error';
+    msg.textContent = error.message || 'Failed to send link.';
+  } else {
+    msg.textContent = 'Check your inbox for the magic link.';
+  }
+}
+
+async function signOut() {
+  await sb.auth.signOut();
+}
+
+function enterApp(s) {
+  session = s;
+  const email = (s.user && s.user.email || '').toLowerCase();
+  if (!ADMIN_ALLOWLIST.includes(email)) {
+    document.getElementById('auth-msg').className = 'auth-msg error';
+    document.getElementById('auth-msg').textContent = `Email "${email}" is not authorised.`;
+    sb.auth.signOut();
+    return;
+  }
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('who').textContent = email;
+  loadGuests();
+}
+
+function exitApp() {
+  session = null;
+  document.getElementById('auth-gate').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  guests = [];
+}
+
+// ─── DATA ───
+async function loadGuests() {
+  setSync('saving', 'Loading…');
+  const { data, error } = await sb
+    .from('guests')
+    .select('id, guest_number, name, group_name, side, rsvp_status, table_number, seat_number')
+    .order('guest_number', { ascending: true });
+
+  if (error) {
+    console.error(error);
+    setSync('error', 'Load failed: ' + error.message);
+    return;
+  }
+  guests = data || [];
+  setSync('saved', 'Loaded');
   render();
+  setTimeout(() => setSync('', ''), 1500);
 }
 
-function addGuestData(name) {
-  guests.push({ id: guestIdCounter++, name, tableId: null });
+async function reload() { await loadGuests(); }
+
+async function persistSeat(guestId, tableNumber, seatNumber) {
+  setSync('saving', 'Saving…');
+  const { error } = await sb
+    .from('guests')
+    .update({ table_number: tableNumber, seat_number: seatNumber })
+    .eq('id', guestId);
+  if (error) {
+    console.error(error);
+    setSync('error', 'Save failed');
+    // Reload from server to recover from any out-of-sync state
+    await loadGuests();
+    return false;
+  }
+  setSync('saved', 'Saved');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => setSync('', ''), 1200);
+  return true;
+}
+
+function setSync(state, text) {
+  const el = document.getElementById('sync');
+  el.className = 'sync-indicator ' + (state || '');
+  el.textContent = text || '';
 }
 
 // ─── RENDER ───
@@ -593,41 +696,61 @@ function render() {
   updateStats();
 }
 
+function setFilter(f) {
+  filter = f;
+  document.querySelectorAll('.filter-chip').forEach(b => {
+    b.classList.toggle('active', b.dataset.filter === f);
+  });
+  renderSidebar();
+}
+
 function renderSidebar() {
-  const query = document.getElementById('search-input').value.toLowerCase();
+  const query = (document.getElementById('search-input')?.value || '').toLowerCase();
   const container = document.getElementById('guest-list');
   container.innerHTML = '';
 
-  const unassigned = guests.filter(g => g.tableId === null);
-  const seated = guests.filter(g => g.tableId !== null);
+  // Hide declined guests entirely from the planner — they shouldn't take seats.
+  let pool = guests.filter(g => (g.rsvp_status || '').toLowerCase() !== 'no');
 
-  if (guests.length === 0) {
-    container.innerHTML = '<div class="unassigned-label" style="display:block;margin-top:0.5rem;">No guests yet — add one above.</div>';
+  if (filter === 'unassigned') pool = pool.filter(g => g.table_number == null);
+  else if (filter === 'seated') pool = pool.filter(g => g.table_number != null);
+
+  if (query) pool = pool.filter(g => (g.name || '').toLowerCase().includes(query));
+
+  if (pool.length === 0) {
+    container.innerHTML = '<div class="group-label" style="opacity:0.6;">No guests match.</div>';
     return;
   }
 
-  if (unassigned.length > 0) {
-    container.innerHTML += `<div class="unassigned-label">Unassigned (${unassigned.length})</div>`;
-    unassigned.forEach(g => {
-      const hidden = query && !g.name.toLowerCase().includes(query);
-      container.innerHTML += guestItemHTML(g, false, hidden);
-    });
-  }
+  // Group by side
+  const groups = { '女方': [], '男方': [], 'Other': [] };
+  pool.forEach(g => {
+    const k = (g.side === '女方' || g.side === '男方') ? g.side : 'Other';
+    groups[k].push(g);
+  });
 
-  if (seated.length > 0) {
-    container.innerHTML += `<div class="unassigned-label" style="margin-top:0.5rem;">Seated (${seated.length})</div>`;
-    seated.forEach(g => {
-      const hidden = query && !g.name.toLowerCase().includes(query);
-      const tbl = tables.find(t => t.id === g.tableId);
-      container.innerHTML += guestItemHTML(g, true, hidden, tbl ? tbl.name : '');
+  ['女方', '男方', 'Other'].forEach(k => {
+    if (groups[k].length === 0) return;
+    const label = k === '女方' ? "Christy's side" : (k === '男方' ? "Mitchell's side" : 'Other');
+    container.innerHTML += `<div class="group-label">${label} (${groups[k].length})</div>`;
+    groups[k].forEach(g => {
+      const seated = g.table_number != null;
+      const seatLabel = seated ? `T${g.table_number}·S${g.seat_number ?? '?'}` : '';
+      container.innerHTML += `
+        <div class="guest-item ${seated ? 'seated' : ''}"
+             data-gid="${g.id}" draggable="true">
+          <div class="guest-avatar" style="background:${avatarColor(g.name)}">${initials(g.name)}</div>
+          <div class="guest-name">${escHtml(g.name)}</div>
+          ${seatLabel ? `<div class="guest-seat-label">${seatLabel}</div>` : ''}
+        </div>`;
     });
-  }
+  });
 
-  // Attach drag listeners
   container.querySelectorAll('.guest-item').forEach(el => {
-    const gid = parseInt(el.dataset.gid);
+    const gid = el.dataset.gid;
     el.addEventListener('dragstart', e => {
-      dragData = { guestId: gid, fromTableId: null };
+      const g = guests.find(x => x.id === gid);
+      dragData = { guestId: gid, fromTable: g?.table_number ?? null, fromSeat: g?.seat_number ?? null };
       setTimeout(() => el.classList.add('dragging'), 0);
       e.dataTransfer.effectAllowed = 'move';
     });
@@ -635,221 +758,197 @@ function renderSidebar() {
   });
 }
 
-function guestItemHTML(g, seated, hidden, tableLabel='') {
-  const color = avatarColor(g.name);
-  const init = initials(g.name);
-  return `
-    <div class="guest-item ${seated?'seated':''} ${hidden?'hidden':''}" 
-         data-gid="${g.id}" draggable="true">
-      <div class="guest-avatar" style="background:${color}">${init}</div>
-      <div class="guest-name">${escHtml(g.name)}</div>
-      ${tableLabel ? `<div class="guest-seat-label">${escHtml(tableLabel)}</div>` : ''}
-      <div class="guest-del" onclick="removeGuest(${g.id})" title="Remove guest">×</div>
-    </div>`;
-}
-
 function renderTables() {
   const grid = document.getElementById('tables-grid');
   grid.innerHTML = '';
-  tables.forEach(t => {
-    const count = t.guestIds.length;
-    const full = count >= MAX_SEATS;
+
+  for (let t = 1; t <= TABLE_COUNT; t++) {
+    const seatsAtTable = guests.filter(g => g.table_number === t);
+    const count = seatsAtTable.length;
+    const full = count >= SEATS_PER_TABLE;
+
+    // SVG seat circles, colored by occupant if any
+    const seatsSvg = [];
+    for (let s = 1; s <= SEATS_PER_TABLE; s++) {
+      const angle = ((s - 1) / SEATS_PER_TABLE) * 2 * Math.PI - Math.PI / 2;
+      const r = 36;
+      const cx = 44 + r * Math.cos(angle);
+      const cy = 44 + r * Math.sin(angle);
+      const occupant = seatsAtTable.find(g => g.seat_number === s);
+      const fill = occupant ? avatarColor(occupant.name) : 'none';
+      const stroke = occupant ? 'none' : '#C8BFB2';
+      seatsSvg.push(
+        `<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="6" fill="${fill}" stroke="${stroke}" stroke-width="1"/>` +
+        (occupant
+          ? `<text x="${cx.toFixed(1)}" y="${(cy + 2).toFixed(1)}" text-anchor="middle" font-size="5" fill="white" font-family="Raleway, sans-serif" font-weight="600">${escHtml(initials(occupant.name))}</text>`
+          : `<text x="${cx.toFixed(1)}" y="${(cy + 2).toFixed(1)}" text-anchor="middle" font-size="5" fill="#A09890" font-family="Raleway, sans-serif">${s}</text>`
+        )
+      );
+    }
+
+    // Numbered slot list
+    const slotsHtml = [];
+    for (let s = 1; s <= SEATS_PER_TABLE; s++) {
+      const occupant = seatsAtTable.find(g => g.seat_number === s);
+      if (occupant) {
+        slotsHtml.push(`
+          <div class="seat-slot filled"
+               data-table="${t}" data-seat="${s}" data-gid="${occupant.id}"
+               draggable="true"
+               ondragstart="seatDragStart(event,'${occupant.id}',${t},${s})"
+               ondragend="seatDragEnd(event)"
+               ondragover="seatDragOver(event,${t},${s})"
+               ondragleave="seatDragLeave(event,${t},${s})"
+               ondrop="dropOnSeat(event,${t},${s})">
+            <span class="seat-num">${s}</span>
+            <span class="seat-name-text">${escHtml(occupant.name)}</span>
+            <span class="seat-remove" onclick="removeFromSeat('${occupant.id}')" title="Remove">×</span>
+          </div>`);
+      } else {
+        slotsHtml.push(`
+          <div class="seat-slot empty"
+               data-table="${t}" data-seat="${s}"
+               ondragover="seatDragOver(event,${t},${s})"
+               ondragleave="seatDragLeave(event,${t},${s})"
+               ondrop="dropOnSeat(event,${t},${s})">
+            <span class="seat-num">${s}</span>
+            <span class="seat-name-text">—</span>
+          </div>`);
+      }
+    }
+
     grid.innerHTML += `
-      <div class="table-card ${full?'full':''}" id="tc-${t.id}"
-           ondragover="tableDragOver(event,${t.id})"
-           ondragleave="tableDragLeave(event,${t.id})"
-           ondrop="dropOnTable(event,${t.id})">
+      <div class="table-card ${full ? 'full' : ''}" id="tc-${t}">
         <div class="table-header">
-          <input class="table-name-input" value="${escHtml(t.name)}" 
-                 onchange="renameTable(${t.id},this.value)"
-                 title="Click to rename table">
-          <div class="table-count ${full?'at-capacity':''}">${count}/${MAX_SEATS}</div>
+          <div class="table-name">Table ${t}</div>
+          <div class="table-count ${full ? 'at-capacity' : ''}">${count}/${SEATS_PER_TABLE}</div>
         </div>
-        ${tableVisualSVG(t)}
-        <div class="table-guests" id="tg-${t.id}">
-          ${t.guestIds.map(gid => {
-            const g = guests.find(x=>x.id===gid);
-            if(!g) return '';
-            const color = avatarColor(g.name);
-            return `<div class="table-guest-chip" data-gid="${g.id}" draggable="true"
-                         ondragstart="chipDragStart(event,${g.id},${t.id})"
-                         ondragend="chipDragEnd(event)">
-              <div class="chip-avatar" style="background:${color}">${initials(g.name)}</div>
-              <div class="chip-name">${escHtml(g.name)}</div>
-              <div class="chip-remove" onclick="removeFromTable(${g.id},${t.id})">×</div>
-            </div>`;
-          }).join('')}
-          ${count === 0 ? '<div class="table-empty-hint">Drop guests here</div>' : ''}
+        <div class="table-visual">
+          <svg viewBox="0 0 88 88" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="44" cy="44" r="22" fill="#EAE5DB" stroke="#C8BFB2" stroke-width="1.5"/>
+            ${seatsSvg.join('')}
+          </svg>
+        </div>
+        <div class="seats-grid">
+          ${slotsHtml.join('')}
         </div>
       </div>`;
-  });
-}
-
-function tableVisualSVG(table) {
-  const count = table.guestIds.length;
-  const seats = [];
-  for (let i = 0; i < MAX_SEATS; i++) {
-    const angle = (i / MAX_SEATS) * 2 * Math.PI - Math.PI/2;
-    const r = 34;
-    const cx = 42 + r * Math.cos(angle);
-    const cy = 42 + r * Math.sin(angle);
-    const filled = i < count;
-    seats.push(`<circle cx="${cx.toFixed(1)}" cy="${cy.toFixed(1)}" r="5" 
-      fill="${filled ? avatarColor(table.guestIds[i] ? guests.find(g=>g.id===table.guestIds[i])?.name||'' : '') : 'none'}" 
-      stroke="${filled ? 'none' : '#C8BFB2'}" stroke-width="1"/>`);
-  }
-  return `<div class="table-visual">
-    <svg viewBox="0 0 84 84" width="84" height="84" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="42" cy="42" r="20" fill="#EAE5DB" stroke="#C8BFB2" stroke-width="1.5"/>
-      ${seats.join('')}
-    </svg>
-  </div>`;
-}
-
-// ─── ADD GUEST ───
-function addGuest() {
-  const input = document.getElementById('new-guest-input');
-  const name = input.value.trim();
-  if (!name) return;
-  addGuestData(name);
-  input.value = '';
-  render();
-}
-
-function removeGuest(gid) {
-  const g = guests.find(x => x.id === gid);
-  if (!g) return;
-  if (g.tableId !== null) {
-    const tbl = tables.find(t => t.id === g.tableId);
-    if (tbl) tbl.guestIds = tbl.guestIds.filter(id => id !== gid);
-  }
-  guests = guests.filter(x => x.id !== gid);
-  render();
-}
-
-function renameTable(tid, name) {
-  const t = tables.find(x => x.id === tid);
-  if (t) t.name = name.trim() || t.name;
-}
-
-// ─── DRAG & DROP ───
-function tableDragOver(e, tid) {
-  e.preventDefault();
-  if (!dragData) return;
-  const g = guests.find(x => x.id === dragData.guestId);
-  const t = tables.find(x => x.id === tid);
-  if (!t || !g) return;
-  const alreadyHere = t.guestIds.includes(g.id);
-  if (!alreadyHere && t.guestIds.length < MAX_SEATS) {
-    document.getElementById('tc-'+tid)?.classList.add('drag-over');
   }
 }
 
-function tableDragLeave(e, tid) {
-  document.getElementById('tc-'+tid)?.classList.remove('drag-over');
-}
-
-function dropOnTable(e, tid) {
-  e.preventDefault();
-  document.getElementById('tc-'+tid)?.classList.remove('drag-over');
-  if (!dragData) return;
-
-  const { guestId, fromTableId } = dragData;
-  const g = guests.find(x => x.id === guestId);
-  const t = tables.find(x => x.id === tid);
-  if (!g || !t) return;
-
-  // Remove from old location
-  if (fromTableId !== null) {
-    const oldT = tables.find(x => x.id === fromTableId);
-    if (oldT) oldT.guestIds = oldT.guestIds.filter(id => id !== guestId);
-  }
-
-  // Add to new table
-  if (!t.guestIds.includes(guestId) && t.guestIds.length < MAX_SEATS) {
-    t.guestIds.push(guestId);
-    g.tableId = tid;
-  } else if (fromTableId !== null) {
-    // Put back if table full
-    const oldT = tables.find(x => x.id === fromTableId);
-    if (oldT) { oldT.guestIds.push(guestId); }
-  } else {
-    g.tableId = fromTableId;
-  }
-
-  dragData = null;
-  render();
-}
-
-function dropOnSidebar(e) {
-  e.preventDefault();
-  if (!dragData) return;
-  const { guestId, fromTableId } = dragData;
-  if (fromTableId !== null) {
-    const t = tables.find(x => x.id === fromTableId);
-    if (t) t.guestIds = t.guestIds.filter(id => id !== guestId);
-    const g = guests.find(x => x.id === guestId);
-    if (g) g.tableId = null;
-  }
-  dragData = null;
-  render();
-}
-
-function chipDragStart(e, gid, tid) {
-  dragData = { guestId: gid, fromTableId: tid };
+// ─── DRAG / DROP ───
+function seatDragStart(e, gid, tableNum, seatNum) {
+  dragData = { guestId: gid, fromTable: tableNum, fromSeat: seatNum };
   e.dataTransfer.effectAllowed = 'move';
-  setTimeout(() => e.target.classList.add('dragging'), 0);
+  e.target.classList.add('dragging');
+  e.stopPropagation();
 }
-
-function chipDragEnd(e) {
+function seatDragEnd(e) {
   e.target.classList.remove('dragging');
 }
+function seatDragOver(e, tableNum, seatNum) {
+  e.preventDefault();
+  if (!dragData) return;
+  document.querySelector(`.seat-slot[data-table="${tableNum}"][data-seat="${seatNum}"]`)?.classList.add('drag-over');
+}
+function seatDragLeave(e, tableNum, seatNum) {
+  document.querySelector(`.seat-slot[data-table="${tableNum}"][data-seat="${seatNum}"]`)?.classList.remove('drag-over');
+}
 
-function removeFromTable(gid, tid) {
-  const t = tables.find(x => x.id === tid);
-  const g = guests.find(x => x.id === gid);
-  if (t) t.guestIds = t.guestIds.filter(id => id !== gid);
-  if (g) g.tableId = null;
+async function dropOnSeat(e, tableNum, seatNum) {
+  e.preventDefault();
+  document.querySelector(`.seat-slot[data-table="${tableNum}"][data-seat="${seatNum}"]`)?.classList.remove('drag-over');
+  if (!dragData) return;
+
+  const { guestId, fromTable, fromSeat } = dragData;
+  dragData = null;
+
+  if (fromTable === tableNum && fromSeat === seatNum) return; // dropped on self
+
+  const movingGuest = guests.find(g => g.id === guestId);
+  if (!movingGuest) return;
+
+  const occupant = guests.find(g => g.table_number === tableNum && g.seat_number === seatNum);
+
+  // Optimistic local update
+  if (occupant) {
+    // Swap: occupant takes movingGuest's previous spot (could be null)
+    occupant.table_number = fromTable;
+    occupant.seat_number  = fromSeat;
+  }
+  movingGuest.table_number = tableNum;
+  movingGuest.seat_number  = seatNum;
   render();
+
+  // Persist (sequentially to avoid unique-constraint races on swap)
+  if (occupant) {
+    // Stage 1: park occupant in NULL to vacate the seat
+    const ok1 = await persistSeat(occupant.id, null, null);
+    if (!ok1) return;
+    // Stage 2: write moving guest's new seat
+    const ok2 = await persistSeat(movingGuest.id, tableNum, seatNum);
+    if (!ok2) return;
+    // Stage 3: place occupant in moving guest's old seat (if there was one)
+    if (fromTable != null && fromSeat != null) {
+      await persistSeat(occupant.id, fromTable, fromSeat);
+    }
+  } else {
+    await persistSeat(movingGuest.id, tableNum, seatNum);
+  }
+}
+
+async function dropOnSidebar(e) {
+  e.preventDefault();
+  if (!dragData) return;
+  const { guestId } = dragData;
+  dragData = null;
+
+  const g = guests.find(x => x.id === guestId);
+  if (!g || g.table_number == null) return;
+
+  g.table_number = null;
+  g.seat_number  = null;
+  render();
+  await persistSeat(guestId, null, null);
+}
+
+async function removeFromSeat(guestId) {
+  const g = guests.find(x => x.id === guestId);
+  if (!g) return;
+  g.table_number = null;
+  g.seat_number  = null;
+  render();
+  await persistSeat(guestId, null, null);
 }
 
 // ─── STATS ───
 function updateStats() {
-  const total = guests.length;
-  const seated = guests.filter(g => g.tableId !== null).length;
+  const total = guests.filter(g => (g.rsvp_status || '').toLowerCase() !== 'no').length;
+  const seated = guests.filter(g => g.table_number != null).length;
   document.getElementById('stat-total').textContent = total;
   document.getElementById('stat-seated').textContent = seated;
   document.getElementById('stat-unassigned').textContent = total - seated;
 }
 
-// ─── FILTER ───
-function filterGuests() {
-  renderSidebar();
-}
-
-// ─── CLEAR ───
-function clearAll() {
-  if (!confirm('Clear all seating assignments? (Guests will remain in the list)')) return;
-  tables.forEach(t => t.guestIds = []);
-  guests.forEach(g => g.tableId = null);
-  render();
-}
-
-// ─── SUMMARY MODAL ───
+// ─── SUMMARY ───
 function openSummary() {
   let html = '';
-  tables.forEach(t => {
-    const guestNames = t.guestIds.map(gid => guests.find(g=>g.id===gid)?.name).filter(Boolean);
+  for (let t = 1; t <= TABLE_COUNT; t++) {
+    const seated = guests
+      .filter(g => g.table_number === t)
+      .sort((a, b) => (a.seat_number || 0) - (b.seat_number || 0));
     html += `<div class="modal-table-summary">
-      <div class="mts-name">${escHtml(t.name)} <span style="font-weight:300;color:var(--text-light)">(${guestNames.length}/${MAX_SEATS})</span></div>
-      <div class="mts-guests">${guestNames.length > 0 ? guestNames.map(escHtml).join(' · ') : '<span style="color:var(--text-light);font-style:italic">Empty</span>'}</div>
+      <div class="mts-name">Table ${t} <span style="font-weight:300;color:var(--text-light)">(${seated.length}/${SEATS_PER_TABLE})</span></div>
+      <div class="mts-guests">${seated.length > 0
+        ? seated.map(g => `${g.seat_number}. ${escHtml(g.name)}`).join(' · ')
+        : '<span style="color:var(--text-light);font-style:italic">Empty</span>'}</div>
     </div>`;
-  });
-  const unassigned = guests.filter(g => g.tableId === null);
+  }
+  const unassigned = guests.filter(g => g.table_number == null && (g.rsvp_status || '').toLowerCase() !== 'no');
   if (unassigned.length > 0) {
     html += `<div class="modal-table-summary" style="margin-top:0.8rem;border-top:1px solid var(--divider);padding-top:0.8rem;">
       <div class="mts-name" style="color:var(--accent)">Unassigned (${unassigned.length})</div>
-      <div class="mts-guests">${unassigned.map(g=>escHtml(g.name)).join(' · ')}</div>
+      <div class="mts-guests">${unassigned.map(g => escHtml(g.name)).join(' · ')}</div>
     </div>`;
   }
   document.getElementById('modal-content').innerHTML = html;
@@ -860,17 +959,15 @@ function closeModal() {
   document.getElementById('modal-overlay').classList.remove('open');
 }
 
-// ─── UTIL ───
-function escHtml(s) {
-  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
-}
-
-// ─── KEYBOARD ───
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') closeModal();
 });
 
-init();
+document.getElementById('auth-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMagicLink();
+});
+
+bootstrap();
 </script>
 </body>
 </html>

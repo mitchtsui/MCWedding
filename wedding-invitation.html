@@ -1302,6 +1302,175 @@
 </section>
 
 <!-- ─── RSVP ─── -->
+<style>
+  /* RSVP states */
+  .rsvp-state { display: none; }
+  .rsvp-state.active { display: block; }
+
+  .rsvp-card {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 2rem 1.8rem;
+    text-align: center;
+  }
+  .rsvp-card h3 {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 400;
+    font-size: 1.6rem;
+    color: var(--text);
+    margin-bottom: 0.6rem;
+  }
+  .rsvp-card p {
+    color: var(--text-mid);
+    font-size: 0.95rem;
+    margin-bottom: 0.4rem;
+  }
+  .rsvp-code-display {
+    display: inline-block;
+    margin-top: 1rem;
+    padding: 0.5rem 1rem;
+    background: var(--bg-card);
+    border: 1px dashed var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.85rem;
+    letter-spacing: 0.18em;
+    color: var(--text);
+  }
+
+  /* Member picker */
+  .member-picker {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1.2rem;
+  }
+  .member-option {
+    padding: 0.7rem 1rem;
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    cursor: pointer;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1rem;
+    color: var(--text);
+    transition: border-color 0.15s, background 0.15s;
+  }
+  .member-option:hover { border-color: var(--olive); }
+  .member-option.selected { border-color: var(--olive); background: var(--bg-card); }
+  .member-option .meta {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-light);
+  }
+  .member-option .badge {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--olive);
+    border: 1px solid var(--olive);
+    padding: 2px 8px;
+    border-radius: 999px;
+  }
+
+  /* Seat card */
+  .seat-card {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 2.2rem 1.8rem;
+  }
+  .seat-card-head { text-align: center; margin-bottom: 1.5rem; }
+  .seat-card-head .script {
+    font-family: liana, script;
+    font-size: 3rem;
+    color: var(--olive);
+    line-height: 1;
+    padding-bottom: 0.4rem;
+  }
+  .seat-card-head .venue {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+  }
+  .seat-row {
+    display: grid;
+    grid-template-columns: 1fr auto;
+    gap: 0.8rem;
+    align-items: center;
+    padding: 1rem 0;
+    border-top: 1px solid var(--divider);
+  }
+  .seat-row:last-child { border-bottom: 1px solid var(--divider); }
+  .seat-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    color: var(--text);
+  }
+  .seat-name .att-no {
+    display: inline-block;
+    margin-left: 0.5rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-light);
+  }
+  .seat-loc {
+    text-align: right;
+    font-family: 'Raleway', sans-serif;
+  }
+  .seat-loc .table {
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+  .seat-loc .seat {
+    display: block;
+    margin-top: 0.2rem;
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.2rem;
+    color: var(--olive);
+    letter-spacing: 0.04em;
+  }
+  .seat-loc .pending {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: 0.95rem;
+    color: var(--text-light);
+  }
+  .seat-card-note {
+    margin-top: 1.2rem;
+    font-size: 0.78rem;
+    color: var(--text-light);
+    text-align: center;
+    font-style: italic;
+  }
+  .seat-card-actions {
+    margin-top: 1.5rem;
+    text-align: center;
+  }
+  .seat-edit-link {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+    background: transparent;
+    border: 1px solid var(--divider);
+    padding: 0.55rem 1.1rem;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .seat-edit-link:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+</style>
+
 <section id="rsvp" style="background:var(--bg-card);">
   <div class="container">
     <div class="section-divider reveal"></div>
@@ -1311,15 +1480,44 @@
     </div>
 
     <div class="rsvp-container">
-      <div class="config-notice reveal">
-        <strong>Setup required:</strong> Replace <code>YOUR_SUPABASE_URL</code> and <code>YOUR_SUPABASE_ANON_KEY</code> in the script below with your project credentials. Create a table <code>rsvp</code> with columns: <code>name</code>, <code>email</code>, <code>attendance</code>, <code>plus_one_name</code>, <code>dietary</code>, <code>message</code>.
+
+      <!-- State 1: No code in URL -->
+      <div id="rsvp-no-code" class="rsvp-state reveal">
+        <div class="rsvp-card">
+          <h3>Personalised Invitation</h3>
+          <p>To RSVP and view your seat, please use the personalised link printed on your invitation card.</p>
+          <p style="margin-top:1rem;font-size:0.85rem;">Lost your link? Please reach out to Christy or Mitchell directly and we'll resend it.</p>
+        </div>
       </div>
 
-      <div id="rsvp-form-wrap" class="reveal">
-        <div class="form-group">
-          <label class="form-label">Full Name *</label>
-          <input type="text" class="form-input" id="f-name" placeholder="Your full name" required>
+      <!-- State 2: Looking up -->
+      <div id="rsvp-loading" class="rsvp-state reveal">
+        <div class="rsvp-card">
+          <p>Looking up your invitation…</p>
         </div>
+      </div>
+
+      <!-- State 3: Invalid code -->
+      <div id="rsvp-invalid" class="rsvp-state reveal">
+        <div class="rsvp-card">
+          <h3>Invitation Not Recognised</h3>
+          <p>The link you used doesn't match any invitation on our list. Please double-check the code printed on your card, or contact us directly.</p>
+          <div class="rsvp-code-display" id="invalid-code-display"></div>
+        </div>
+      </div>
+
+      <!-- State 4: Form (code valid) -->
+      <div id="rsvp-form-wrap" class="rsvp-state reveal">
+        <div id="member-picker-wrap" style="display:none;">
+          <label class="form-label">Who is replying?</label>
+          <div class="member-picker" id="member-picker"></div>
+        </div>
+
+        <div class="form-group" id="name-display-group">
+          <label class="form-label">Name</label>
+          <div class="form-input" style="background:var(--bg-card);cursor:default;" id="f-name-display"></div>
+        </div>
+
         <div class="form-group">
           <label class="form-label">Email Address</label>
           <input type="email" class="form-input" id="f-email" placeholder="your@email.com">
@@ -1360,10 +1558,21 @@
         <div id="form-error" style="margin-top:1rem;color:#8B3A3A;font-family:'Raleway',sans-serif;font-size:0.7rem;letter-spacing:0.12em;display:none;"></div>
       </div>
 
-      <div class="rsvp-success" id="rsvp-success">
-        <div class="success-script">Thank you</div>
-        <p id="success-message">We've received your RSVP and can't wait to celebrate with you.</p>
+      <!-- State 5: Seat card (post-RSVP confirmation / re-lookup) -->
+      <div id="seat-card" class="rsvp-state reveal">
+        <div class="seat-card">
+          <div class="seat-card-head">
+            <div class="script">Your Seat</div>
+            <div class="venue">The Salisbury Room · The Peninsula Hong Kong</div>
+          </div>
+          <div id="seat-card-rows"></div>
+          <p class="seat-card-note">Seats are pre-arranged. If anything looks wrong, please reach out to us.</p>
+          <div class="seat-card-actions">
+            <button class="seat-edit-link" onclick="editRsvp()">Update my RSVP</button>
+          </div>
+        </div>
       </div>
+
     </div>
   </div>
 </section>
@@ -1379,6 +1588,199 @@
   // Replace these with your actual Supabase credentials
   const SUPABASE_URL = 'YOUR_SUPABASE_URL';
   const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY';
+
+  // ─── INVITATION CODE FLOW ───
+  // Reads ?code=MC-XXXXX from the URL, looks up the household,
+  // then either shows the prefilled RSVP form or the seat card.
+  let INVITATION = null;          // { code, members: [{id, name, side, has_rsvpd}] }
+  let SELECTED_MEMBER = null;     // { id, name, ... }
+
+  function readCodeFromUrl() {
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const c = params.get('code') || params.get('c');
+      return c ? c.trim().toUpperCase() : null;
+    } catch (e) { return null; }
+  }
+
+  function setRsvpState(stateId) {
+    ['rsvp-no-code','rsvp-loading','rsvp-invalid','rsvp-form-wrap','seat-card']
+      .forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.classList.toggle('active', id === stateId);
+      });
+  }
+
+  async function rpc(fn, body) {
+    if (SUPABASE_URL === 'YOUR_SUPABASE_URL' || !SUPABASE_URL) {
+      // Demo mode — return a mock response so the flow is visible without DB.
+      return demoRpc(fn, body);
+    }
+    const res = await fetch(`${SUPABASE_URL}/rest/v1/rpc/${fn}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON_KEY,
+        'Authorization': `Bearer ${SUPABASE_ANON_KEY}`
+      },
+      body: JSON.stringify(body || {})
+    });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      throw new Error(`RPC ${fn} failed (${res.status}): ${txt}`);
+    }
+    return res.json();
+  }
+
+  // Demo-mode mock — lets the page work end-to-end before Supabase is wired up.
+  function demoRpc(fn, body) {
+    const code = (body?.p_code || '').toUpperCase();
+    const DEMO = {
+      'MC-DEMO1': {
+        code: 'MC-DEMO1',
+        members: [
+          { id: 'demo-1', name: 'Demo Guest', side: '女方', has_rsvpd: false }
+        ],
+        seats: [
+          { name: 'Demo Guest', table_number: 5, seat_number: 3, has_seat: true, has_rsvpd: false, attendance: true }
+        ]
+      },
+      'MC-DEMO2': {
+        code: 'MC-DEMO2',
+        members: [
+          { id: 'demo-2a', name: 'Mark Chan',  side: '男方', has_rsvpd: false },
+          { id: 'demo-2b', name: 'Sarah Chan', side: '男方', has_rsvpd: false }
+        ],
+        seats: [
+          { name: 'Mark Chan',  table_number: 5, seat_number: 3, has_seat: true, has_rsvpd: false, attendance: true },
+          { name: 'Sarah Chan', table_number: 5, seat_number: 4, has_seat: true, has_rsvpd: false, attendance: true }
+        ]
+      }
+    };
+    const entry = DEMO[code];
+
+    if (fn === 'lookup_invitation') {
+      if (!entry) return Promise.resolve({ found: false });
+      return Promise.resolve({ found: true, code: entry.code, members: entry.members });
+    }
+    if (fn === 'lookup_seats') {
+      if (!entry) return Promise.resolve({ available: false });
+      const submitted = sessionStorage.getItem('demo-rsvp-' + code);
+      if (!submitted) return Promise.resolve({ available: false });
+      return Promise.resolve({ available: true, members: entry.seats });
+    }
+    if (fn === 'submit_rsvp') {
+      if (!entry) return Promise.resolve({ success: false, error: 'Invalid code (demo).' });
+      sessionStorage.setItem('demo-rsvp-' + code, '1');
+      return Promise.resolve({ success: true });
+    }
+    return Promise.resolve({});
+  }
+
+  function renderMemberPicker(members) {
+    const wrap = document.getElementById('member-picker-wrap');
+    const picker = document.getElementById('member-picker');
+    if (members.length <= 1) {
+      wrap.style.display = 'none';
+      SELECTED_MEMBER = members[0] || null;
+      updateNameDisplay();
+      return;
+    }
+    wrap.style.display = '';
+    picker.innerHTML = '';
+    members.forEach(m => {
+      const opt = document.createElement('div');
+      opt.className = 'member-option';
+      opt.dataset.id = m.id;
+      opt.innerHTML = `
+        <span>${escHtml(m.name)} <span class="meta">${escHtml(m.side || '')}</span></span>
+        ${m.has_rsvpd ? '<span class="badge">Replied</span>' : ''}
+      `;
+      opt.onclick = () => selectMember(m);
+      picker.appendChild(opt);
+    });
+    // Auto-select first non-RSVP'd, else first
+    const firstNew = members.find(m => !m.has_rsvpd) || members[0];
+    selectMember(firstNew);
+  }
+
+  function selectMember(m) {
+    SELECTED_MEMBER = m;
+    document.querySelectorAll('.member-option').forEach(el => {
+      el.classList.toggle('selected', el.dataset.id === m.id);
+    });
+    updateNameDisplay();
+  }
+
+  function updateNameDisplay() {
+    const el = document.getElementById('f-name-display');
+    if (el) el.textContent = SELECTED_MEMBER ? SELECTED_MEMBER.name : '—';
+  }
+
+  function escHtml(s) {
+    return String(s == null ? '' : s)
+      .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  async function initRsvpFlow() {
+    const code = readCodeFromUrl();
+    if (!code) { setRsvpState('rsvp-no-code'); return; }
+
+    setRsvpState('rsvp-loading');
+    try {
+      const inv = await rpc('lookup_invitation', { p_code: code });
+      if (!inv || !inv.found) {
+        document.getElementById('invalid-code-display').textContent = code;
+        setRsvpState('rsvp-invalid');
+        return;
+      }
+      INVITATION = inv;
+
+      // If anyone in the household has already RSVP'd, fetch seats and show the card.
+      const seats = await rpc('lookup_seats', { p_code: code });
+      if (seats && seats.available) {
+        renderSeatCard(seats.members);
+        setRsvpState('seat-card');
+      } else {
+        renderMemberPicker(inv.members);
+        setRsvpState('rsvp-form-wrap');
+      }
+    } catch (e) {
+      console.error('RSVP lookup failed:', e);
+      document.getElementById('invalid-code-display').textContent = code;
+      setRsvpState('rsvp-invalid');
+    }
+  }
+
+  function renderSeatCard(members) {
+    const rows = document.getElementById('seat-card-rows');
+    rows.innerHTML = '';
+    members.forEach(m => {
+      const declined = m.has_rsvpd && m.attendance === false;
+      let locHtml;
+      if (declined) {
+        locHtml = `<span class="pending">Will be missed</span>`;
+      } else if (m.has_seat) {
+        locHtml = `<span class="table">Table ${m.table_number}</span><span class="seat">Seat ${m.seat_number}</span>`;
+      } else {
+        locHtml = `<span class="pending">To be assigned</span>`;
+      }
+      rows.innerHTML += `
+        <div class="seat-row">
+          <div class="seat-name">
+            ${escHtml(m.name)}
+            ${declined ? '<span class="att-no">Declined</span>' : ''}
+          </div>
+          <div class="seat-loc">${locHtml}</div>
+        </div>`;
+    });
+  }
+
+  function editRsvp() {
+    if (!INVITATION) return;
+    renderMemberPicker(INVITATION.members);
+    setRsvpState('rsvp-form-wrap');
+  }
 
   // ─── COUNTDOWN ───
   function updateCountdown() {
@@ -1447,74 +1849,61 @@
 
   // ─── SUBMIT RSVP ───
   async function submitRSVP() {
-    const name = document.getElementById('f-name').value.trim();
-    const email = document.getElementById('f-email').value.trim();
+    const errEl = document.getElementById('form-error');
+    errEl.style.display = 'none';
+
+    if (!INVITATION || !SELECTED_MEMBER) {
+      errEl.textContent = 'Please select who is replying.';
+      errEl.style.display = 'block';
+      return;
+    }
+
+    const email   = document.getElementById('f-email').value.trim();
     const plusOne = document.getElementById('f-plusone').value.trim();
     const dietary = document.getElementById('f-dietary').value;
     const song    = document.getElementById('f-song').value.trim();
     const message = document.getElementById('f-message').value.trim();
-    const errEl = document.getElementById('form-error');
-
-    if (!name) {
-      errEl.textContent = 'Please enter your name.';
-      errEl.style.display = 'block';
-      return;
-    }
-    errEl.style.display = 'none';
+    const isYes   = (attendance === 'yes');
 
     const btn = document.getElementById('rsvp-submit');
     btn.disabled = true;
     btn.textContent = 'SENDING…';
 
-    const payload = {
-      name,
-      email: email || null,
-      attendance,
-      plus_one_name: plusOne || null,
-      dietary: dietary || null,
-      song_request: song || null,
-      message: message || null
-    };
-
     try {
-      if (SUPABASE_URL === 'YOUR_SUPABASE_URL') {
-        // Demo mode — simulate success
-        await new Promise(r => setTimeout(r, 800));
-        showSuccess(attendance, name);
-        return;
-      }
-
-      const res = await fetch(`${SUPABASE_URL}/rest/v1/rsvp`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'apikey': SUPABASE_ANON_KEY,
-          'Authorization': `Bearer ${SUPABASE_ANON_KEY}`,
-          'Prefer': 'return=minimal'
-        },
-        body: JSON.stringify(payload)
+      const out = await rpc('submit_rsvp', {
+        p_code:          INVITATION.code,
+        p_guest_id:      SELECTED_MEMBER.id,
+        p_email:         email || null,
+        p_attendance:    isYes,
+        p_plus_one_name: isYes ? (plusOne || null) : null,
+        p_dietary:       isYes ? (dietary || null) : null,
+        p_song_request:  song || null,
+        p_message:       message || null
       });
 
-      if (!res.ok) throw new Error(`${res.status}`);
-      showSuccess(attendance, name);
+      if (!out || out.success !== true) {
+        throw new Error((out && out.error) || 'submit failed');
+      }
+
+      // Reflect the new RSVP locally so the picker badge updates.
+      const m = INVITATION.members.find(x => x.id === SELECTED_MEMBER.id);
+      if (m) m.has_rsvpd = true;
+
+      // Fetch seat info and show the card.
+      const seats = await rpc('lookup_seats', { p_code: INVITATION.code });
+      if (seats && seats.available) {
+        renderSeatCard(seats.members);
+        setRsvpState('seat-card');
+      } else {
+        // Fallback — should not normally happen
+        setRsvpState('seat-card');
+      }
     } catch(e) {
+      console.error(e);
       btn.disabled = false;
       btn.textContent = 'SEND RSVP';
       errEl.textContent = 'Something went wrong. Please try again or contact us directly.';
       errEl.style.display = 'block';
-    }
-  }
-
-  function showSuccess(att, name) {
-    document.getElementById('rsvp-form-wrap').style.display = 'none';
-    const suc = document.getElementById('rsvp-success');
-    suc.style.display = 'block';
-    if (att === 'yes') {
-      document.getElementById('success-message').textContent =
-        `We've received your RSVP, ${name.split(' ')[0]}. We can't wait to celebrate with you on November 12th.`;
-    } else {
-      document.getElementById('success-message').textContent =
-        `We've received your RSVP, ${name.split(' ')[0]}. We're sorry you can't make it, and we'll be thinking of you.`;
     }
   }
 
@@ -1636,6 +2025,9 @@
   }
   // Offset by 2s so the two slideshows don't transition simultaneously
   setTimeout(() => setInterval(() => goStorySlide(storyIndex + 1), 4000), 2000);
+
+  // ─── INIT RSVP / CODE FLOW ───
+  initRsvpFlow();
 </script>
 
 <!-- ─── CHAMBOLLE EASTER EGG ─── -->

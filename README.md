@@ -26,21 +26,40 @@ Both HTML files are **fully self-contained** — no build step, no dependencies,
 - **GitHub Pages:** push to repo, enable Pages from `main` branch
 - **Any static host:** upload the file directly
 
-### 2. Connect Supabase (for live RSVPs)
+### 2. Connect Supabase
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run `supabase/schema_seed.sql` in the Supabase SQL Editor
-   - This creates both tables and seeds all 198 guests
-3. Open `wedding-invitation.html` and replace:
-   ```js
-   const SUPABASE_URL  = 'YOUR_SUPABASE_URL'
-   const SUPABASE_ANON_KEY = 'YOUR_SUPABASE_ANON_KEY'
-   ```
-   with your actual project URL and anon key (found in Project Settings → API)
+   - Creates both tables, seeds all 198 guests, **and** generates a unique invitation code per guest, sets up RLS, and creates the public RPCs (`lookup_invitation`, `lookup_seats`, `submit_rsvp`).
+   - The script is idempotent — safe to run multiple times.
+3. Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY` in **both**:
+   - `wedding-invitation.html`
+   - `seating-planner.html`
 
-> Until credentials are added, the RSVP form runs in **demo mode** and simulates a successful submission without touching any database.
+> Until credentials are added, both files run in demo mode. The RSVP page accepts `?code=MC-DEMO1` (single guest) or `?code=MC-DEMO2` (couple) for end-to-end UI testing without a database.
 
-### 3. (Optional) Seed via Node.js
+### 3. Pair couples onto a shared invitation code (optional)
+
+By default each guest gets their own code. To share one envelope between a couple:
+
+```sql
+SELECT pair_invitation('Mark Chan', 'Sarah Chan');
+-- Sarah is merged onto Mark's code. Both seats display together.
+```
+
+### 4. Print the code list
+
+```sql
+SELECT * FROM invitation_print_list ORDER BY guest_number;
+```
+
+Export this as CSV, then write the per-guest URL onto each printed invitation:
+
+```
+https://yourdomain.com/?code=MC-XXXXX
+```
+
+### 5. (Optional) Seed via Node.js
 
 If you prefer seeding with JavaScript rather than SQL:
 
@@ -50,6 +69,22 @@ npm install @supabase/supabase-js
 node supabase/seed-guests.js
 ```
 
+> The DB trigger auto-fills `invitation_code` for every new guest, so the seed script doesn't need to set it.
+
+---
+
+## RSVP & seating flow
+
+1. **Each guest gets a personalised URL**: `https://[host]/?code=MC-XXXXX`
+2. Guest opens the link → invitation looked up via `lookup_invitation` RPC → form prefills with their name (and household, for couples).
+3. Guest submits RSVP → `submit_rsvp` RPC writes a row linked by `guest_id` and mirrors `rsvp_status` onto `guests`.
+4. Confirmation page shows table + seat number for everyone on that invitation, pulled via `lookup_seats`.
+5. Guest can revisit the same URL anytime to see their seat or update their RSVP.
+6. **You assign seats** in `seating-planner.html` (magic-link sign-in for `christychowtc@gmail.com` / `mitchell.tsui.mc@gmail.com`). Drag-drop persists `table_number` + `seat_number` to Supabase.
+7. Plus-ones not on the master list appear in the `pending_plus_ones` view for manual placement.
+
+The anon key never has direct read access to `guests` — it can only call the three SECURITY DEFINER RPCs, which return at most one household.
+
 ---
 
 ## Website sections
@@ -58,7 +93,7 @@ node supabase/seed-guests.js
 
 - **Live countdown** to 12 November 2026, 17:00 HKT
 - **Chambolle easter egg** — Pembroke Welsh Corgi pops up as you scroll
-- **RSVP form** — name, attendance, dietary requirements, song request, message
+- **Personalised RSVP** — code-based, prefilled, returns assigned seat
 - **SVG map** of Tsim Sha Tsui with The Peninsula marked
 - **Fully responsive** with touch swipe support
 
@@ -90,11 +125,13 @@ Row-level security is enabled. Public users can read `guests` and insert to `rsv
 
 ## Pending before go-live
 
-- [ ] Add Supabase credentials to `wedding-invitation.html`
-- [ ] Run `supabase/schema_seed.sql`
+- [ ] Run `supabase/schema_seed.sql` in the Supabase SQL Editor
+- [ ] Add Supabase credentials to `wedding-invitation.html` **and** `seating-planner.html`
+- [ ] Pair couples onto shared codes via `pair_invitation()`
+- [ ] Export `invitation_print_list` and write codes onto physical invitations
+- [ ] Sign in to seating planner and assign tables/seats
 - [ ] Upload pre-wedding photos to Gallery section
 - [ ] Confirm 22 pending guests
-- [ ] Assign table numbers (use `seating-planner.html`)
 
 ---
 

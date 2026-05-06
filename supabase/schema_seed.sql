@@ -265,3 +265,352 @@ VALUES
   (197, 'Jia Jhang', 'Uni Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
   (198, 'Huang Jia', 'Uni Friends', '男方', 'Pending', 'Pending', NULLIF('',''), FALSE, NULL)
 ON CONFLICT DO NOTHING;
+
+
+-- ============================================================
+-- Phase 2: Code-based RSVP + Seat Assignment integration
+-- Idempotent — safe to run multiple times.
+-- ============================================================
+
+-- 5. Extend tables with invitation code + seat slot
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS invitation_code TEXT;
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS seat_number     INTEGER;
+ALTER TABLE rsvp   ADD COLUMN IF NOT EXISTS guest_id        UUID REFERENCES guests(id);
+ALTER TABLE rsvp   ADD COLUMN IF NOT EXISTS invitation_code TEXT;
+
+-- One guest per (table, seat); allows multiple NULLs
+CREATE UNIQUE INDEX IF NOT EXISTS guests_table_seat_uniq
+  ON guests(table_number, seat_number)
+  WHERE table_number IS NOT NULL AND seat_number IS NOT NULL;
+
+-- Invitation code lookup (NOT unique — couples share codes)
+CREATE INDEX IF NOT EXISTS guests_invitation_code_idx ON guests(invitation_code);
+
+
+-- 6. Code generator: 'MC-' + 5 chars from 31-symbol alphabet (no 0/O/1/I/L)
+CREATE OR REPLACE FUNCTION generate_invitation_code()
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  alphabet TEXT := 'ABCDEFGHJKMNPQRSTUVWXYZ23456789';
+  result   TEXT := 'MC-';
+  i INT;
+BEGIN
+  FOR i IN 1..5 LOOP
+    result := result || substr(alphabet, 1 + floor(random() * length(alphabet))::int, 1);
+  END LOOP;
+  RETURN result;
+END;
+$$;
+
+-- 7. Trigger: auto-fill invitation_code on new guest INSERT (if not provided)
+CREATE OR REPLACE FUNCTION ensure_invitation_code()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  attempt INT := 0;
+BEGIN
+  IF NEW.invitation_code IS NULL THEN
+    LOOP
+      NEW.invitation_code := generate_invitation_code();
+      attempt := attempt + 1;
+      EXIT WHEN NOT EXISTS (
+        SELECT 1 FROM guests WHERE invitation_code = NEW.invitation_code
+      );
+      IF attempt > 20 THEN
+        RAISE EXCEPTION 'Could not generate unique invitation code after 20 attempts';
+      END IF;
+    END LOOP;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DROP TRIGGER IF EXISTS guests_invitation_code_trigger ON guests;
+CREATE TRIGGER guests_invitation_code_trigger
+  BEFORE INSERT ON guests
+  FOR EACH ROW EXECUTE FUNCTION ensure_invitation_code();
+
+-- 8. Backfill: assign codes to existing guests missing one.
+DO $$
+DECLARE
+  g RECORD;
+  new_code TEXT;
+  attempt  INT;
+BEGIN
+  FOR g IN SELECT id FROM guests WHERE invitation_code IS NULL LOOP
+    attempt := 0;
+    LOOP
+      new_code := generate_invitation_code();
+      attempt  := attempt + 1;
+      IF NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = new_code) THEN
+        UPDATE guests SET invitation_code = new_code WHERE id = g.id;
+        EXIT;
+      END IF;
+      IF attempt > 20 THEN
+        RAISE EXCEPTION 'Backfill failed: too many collisions for guest %', g.id;
+      END IF;
+    END LOOP;
+  END LOOP;
+END $$;
+
+
+-- 9. Helper: merge two guests onto one shared invitation code (for couples).
+--    The first arg's code is kept; the second guest is merged onto it.
+--    Usage: SELECT pair_invitation('Mark Chan', 'Sarah Chan');
+CREATE OR REPLACE FUNCTION pair_invitation(p_keep_name TEXT, p_merge_name TEXT)
+RETURNS TEXT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+  shared_code TEXT;
+BEGIN
+  SELECT invitation_code INTO shared_code
+  FROM guests
+  WHERE name = p_keep_name
+  LIMIT 1;
+  IF shared_code IS NULL THEN
+    RAISE EXCEPTION 'Guest "%" not found or has no code', p_keep_name;
+  END IF;
+  UPDATE guests SET invitation_code = shared_code WHERE name = p_merge_name;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'Guest "%" not found', p_merge_name;
+  END IF;
+  RETURN shared_code;
+END;
+$$;
+
+
+-- 10. Admin allowlist (Christy + Mitchell)
+CREATE OR REPLACE FUNCTION is_admin()
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE(auth.email(), '') IN (
+    'christychowtc@gmail.com',
+    'mitchell.tsui.mc@gmail.com'
+  );
+$$;
+
+
+-- 11. Lock down direct table access — replace blanket public read with RPC-only.
+DROP POLICY IF EXISTS "Public read guests"   ON guests;
+DROP POLICY IF EXISTS "Service write guests" ON guests;
+DROP POLICY IF EXISTS "Public insert rsvp"   ON rsvp;
+DROP POLICY IF EXISTS "Service manage rsvp"  ON rsvp;
+DROP POLICY IF EXISTS "Admin all guests"     ON guests;
+DROP POLICY IF EXISTS "Admin all rsvp"       ON rsvp;
+DROP POLICY IF EXISTS "Service all guests"   ON guests;
+DROP POLICY IF EXISTS "Service all rsvp"     ON rsvp;
+
+CREATE POLICY "Admin all guests" ON guests FOR ALL
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Admin all rsvp" ON rsvp FOR ALL
+  USING (is_admin())
+  WITH CHECK (is_admin());
+
+CREATE POLICY "Service all guests" ON guests FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+
+CREATE POLICY "Service all rsvp" ON rsvp FOR ALL
+  USING (auth.role() = 'service_role')
+  WITH CHECK (auth.role() = 'service_role');
+
+
+-- 12. Public RPCs (SECURITY DEFINER — return only the matched household)
+
+-- lookup_invitation(code) → household members for prefill (no seat info)
+CREATE OR REPLACE FUNCTION lookup_invitation(p_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  members JSONB;
+  norm    TEXT;
+BEGIN
+  IF p_code IS NULL OR length(trim(p_code)) = 0 THEN
+    RETURN jsonb_build_object('found', false);
+  END IF;
+
+  norm := upper(trim(p_code));
+
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'id',         g.id,
+      'name',       g.name,
+      'side',       g.side,
+      'has_rsvpd',  EXISTS (SELECT 1 FROM rsvp r WHERE r.guest_id = g.id)
+    )
+    ORDER BY g.guest_number
+  )
+  INTO members
+  FROM guests g
+  WHERE g.invitation_code = norm;
+
+  IF members IS NULL THEN
+    RETURN jsonb_build_object('found', false);
+  END IF;
+
+  RETURN jsonb_build_object(
+    'found',   true,
+    'code',    norm,
+    'members', members
+  );
+END;
+$$;
+
+-- lookup_seats(code) → seat info (only after at least one household RSVP)
+CREATE OR REPLACE FUNCTION lookup_seats(p_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  any_rsvp BOOLEAN;
+  members  JSONB;
+  norm     TEXT;
+BEGIN
+  IF p_code IS NULL OR length(trim(p_code)) = 0 THEN
+    RETURN jsonb_build_object('available', false);
+  END IF;
+
+  norm := upper(trim(p_code));
+
+  SELECT EXISTS(
+    SELECT 1 FROM rsvp r
+    JOIN guests g ON r.guest_id = g.id
+    WHERE g.invitation_code = norm
+  ) INTO any_rsvp;
+
+  IF NOT any_rsvp THEN
+    RETURN jsonb_build_object('available', false);
+  END IF;
+
+  SELECT jsonb_agg(
+    jsonb_build_object(
+      'name',         g.name,
+      'table_number', g.table_number,
+      'seat_number',  g.seat_number,
+      'attendance',   (SELECT r.attendance FROM rsvp r
+                       WHERE r.guest_id = g.id
+                       ORDER BY r.submitted_at DESC LIMIT 1),
+      'has_seat',     g.table_number IS NOT NULL AND g.seat_number IS NOT NULL,
+      'has_rsvpd',    EXISTS (SELECT 1 FROM rsvp r WHERE r.guest_id = g.id)
+    )
+    ORDER BY g.guest_number
+  )
+  INTO members
+  FROM guests g
+  WHERE g.invitation_code = norm;
+
+  RETURN jsonb_build_object('available', true, 'members', members);
+END;
+$$;
+
+-- submit_rsvp(...) → adds RSVP linked to guest_id; validates ownership of code.
+CREATE OR REPLACE FUNCTION submit_rsvp(
+  p_code           TEXT,
+  p_guest_id       UUID,
+  p_email          TEXT,
+  p_attendance     BOOLEAN,
+  p_plus_one_name  TEXT,
+  p_dietary        TEXT,
+  p_song_request   TEXT,
+  p_message        TEXT
+) RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  guest_name TEXT;
+  norm       TEXT;
+BEGIN
+  norm := upper(trim(coalesce(p_code, '')));
+
+  SELECT name INTO guest_name
+  FROM guests
+  WHERE id = p_guest_id AND invitation_code = norm;
+
+  IF guest_name IS NULL THEN
+    RETURN jsonb_build_object('success', false, 'error', 'Invalid guest or invitation code.');
+  END IF;
+
+  -- Replace any prior RSVP from the same guest (latest wins)
+  DELETE FROM rsvp WHERE guest_id = p_guest_id;
+
+  INSERT INTO rsvp (
+    guest_id, invitation_code, name, email, attendance,
+    plus_one_name, dietary, song_request, message
+  ) VALUES (
+    p_guest_id, norm, guest_name, p_email, p_attendance,
+    p_plus_one_name, p_dietary, p_song_request, p_message
+  );
+
+  -- Mirror status onto guests.rsvp_status for the admin tracker
+  UPDATE guests
+  SET rsvp_status = CASE WHEN p_attendance THEN 'Yes' ELSE 'No' END,
+      dietary     = COALESCE(NULLIF(trim(p_dietary), ''), dietary)
+  WHERE id = p_guest_id;
+
+  RETURN jsonb_build_object('success', true);
+END;
+$$;
+
+
+-- 13. Grants — public RPC surface
+GRANT EXECUTE ON FUNCTION lookup_invitation(TEXT)   TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION lookup_seats(TEXT)        TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION submit_rsvp(TEXT, UUID, TEXT, BOOLEAN, TEXT, TEXT, TEXT, TEXT)
+                                                    TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION pair_invitation(TEXT, TEXT) TO authenticated;
+
+
+-- 14. Pending plus-one queue — RSVPs naming a plus-one not in master list.
+CREATE OR REPLACE VIEW pending_plus_ones AS
+SELECT
+  r.id              AS rsvp_id,
+  r.name            AS rsvp_name,
+  r.plus_one_name,
+  r.dietary,
+  r.submitted_at,
+  r.guest_id        AS host_guest_id,
+  g.table_number    AS host_table,
+  g.seat_number     AS host_seat,
+  g.invitation_code AS host_code
+FROM rsvp r
+LEFT JOIN guests g ON g.id = r.guest_id
+WHERE r.plus_one_name IS NOT NULL
+  AND length(trim(r.plus_one_name)) > 0
+  AND NOT EXISTS (
+    SELECT 1 FROM guests gp
+    WHERE LOWER(TRIM(gp.name)) = LOWER(TRIM(r.plus_one_name))
+  );
+
+GRANT SELECT ON pending_plus_ones TO authenticated;
+
+
+-- 15. Printable code list — for hand-writing / printing onto invitations.
+--     Run: SELECT * FROM invitation_print_list ORDER BY guest_number;
+CREATE OR REPLACE VIEW invitation_print_list AS
+SELECT
+  guest_number,
+  name,
+  group_name,
+  side,
+  invitation_code,
+  CASE WHEN COUNT(*) OVER (PARTITION BY invitation_code) > 1
+       THEN 'shared' ELSE 'solo' END AS code_type
+FROM guests
+WHERE invitation_code IS NOT NULL;
+
+GRANT SELECT ON invitation_print_list TO authenticated;
