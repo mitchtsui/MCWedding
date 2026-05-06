@@ -1841,6 +1841,17 @@
     endIso:   '2026-11-12T23:00:00+08:00'
   };
 
+  function eventWebsite() {
+    // Same site the guest is on — uses the production domain in production,
+    // localhost in dev. Falls back to a hard-coded URL just in case.
+    try {
+      if (window.location && window.location.origin && /^https?:/.test(window.location.origin)) {
+        return window.location.origin;
+      }
+    } catch (e) {}
+    return 'https://mc-wedding-ten.vercel.app';
+  }
+
   function buildDescription() {
     const lines = [
       "We can't wait to celebrate with you!",
@@ -1860,6 +1871,8 @@
         lines.push(`  ${s.name}: Table ${s.table_number}, Seat ${s.seat_number}`);
       });
     }
+
+    lines.push('', 'Event website: ' + eventWebsite());
     return lines.join('\n');
   }
 
@@ -1916,6 +1929,7 @@
       `DTEND:${EVENT.endUtc}`,
       `SUMMARY:${icsEscape(EVENT.title)}`,
       `LOCATION:${icsEscape(EVENT.location)}`,
+      `URL:${eventWebsite()}`,
       `DESCRIPTION:${icsEscape(buildDescription())}`,
       'END:VEVENT',
       'END:VCALENDAR'
