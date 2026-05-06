@@ -1458,6 +1458,7 @@
     margin-top: 1.5rem;
     text-align: center;
   }
+  .seat-card-actions > * { margin: 0.3rem; }
   .seat-edit-link {
     font-family: 'Raleway', sans-serif;
     font-size: 0.65rem;
@@ -1471,6 +1472,35 @@
     transition: background 0.15s, color 0.15s;
   }
   .seat-edit-link:hover { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .seat-edit-link.primary {
+    background: var(--olive);
+    border-color: var(--olive);
+    color: #fff;
+  }
+  .seat-edit-link.primary:hover { background: var(--sea-spray); border-color: var(--sea-spray); }
+
+  .calendar-choices {
+    display: none;
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px solid var(--divider);
+    text-align: center;
+  }
+  .calendar-choices.open { display: block; }
+  .calendar-choices .label {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-bottom: 0.8rem;
+  }
+  .calendar-choices .row {
+    display: flex;
+    justify-content: center;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
 </style>
 
 <section id="rsvp" style="background:var(--bg-card);">
@@ -1569,7 +1599,16 @@
           <div id="seat-card-rows"></div>
           <p class="seat-card-note">Seats are pre-arranged. If anything looks wrong, please reach out to us.</p>
           <div class="seat-card-actions">
+            <button class="seat-edit-link primary" onclick="toggleCalendarChoices()">Add to Calendar</button>
             <button class="seat-edit-link" onclick="editRsvp()">Update my RSVP</button>
+          </div>
+          <div class="calendar-choices" id="calendar-choices">
+            <div class="label">Choose your calendar</div>
+            <div class="row">
+              <button class="seat-edit-link" onclick="addToApple()">Apple / iCal</button>
+              <button class="seat-edit-link" onclick="addToGoogle()">Google</button>
+              <button class="seat-edit-link" onclick="addToOutlook()">Outlook</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1599,6 +1638,7 @@
   // then either shows the prefilled RSVP form or the seat card.
   let INVITATION = null;          // { code, members: [{id, name, side, has_rsvpd}] }
   let SELECTED_MEMBER = null;     // { id, name, ... }
+  let CURRENT_SEATS = null;       // last seats[] from lookup_seats — for calendar export
 
   function readCodeFromUrl() {
     try {
@@ -1758,6 +1798,8 @@
   }
 
   function renderSeatCard(members) {
+    CURRENT_SEATS = members || [];
+    document.getElementById('calendar-choices')?.classList.remove('open');
     const rows = document.getElementById('seat-card-rows');
     rows.innerHTML = '';
     members.forEach(m => {
@@ -1785,6 +1827,108 @@
     if (!INVITATION) return;
     renderMemberPicker(INVITATION.members);
     setRsvpState('rsvp-form-wrap');
+  }
+
+  // ─── ADD TO CALENDAR ───
+  // Wedding: Thursday 12 November 2026, 17:00–23:00 HKT (Asia/Hong_Kong, UTC+8)
+  // 17:00 HKT = 09:00 UTC; 23:00 HKT = 15:00 UTC.
+  const EVENT = {
+    title:    "Christy & Mitchell's Wedding",
+    location: "The Salisbury Room, The Peninsula Hong Kong, Salisbury Road, Tsim Sha Tsui, Kowloon, Hong Kong",
+    startUtc: '20261112T090000Z',
+    endUtc:   '20261112T150000Z',
+    startIso: '2026-11-12T17:00:00+08:00',
+    endIso:   '2026-11-12T23:00:00+08:00'
+  };
+
+  function buildDescription() {
+    const lines = [
+      "We can't wait to celebrate with you!",
+      '',
+      'Schedule:',
+      '  17:00 – 18:00   Guest Arrival',
+      '  18:30 – 19:30   Wedding Ceremony',
+      '  19:45 – 23:00   Dinner Reception',
+      '',
+      'Attire: Elegant Evening Attire'
+    ];
+
+    const seated = (CURRENT_SEATS || []).filter(s => s.has_seat);
+    if (seated.length) {
+      lines.push('', 'Your seat' + (seated.length > 1 ? 's' : '') + ':');
+      seated.forEach(s => {
+        lines.push(`  ${s.name}: Table ${s.table_number}, Seat ${s.seat_number}`);
+      });
+    }
+    return lines.join('\n');
+  }
+
+  function toggleCalendarChoices() {
+    document.getElementById('calendar-choices')?.classList.toggle('open');
+  }
+
+  function addToGoogle() {
+    const params = new URLSearchParams({
+      action: 'TEMPLATE',
+      text:    EVENT.title,
+      dates:   `${EVENT.startUtc}/${EVENT.endUtc}`,
+      details: buildDescription(),
+      location: EVENT.location,
+      ctz:     'Asia/Hong_Kong'
+    });
+    window.open(`https://calendar.google.com/calendar/render?${params.toString()}`, '_blank', 'noopener');
+  }
+
+  function addToOutlook() {
+    const params = new URLSearchParams({
+      path:    '/calendar/action/compose',
+      rru:     'addevent',
+      subject: EVENT.title,
+      startdt: EVENT.startIso,
+      enddt:   EVENT.endIso,
+      body:    buildDescription(),
+      location: EVENT.location
+    });
+    window.open(`https://outlook.live.com/calendar/0/deeplink/compose?${params.toString()}`, '_blank', 'noopener');
+  }
+
+  // Escape per RFC 5545: backslash, comma, semicolon, newline.
+  function icsEscape(s) {
+    return String(s == null ? '' : s)
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/,/g, '\\,')
+      .replace(/;/g, '\\;');
+  }
+
+  function addToApple() {
+    const dtstamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '').replace(/Z$/, 'Z');
+    const ics = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//Christy & Mitchell//Wedding//EN',
+      'CALSCALE:GREGORIAN',
+      'METHOD:PUBLISH',
+      'BEGIN:VEVENT',
+      `UID:mcwedding-${Date.now()}@mc-wedding.vercel.app`,
+      `DTSTAMP:${dtstamp}`,
+      `DTSTART:${EVENT.startUtc}`,
+      `DTEND:${EVENT.endUtc}`,
+      `SUMMARY:${icsEscape(EVENT.title)}`,
+      `LOCATION:${icsEscape(EVENT.location)}`,
+      `DESCRIPTION:${icsEscape(buildDescription())}`,
+      'END:VEVENT',
+      'END:VCALENDAR'
+    ].join('\r\n');
+
+    const blob = new Blob([ics], { type: 'text/calendar;charset=utf-8' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href     = url;
+    a.download = 'christy-mitchell-wedding.ics';
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { document.body.removeChild(a); URL.revokeObjectURL(url); }, 100);
   }
 
   // ─── COUNTDOWN ───
