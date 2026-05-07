@@ -1687,62 +1687,39 @@
     gap: 1.4rem;
     align-items: stretch;
   }
-  .fp-img-wrap {
+  .fp-svg-wrap {
     flex: 1;
     background: #F9F4EB;
     border: 1px solid var(--divider);
-    padding: 0;
+    padding: 1rem;
     min-width: 0;
-    position: relative;
-    line-height: 0;
   }
-  .fp-img-wrap img {
-    width: 100%;
-    height: auto;
-    display: block;
-    user-select: none;
-    -webkit-user-drag: none;
+  .fp-svg-wrap svg { width: 100%; height: auto; display: block; }
+
+  /* Tables — interactive */
+  .fp-table { cursor: pointer; }
+  .fp-table-circle {
+    fill: #F5EEE4;
+    stroke: var(--olive);
+    stroke-width: 1.5;
+    transition: fill 0.15s, stroke-width 0.15s;
   }
-  .fp-hotspots {
-    position: absolute;
-    inset: 0;
+  .fp-table-num {
+    fill: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 18px;
+    font-weight: 500;
     pointer-events: none;
   }
+  .fp-table:hover .fp-table-circle { fill: #E8DFCF; stroke-width: 2.2; }
+  .fp-table.active .fp-table-circle { fill: var(--olive); stroke-width: 2; }
+  .fp-table.active  .fp-table-num   { fill: var(--bg); font-weight: 600; }
+  .fp-table.selected .fp-table-circle { stroke: #722F37; stroke-width: 3; }
+  .fp-table.active.selected .fp-table-circle { stroke: #722F37; }
 
-  /* A table = an absolutely-positioned circular click target over the image.
-     Width is a % of the image so it scales with the responsive img. */
-  .fp-table {
-    position: absolute;
-    width: 11%;
-    aspect-ratio: 1;
-    transform: translate(-50%, -50%);
-    border-radius: 50%;
-    background: transparent;
-    border: 2px solid transparent;
-    cursor: pointer;
-    pointer-events: auto;
-    padding: 0;
-    transition: background 0.15s, border-color 0.15s, box-shadow 0.15s;
-  }
-  .fp-table:hover {
-    background: rgba(104,107,56,0.18);
-    border-color: rgba(104,107,56,0.4);
-  }
-  .fp-table:focus { outline: none; }
-  .fp-table:focus-visible { box-shadow: 0 0 0 3px rgba(104,107,56,0.35); }
-  .fp-table.active {
-    background: rgba(104,107,56,0.30);
-    border-color: var(--olive);
-    box-shadow: 0 0 0 4px rgba(104,107,56,0.18);
-  }
-  .fp-table.selected {
-    border-width: 3px;
-    border-color: #722F37;
-  }
-  .fp-table.active.selected {
-    border-color: #722F37;
-    box-shadow: 0 0 0 4px rgba(104,107,56,0.18);
-  }
+  .fp-room-label    { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 500; fill: var(--text-light); }
+  .fp-fixture-label { font-family: 'Raleway', sans-serif; font-size: 9px;  letter-spacing: 2px; fill: #A09890; }
+  .fp-stage-label   { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 600; fill: #EDE6D8; }
 
   /* Side panel */
   .fp-panel {
@@ -1961,31 +1938,171 @@
     <div class="fp-sub">Tap any table to see who's seated</div>
 
     <div class="fp-body">
-      <div class="fp-img-wrap">
-        <img src="/assets/seating-plan.png" alt="Seating plan for our wedding" loading="lazy">
-        <!-- Invisible click hotspots over each table. Positions are % of the
-             image so they scale with the responsive img. Tweak left/top if any
-             feel off-centre. -->
-        <div class="fp-hotspots">
-          <!-- Left cluster -->
-          <button class="fp-table" data-table="12" style="left:24%;top:38%" onclick="selectTable(12)" aria-label="Table 12"></button>
-          <button class="fp-table" data-table="10" style="left:38%;top:38%" onclick="selectTable(10)" aria-label="Table 10"></button>
-          <button class="fp-table" data-table="11" style="left:32%;top:51%" onclick="selectTable(11)" aria-label="Table 11"></button>
-          <button class="fp-table" data-table="13" style="left:25%;top:60%" onclick="selectTable(13)" aria-label="Table 13"></button>
-          <!-- The bottom-right of the left cluster is also labelled "11" in the
-               image; mapping to the same table number for now (per Christy/Mitchell). -->
-          <button class="fp-table" data-table="11" style="left:43%;top:60%" onclick="selectTable(11)" aria-label="Table 11"></button>
+      <div class="fp-svg-wrap">
+        <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+          <!-- Reusable 12-seat ring (referenced by every round table via <use>) -->
+          <defs>
+            <g id="seats-12" fill="#A09890" stroke="none">
+              <circle cx="0"   cy="-44" r="3"/>
+              <circle cx="22"  cy="-38" r="3"/>
+              <circle cx="38"  cy="-22" r="3"/>
+              <circle cx="44"  cy="0"   r="3"/>
+              <circle cx="38"  cy="22"  r="3"/>
+              <circle cx="22"  cy="38"  r="3"/>
+              <circle cx="0"   cy="44"  r="3"/>
+              <circle cx="-22" cy="38"  r="3"/>
+              <circle cx="-38" cy="22"  r="3"/>
+              <circle cx="-44" cy="0"   r="3"/>
+              <circle cx="-38" cy="-22" r="3"/>
+              <circle cx="-22" cy="-38" r="3"/>
+            </g>
+          </defs>
 
-          <!-- Right cluster (Salisbury main) -->
-          <button class="fp-table" data-table="7" style="left:76%;top:22%" onclick="selectTable(7)" aria-label="Table 7"></button>
-          <button class="fp-table" data-table="9" style="left:62%;top:28%" onclick="selectTable(9)" aria-label="Table 9"></button>
-          <button class="fp-table" data-table="3" style="left:70%;top:35%" onclick="selectTable(3)" aria-label="Table 3"></button>
-          <button class="fp-table" data-table="1" style="left:62%;top:47%" onclick="selectTable(1)" aria-label="Table 1"></button>
-          <button class="fp-table" data-table="2" style="left:62%;top:60%" onclick="selectTable(2)" aria-label="Table 2"></button>
-          <button class="fp-table" data-table="5" style="left:74%;top:70%" onclick="selectTable(5)" aria-label="Table 5"></button>
-          <button class="fp-table" data-table="8" style="left:62%;top:75%" onclick="selectTable(8)" aria-label="Table 8"></button>
-          <button class="fp-table" data-table="6" style="left:78%;top:84%" onclick="selectTable(6)" aria-label="Table 6"></button>
-        </div>
+          <!-- Outer venue frame -->
+          <rect x="20" y="40" width="1160" height="540" fill="none" stroke="#C8BFB2" stroke-width="2"/>
+
+          <!-- ─── MAHJONG ROOM (left) ─── -->
+          <line x1="280" y1="40"  x2="280" y2="220" stroke="#C8BFB2" stroke-width="2"/>
+          <line x1="280" y1="290" x2="280" y2="580" stroke="#C8BFB2" stroke-width="2"/>
+          <text x="170" y="80" text-anchor="middle" class="fp-room-label">MAHJONG ROOM</text>
+          <!-- 4 mahjong tables (small squares, 4 seats each) -->
+          <g fill="none" stroke="#A09890" stroke-width="1">
+            <rect x="98"  y="180" width="44" height="44"/>
+            <rect x="218" y="180" width="44" height="44"/>
+            <rect x="98"  y="380" width="44" height="44"/>
+            <rect x="218" y="380" width="44" height="44"/>
+          </g>
+          <g fill="#A09890">
+            <!-- TL table seats -->
+            <circle cx="120" cy="170" r="3"/><circle cx="120" cy="234" r="3"/>
+            <circle cx="88"  cy="202" r="3"/><circle cx="152" cy="202" r="3"/>
+            <!-- TR table seats -->
+            <circle cx="240" cy="170" r="3"/><circle cx="240" cy="234" r="3"/>
+            <circle cx="208" cy="202" r="3"/><circle cx="272" cy="202" r="3"/>
+            <!-- BL table seats -->
+            <circle cx="120" cy="370" r="3"/><circle cx="120" cy="434" r="3"/>
+            <circle cx="88"  cy="402" r="3"/><circle cx="152" cy="402" r="3"/>
+            <!-- BR table seats -->
+            <circle cx="240" cy="370" r="3"/><circle cx="240" cy="434" r="3"/>
+            <circle cx="208" cy="402" r="3"/><circle cx="272" cy="402" r="3"/>
+          </g>
+
+          <!-- ─── MIDDLE AREA ─── -->
+          <!-- Bridal Room -->
+          <rect x="380" y="60" width="200" height="100" fill="#F5EEE4" stroke="#C8BFB2" stroke-width="1.5"/>
+          <text x="480" y="115" text-anchor="middle" class="fp-fixture-label">BRIDAL ROOM</text>
+
+          <!-- Lifts (entry strip) -->
+          <g>
+            <rect x="320" y="180" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
+            <text x="347" y="212" text-anchor="middle" class="fp-fixture-label">LIFT</text>
+            <rect x="380" y="180" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
+            <text x="407" y="212" text-anchor="middle" class="fp-fixture-label">LIFT</text>
+            <rect x="320" y="245" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
+            <text x="347" y="277" text-anchor="middle" class="fp-fixture-label">LIFT</text>
+            <rect x="380" y="245" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
+            <text x="407" y="277" text-anchor="middle" class="fp-fixture-label">LIFT</text>
+          </g>
+
+          <!-- Reception Table -->
+          <rect x="465" y="195" width="80" height="22" fill="#F5EEE4" stroke="#A09890" stroke-width="1"/>
+          <text x="505" y="240" text-anchor="middle" class="fp-fixture-label">RECEPTION</text>
+
+          <!-- Tables 9-13 in middle cluster -->
+          <g class="fp-table" data-table="11" onclick="selectTable(11)" transform="translate(560, 320)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">11</text>
+          </g>
+          <g class="fp-table" data-table="13" onclick="selectTable(13)" transform="translate(670, 320)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">13</text>
+          </g>
+          <g class="fp-table" data-table="12" onclick="selectTable(12)" transform="translate(500, 410)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">12</text>
+          </g>
+          <g class="fp-table" data-table="10" onclick="selectTable(10)" transform="translate(610, 410)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">10</text>
+          </g>
+          <g class="fp-table" data-table="9" onclick="selectTable(9)" transform="translate(560, 500)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">9</text>
+          </g>
+
+          <!-- Stairs -->
+          <g stroke="#C8BFB2" stroke-width="1">
+            <line x1="450" y1="558" x2="510" y2="558"/>
+            <line x1="450" y1="564" x2="510" y2="564"/>
+            <line x1="450" y1="570" x2="510" y2="570"/>
+          </g>
+          <text x="480" y="552" text-anchor="middle" class="fp-fixture-label">STAIRS</text>
+
+          <!-- Coatroom + washrooms -->
+          <ellipse cx="630" cy="555" rx="100" ry="9" fill="none" stroke="#C8BFB2" stroke-width="1"/>
+          <text x="630" y="558" text-anchor="middle" class="fp-fixture-label">COATROOM &amp; WASHROOMS</text>
+
+          <!-- ─── SALISBURY ROOM · MAIN (right) ─── -->
+          <text x="900" y="80" text-anchor="middle" class="fp-room-label">SALISBURY ROOM · MAIN</text>
+
+          <!-- Tables 1-8, two columns -->
+          <g class="fp-table" data-table="7" onclick="selectTable(7)" transform="translate(830, 140)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">7</text>
+          </g>
+          <g class="fp-table" data-table="4" onclick="selectTable(4)" transform="translate(970, 140)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">4</text>
+          </g>
+          <g class="fp-table" data-table="3" onclick="selectTable(3)" transform="translate(830, 240)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">3</text>
+          </g>
+          <g class="fp-table" data-table="1" onclick="selectTable(1)" transform="translate(970, 240)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">1</text>
+          </g>
+          <g class="fp-table" data-table="2" onclick="selectTable(2)" transform="translate(830, 340)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">2</text>
+          </g>
+          <g class="fp-table" data-table="5" onclick="selectTable(5)" transform="translate(970, 340)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">5</text>
+          </g>
+          <g class="fp-table" data-table="6" onclick="selectTable(6)" transform="translate(830, 440)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">6</text>
+          </g>
+          <g class="fp-table" data-table="8" onclick="selectTable(8)" transform="translate(970, 440)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">8</text>
+          </g>
+
+          <!-- Mock cake (above stage) -->
+          <circle cx="1110" cy="120" r="14" fill="#F5EEE4" stroke="#A09890" stroke-width="1"/>
+          <text x="1110" y="100" text-anchor="middle" class="fp-fixture-label">MOCK CAKE</text>
+
+          <!-- Stage -->
+          <rect x="1060" y="160" width="100" height="280" fill="#3a3a30" opacity="0.85"/>
+          <text x="1110" y="305" text-anchor="middle" class="fp-stage-label">STAGE</text>
+
+          <!-- Live band (under stage) -->
+          <text x="1110" y="475" text-anchor="middle" class="fp-fixture-label">LIVE BAND</text>
+        </svg>
       </div>
 
       <!-- Side / bottom panel — table occupants -->
