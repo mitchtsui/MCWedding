@@ -1939,7 +1939,7 @@
 
     <div class="fp-body">
       <div class="fp-svg-wrap">
-        <svg viewBox="0 0 1200 600" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <svg viewBox="400 40 780 540" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <!-- Reusable 12-seat ring (referenced by every round table via <use>) -->
           <defs>
             <g id="seats-12" fill="#A09890" stroke="none">
@@ -1958,55 +1958,8 @@
             </g>
           </defs>
 
-          <!-- Outer venue frame -->
-          <rect x="20" y="40" width="1160" height="540" fill="none" stroke="#C8BFB2" stroke-width="2"/>
-
-          <!-- ─── MAHJONG ROOM (left) ─── -->
-          <line x1="280" y1="40"  x2="280" y2="220" stroke="#C8BFB2" stroke-width="2"/>
-          <line x1="280" y1="290" x2="280" y2="580" stroke="#C8BFB2" stroke-width="2"/>
-          <text x="170" y="80" text-anchor="middle" class="fp-room-label">MAHJONG ROOM</text>
-          <!-- 4 mahjong tables (small squares, 4 seats each) -->
-          <g fill="none" stroke="#A09890" stroke-width="1">
-            <rect x="98"  y="180" width="44" height="44"/>
-            <rect x="218" y="180" width="44" height="44"/>
-            <rect x="98"  y="380" width="44" height="44"/>
-            <rect x="218" y="380" width="44" height="44"/>
-          </g>
-          <g fill="#A09890">
-            <!-- TL table seats -->
-            <circle cx="120" cy="170" r="3"/><circle cx="120" cy="234" r="3"/>
-            <circle cx="88"  cy="202" r="3"/><circle cx="152" cy="202" r="3"/>
-            <!-- TR table seats -->
-            <circle cx="240" cy="170" r="3"/><circle cx="240" cy="234" r="3"/>
-            <circle cx="208" cy="202" r="3"/><circle cx="272" cy="202" r="3"/>
-            <!-- BL table seats -->
-            <circle cx="120" cy="370" r="3"/><circle cx="120" cy="434" r="3"/>
-            <circle cx="88"  cy="402" r="3"/><circle cx="152" cy="402" r="3"/>
-            <!-- BR table seats -->
-            <circle cx="240" cy="370" r="3"/><circle cx="240" cy="434" r="3"/>
-            <circle cx="208" cy="402" r="3"/><circle cx="272" cy="402" r="3"/>
-          </g>
-
-          <!-- ─── MIDDLE AREA ─── -->
-          <!-- Bridal Room -->
-          <rect x="380" y="60" width="200" height="100" fill="#F5EEE4" stroke="#C8BFB2" stroke-width="1.5"/>
-          <text x="480" y="115" text-anchor="middle" class="fp-fixture-label">BRIDAL ROOM</text>
-
-          <!-- Lifts (entry strip) -->
-          <g>
-            <rect x="320" y="180" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
-            <text x="347" y="212" text-anchor="middle" class="fp-fixture-label">LIFT</text>
-            <rect x="380" y="180" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
-            <text x="407" y="212" text-anchor="middle" class="fp-fixture-label">LIFT</text>
-            <rect x="320" y="245" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
-            <text x="347" y="277" text-anchor="middle" class="fp-fixture-label">LIFT</text>
-            <rect x="380" y="245" width="55" height="55" fill="#E8DFCF" stroke="#C8BFB2" stroke-width="1"/>
-            <text x="407" y="277" text-anchor="middle" class="fp-fixture-label">LIFT</text>
-          </g>
-
-          <!-- Reception Table -->
-          <rect x="465" y="195" width="80" height="22" fill="#F5EEE4" stroke="#A09890" stroke-width="1"/>
-          <text x="505" y="240" text-anchor="middle" class="fp-fixture-label">RECEPTION</text>
+          <!-- Outer venue frame (cropped to dinner area only) -->
+          <rect x="420" y="60" width="760" height="500" fill="none" stroke="#C8BFB2" stroke-width="2"/>
 
           <!-- Tables 9-13 in middle cluster -->
           <g class="fp-table" data-table="11" onclick="selectTable(11)" transform="translate(560, 320)">
@@ -2046,9 +1999,6 @@
           <!-- Coatroom + washrooms -->
           <ellipse cx="630" cy="555" rx="100" ry="9" fill="none" stroke="#C8BFB2" stroke-width="1"/>
           <text x="630" y="558" text-anchor="middle" class="fp-fixture-label">COATROOM &amp; WASHROOMS</text>
-
-          <!-- ─── SALISBURY ROOM · MAIN (right) ─── -->
-          <text x="900" y="80" text-anchor="middle" class="fp-room-label">SALISBURY ROOM · MAIN</text>
 
           <!-- Tables 1-8, two columns -->
           <g class="fp-table" data-table="7" onclick="selectTable(7)" transform="translate(830, 140)">
