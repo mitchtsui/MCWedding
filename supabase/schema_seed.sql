@@ -673,3 +673,63 @@ WHERE r.message IS NOT NULL
 ORDER BY r.submitted_at DESC;
 
 GRANT SELECT ON admin_messages TO authenticated;
+
+
+-- ============================================================
+-- Phase 4: Floor plan tap-to-reveal
+-- ============================================================
+
+-- 19. lookup_all_table_assignments(code) → returns every assigned guest's
+--     name + table + seat, grouped by table number. Used by the floor-plan
+--     modal to show "who's at table N" when a guest taps a table.
+--
+--     Validates that the supplied code exists (i.e. the caller is at least
+--     one of our invited guests) before returning anything. Excludes guests
+--     who have RSVP'd 'No' so the chart doesn't show absences.
+CREATE OR REPLACE FUNCTION lookup_all_table_assignments(p_code TEXT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  norm    TEXT;
+  is_valid BOOLEAN;
+  result  JSONB;
+BEGIN
+  IF p_code IS NULL OR length(trim(p_code)) = 0 THEN
+    RETURN jsonb_build_object('valid', false);
+  END IF;
+
+  norm := upper(trim(p_code));
+
+  SELECT EXISTS (SELECT 1 FROM guests WHERE invitation_code = norm)
+  INTO is_valid;
+
+  IF NOT is_valid THEN
+    RETURN jsonb_build_object('valid', false);
+  END IF;
+
+  SELECT jsonb_object_agg(table_number::text, members)
+  INTO result
+  FROM (
+    SELECT
+      g.table_number,
+      jsonb_agg(
+        jsonb_build_object(
+          'name', g.name,
+          'seat', g.seat_number
+        )
+        ORDER BY g.seat_number NULLS LAST
+      ) AS members
+    FROM guests g
+    WHERE g.table_number IS NOT NULL
+      AND COALESCE(g.rsvp_status, '') NOT IN ('No', 'no')
+    GROUP BY g.table_number
+  ) t;
+
+  RETURN jsonb_build_object('valid', true, 'tables', COALESCE(result, '{}'::jsonb));
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION lookup_all_table_assignments(TEXT) TO anon, authenticated;
