@@ -1,0 +1,701 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mockups — Christy &amp; Mitchell</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,500;0,600;1,300;1,400&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    /* Existing palette */
+    --gardenia:    #EDE6D8;
+    --golden:      #E8C97E;
+    --rose-bisque: #DDC8D0;
+    --pale-peach:  #F4C3A8;
+    --olive:       #686B38;
+    --olive-deep:  #4D5028;
+    --sea-spray:   #6A7A5A;
+    /* Equestrian accents */
+    --antique-gold:#C9A961;
+    --leather:     #6B4A2A;
+    --burgundy:    #722F37;
+    /* Text */
+    --text:      #1A1A14;
+    --text-mid:  #5A4E45;
+    --text-light:#8A7E77;
+    --divider:   #C8BFB2;
+    --bg-card:   #F5EEE4;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--gardenia);
+    color: var(--text);
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 17px;
+    line-height: 1.7;
+    padding-bottom: 6rem;
+  }
+
+  /* Mockup chrome */
+  .mockup-banner {
+    background: var(--olive);
+    color: var(--gardenia);
+    padding: 0.7rem 2rem;
+    text-align: center;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    position: sticky;
+    top: 0;
+    z-index: 50;
+  }
+  .container { max-width: 1100px; margin: 0 auto; padding: 0 1.5rem; }
+  section { padding: 4rem 0; }
+
+  .eyebrow {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.24em;
+    text-transform: uppercase;
+    color: var(--olive);
+    margin-bottom: 0.6rem;
+  }
+  h2.title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: clamp(2rem, 4vw, 2.8rem);
+    letter-spacing: 0.02em;
+    margin-bottom: 0.5rem;
+  }
+  h2.title em { font-style: italic; color: var(--olive); }
+  .lede {
+    color: var(--text-mid);
+    max-width: 640px;
+    font-size: 1rem;
+    margin-bottom: 2.5rem;
+  }
+
+  /* Variant grid */
+  .variant-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 1.4rem;
+  }
+  .variant {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 2.2rem 1.4rem 1.6rem;
+    text-align: center;
+    position: relative;
+  }
+  .variant-label {
+    position: absolute;
+    top: 0.6rem; left: 0.8rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+  }
+  .variant-canvas {
+    min-height: 180px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-bottom: 1rem;
+  }
+  .variant-note {
+    font-size: 0.85rem;
+    color: var(--text-mid);
+    font-style: italic;
+  }
+
+  /* Hero mock */
+  .hero-mock {
+    background:
+      radial-gradient(ellipse 80% 60% at 50% 40%, rgba(232,201,126,0.18), transparent),
+      var(--gardenia);
+    padding: 5rem 2rem 4rem;
+    text-align: center;
+    border: 1px solid var(--divider);
+  }
+  .hero-script {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-weight: 300;
+    font-size: clamp(3.2rem, 7vw, 5.5rem);
+    color: var(--olive);
+    line-height: 1;
+    margin: 1rem 0 1.4rem;
+  }
+  .hero-script-note {
+    display: block;
+    font-family: 'Raleway', sans-serif;
+    font-style: normal;
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-top: 0.4rem;
+  }
+  .hero-names {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(1.5rem, 3.2vw, 2.3rem);
+    font-weight: 300;
+    letter-spacing: 0.14em;
+    color: var(--text);
+    margin-bottom: 0.6rem;
+  }
+  .hero-chambolle {
+    color: var(--rose-bisque);
+    font-style: italic;
+    font-size: 1rem;
+    margin-bottom: 1.4rem;
+  }
+  .hero-meta {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.66rem;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+    font-weight: 700;
+    color: var(--text);
+  }
+
+  /* Floor plan mock */
+  .floor-plan {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 1rem;
+  }
+  .floor-plan svg { width: 100%; height: auto; display: block; }
+  .floor-plan-legend {
+    margin-top: 1rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    color: var(--text-mid);
+    text-align: center;
+    letter-spacing: 0.06em;
+  }
+  .legend-pill {
+    display: inline-block;
+    padding: 2px 10px;
+    border-radius: 999px;
+    margin: 0 0.3rem;
+    border: 1px solid var(--divider);
+  }
+  .legend-pill.you { background: var(--olive); color: var(--gardenia); border-color: var(--olive); }
+
+  /* Divider showcase */
+  .divider-row {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 2.4rem 1.4rem;
+    margin-bottom: 1.2rem;
+  }
+  .divider-row .lbl {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-bottom: 1.4rem;
+  }
+  .divider-row svg { display: block; margin: 0 auto; }
+
+  .row-head {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 1.6rem;
+    flex-wrap: wrap;
+  }
+  .pill {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--olive);
+    border: 1px solid var(--olive);
+    padding: 4px 10px;
+    border-radius: 999px;
+  }
+
+</style>
+</head>
+<body>
+
+<div class="mockup-banner">
+  Design Mockup · Not the live site · christychowtc / mitchell
+</div>
+
+<!-- ─────────────────────────────────────── -->
+<!-- INTRO -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="eyebrow">Mockup Brief</div>
+    <h2 class="title">Equestrian × <em>Winery</em></h2>
+    <p class="lede">Classical equestrian — refined, Hermès-leaning, gold + olive — with vine and grape elements woven through. Below: monogram options, divider options, hero treatment with monogram, and a minimal 13-table floor plan. Pick what to keep, swap, or drop.</p>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────── -->
+<!-- MONOGRAM VARIANTS -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="row-head">
+      <div>
+        <div class="eyebrow">Monogram</div>
+        <h2 class="title">C &amp; M <em>Variants</em></h2>
+      </div>
+      <span class="pill">Pick one</span>
+    </div>
+    <p class="lede">Used in hero (above the script), seat-card header, footer. Designed to scale from 60px (small mark) to 200px (hero feature).</p>
+
+    <div class="variant-grid">
+
+      <!-- VARIANT 1: Horseshoe wreath -->
+      <div class="variant">
+        <div class="variant-label">Variant 1 · Horseshoe Wreath</div>
+        <div class="variant-canvas">
+          <svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+            <!-- Horseshoe (open at top) -->
+            <path d="M 35 50
+                     A 45 45 0 0 0 35 130
+                     L 50 130
+                     A 30 30 0 0 1 50 65
+                     L 50 50 Z
+                     M 125 50
+                     A 45 45 0 0 1 125 130
+                     L 110 130
+                     A 30 30 0 0 0 110 65
+                     L 110 50 Z"
+                  fill="#C9A961" opacity="0.95"/>
+            <!-- Nail dots -->
+            <circle cx="32" cy="78" r="1.6" fill="#4D5028"/>
+            <circle cx="32" cy="100" r="1.6" fill="#4D5028"/>
+            <circle cx="38" cy="120" r="1.6" fill="#4D5028"/>
+            <circle cx="128" cy="78" r="1.6" fill="#4D5028"/>
+            <circle cx="128" cy="100" r="1.6" fill="#4D5028"/>
+            <circle cx="122" cy="120" r="1.6" fill="#4D5028"/>
+            <!-- Letters -->
+            <text x="80" y="106" text-anchor="middle"
+                  font-family="Cormorant Garamond, serif" font-style="italic"
+                  font-size="58" font-weight="500" fill="#1A1A14">C&amp;M</text>
+            <!-- Vine leaves at top opening -->
+            <g transform="translate(60,42)">
+              <path d="M 0 0 Q 6 -8 12 -3 Q 14 6 6 10 Q -2 6 0 0 Z" fill="#686B38"/>
+              <path d="M 6 -3 L 6 10" stroke="#3a4020" stroke-width="0.6"/>
+            </g>
+            <g transform="translate(100,42) scale(-1,1)">
+              <path d="M 0 0 Q 6 -8 12 -3 Q 14 6 6 10 Q -2 6 0 0 Z" fill="#686B38"/>
+              <path d="M 6 -3 L 6 10" stroke="#3a4020" stroke-width="0.6"/>
+            </g>
+          </svg>
+        </div>
+        <div class="variant-note">Gold horseshoe frames the letters; small vine leaves close the gap at the top opening.</div>
+      </div>
+
+      <!-- VARIANT 2: Crossed crops + crest -->
+      <div class="variant">
+        <div class="variant-label">Variant 2 · Crossed Crops &amp; Crest</div>
+        <div class="variant-canvas">
+          <svg width="180" height="160" viewBox="0 0 180 160" xmlns="http://www.w3.org/2000/svg">
+            <!-- Crossed riding crops -->
+            <g transform="translate(90,90) rotate(-22)">
+              <line x1="-70" y1="0" x2="70" y2="0" stroke="#6B4A2A" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="-70" cy="0" r="6" fill="none" stroke="#6B4A2A" stroke-width="2"/>
+              <rect x="68" y="-3.5" width="6" height="7" fill="#6B4A2A"/>
+            </g>
+            <g transform="translate(90,90) rotate(22)">
+              <line x1="-70" y1="0" x2="70" y2="0" stroke="#6B4A2A" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="-70" cy="0" r="6" fill="none" stroke="#6B4A2A" stroke-width="2"/>
+              <rect x="68" y="-3.5" width="6" height="7" fill="#6B4A2A"/>
+            </g>
+            <!-- Oval crest behind letters -->
+            <ellipse cx="90" cy="80" rx="42" ry="36" fill="#F5EEE4" stroke="#C9A961" stroke-width="2"/>
+            <!-- Letters -->
+            <text x="90" y="92" text-anchor="middle"
+                  font-family="Cormorant Garamond, serif" font-style="italic"
+                  font-size="40" font-weight="500" fill="#1A1A14">C&amp;M</text>
+            <!-- Vine flourish below -->
+            <path d="M 60 130 Q 75 124 90 130 T 120 130"
+                  fill="none" stroke="#686B38" stroke-width="1.4"/>
+            <circle cx="68" cy="128" r="2" fill="#722F37"/>
+            <circle cx="72" cy="131" r="2" fill="#722F37"/>
+            <circle cx="76" cy="128" r="2" fill="#722F37"/>
+            <circle cx="106" cy="128" r="2" fill="#722F37"/>
+            <circle cx="110" cy="131" r="2" fill="#722F37"/>
+            <circle cx="114" cy="128" r="2" fill="#722F37"/>
+          </svg>
+        </div>
+        <div class="variant-note">Crossed riding crops behind a gold-rimmed crest, vine flourish with grape clusters at the base.</div>
+      </div>
+
+      <!-- VARIANT 3: Minimal serif + horseshoe accent -->
+      <div class="variant">
+        <div class="variant-label">Variant 3 · Minimal</div>
+        <div class="variant-canvas">
+          <svg width="160" height="160" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
+            <!-- Vine sprig top -->
+            <g transform="translate(80,30)">
+              <path d="M -22 0 Q -10 -8 0 0 Q 10 -8 22 0"
+                    fill="none" stroke="#686B38" stroke-width="1.2"/>
+              <path d="M -8 -4 Q -4 -10 0 -4 Z" fill="#686B38"/>
+              <path d="M 8 -4 Q 4 -10 0 -4 Z" fill="#686B38"/>
+              <circle cx="-3" cy="-2" r="1.6" fill="#722F37"/>
+              <circle cx="0" cy="-2" r="1.6" fill="#722F37"/>
+              <circle cx="3" cy="-2" r="1.6" fill="#722F37"/>
+            </g>
+            <!-- Letters -->
+            <text x="80" y="100" text-anchor="middle"
+                  font-family="Cormorant Garamond, serif" font-style="italic"
+                  font-size="64" font-weight="400" fill="#1A1A14">C&amp;M</text>
+            <!-- Tiny horseshoe below -->
+            <g transform="translate(80,128)">
+              <path d="M -10 0 A 10 12 0 0 1 10 0
+                       L 7 8
+                       L 5 8
+                       L 8 0
+                       A 6 8 0 0 0 -8 0
+                       L -5 8
+                       L -7 8
+                       Z"
+                    fill="#C9A961"/>
+            </g>
+          </svg>
+        </div>
+        <div class="variant-note">Italic serif initials anchored by a small grape sprig above and a tiny horseshoe below — quietest option, scales well.</div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────── -->
+<!-- SECTION DIVIDERS -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="row-head">
+      <div>
+        <div class="eyebrow">Section Dividers</div>
+        <h2 class="title">Replacing the <em>Gradient Line</em></h2>
+      </div>
+      <span class="pill">Pick one or two</span>
+    </div>
+    <p class="lede">Currently each section starts with a soft gradient line. Below are equestrian replacements — same role, more character.</p>
+
+    <!-- Divider A: Horseshoe centered -->
+    <div class="divider-row">
+      <div class="lbl">Divider A · Centred Horseshoe</div>
+      <svg width="100%" height="40" viewBox="0 0 600 40" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <line x1="0" y1="20" x2="260" y2="20" stroke="#C8BFB2" stroke-width="0.8"/>
+        <line x1="340" y1="20" x2="600" y2="20" stroke="#C8BFB2" stroke-width="0.8"/>
+        <g transform="translate(300,20)">
+          <path d="M -14 -8 A 14 16 0 0 1 14 -8
+                   L 11 12
+                   L 8 12
+                   L 11 -7
+                   A 9 12 0 0 0 -11 -7
+                   L -8 12
+                   L -11 12
+                   Z"
+                fill="#C9A961"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Divider B: Crossed crops with horseshoe -->
+    <div class="divider-row">
+      <div class="lbl">Divider B · Crossed Crops &amp; Horseshoe</div>
+      <svg width="100%" height="60" viewBox="0 0 600 60" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <line x1="0" y1="30" x2="220" y2="30" stroke="#C8BFB2" stroke-width="0.8"/>
+        <line x1="380" y1="30" x2="600" y2="30" stroke="#C8BFB2" stroke-width="0.8"/>
+        <!-- Crossed crops -->
+        <g transform="translate(300,30) rotate(-22)">
+          <line x1="-50" y1="0" x2="50" y2="0" stroke="#6B4A2A" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="-50" cy="0" r="4" fill="none" stroke="#6B4A2A" stroke-width="1.4"/>
+          <rect x="48" y="-2.2" width="4" height="4.4" fill="#6B4A2A"/>
+        </g>
+        <g transform="translate(300,30) rotate(22)">
+          <line x1="-50" y1="0" x2="50" y2="0" stroke="#6B4A2A" stroke-width="1.6" stroke-linecap="round"/>
+          <circle cx="-50" cy="0" r="4" fill="none" stroke="#6B4A2A" stroke-width="1.4"/>
+          <rect x="48" y="-2.2" width="4" height="4.4" fill="#6B4A2A"/>
+        </g>
+        <!-- Small horseshoe in front -->
+        <g transform="translate(300,30)">
+          <path d="M -10 -6 A 10 12 0 0 1 10 -6
+                   L 8 8
+                   L 6 8
+                   L 8 -5
+                   A 7 9 0 0 0 -8 -5
+                   L -6 8
+                   L -8 8
+                   Z"
+                fill="#C9A961"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Divider C: Vine swag -->
+    <div class="divider-row">
+      <div class="lbl">Divider C · Vine Swag</div>
+      <svg width="100%" height="44" viewBox="0 0 600 44" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <line x1="0" y1="22" x2="180" y2="22" stroke="#C8BFB2" stroke-width="0.8"/>
+        <line x1="420" y1="22" x2="600" y2="22" stroke="#C8BFB2" stroke-width="0.8"/>
+        <!-- Vine path -->
+        <path d="M 180 22 Q 240 4 300 22 T 420 22"
+              fill="none" stroke="#686B38" stroke-width="1.2"/>
+        <!-- Leaves -->
+        <path d="M 240 12 Q 248 4 256 12 Q 250 18 240 12 Z" fill="#686B38"/>
+        <path d="M 344 12 Q 352 4 360 12 Q 354 18 344 12 Z" fill="#686B38"/>
+        <!-- Grape clusters -->
+        <g transform="translate(300,22)" fill="#722F37">
+          <circle cx="-3" cy="0" r="2"/>
+          <circle cx="0" cy="2" r="2"/>
+          <circle cx="3" cy="0" r="2"/>
+          <circle cx="-1.5" cy="4" r="2"/>
+          <circle cx="1.5" cy="4" r="2"/>
+          <circle cx="0" cy="6" r="2"/>
+        </g>
+      </svg>
+    </div>
+
+    <!-- Divider D: Hermès-style nail studs -->
+    <div class="divider-row">
+      <div class="lbl">Divider D · Hermès-style Nail Studs</div>
+      <svg width="100%" height="36" viewBox="0 0 600 36" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg">
+        <line x1="0" y1="18" x2="240" y2="18" stroke="#C9A961" stroke-width="0.8"/>
+        <line x1="360" y1="18" x2="600" y2="18" stroke="#C9A961" stroke-width="0.8"/>
+        <circle cx="270" cy="18" r="2" fill="#C9A961"/>
+        <circle cx="285" cy="18" r="3" fill="#C9A961"/>
+        <circle cx="300" cy="18" r="4" fill="#C9A961"/>
+        <circle cx="315" cy="18" r="3" fill="#C9A961"/>
+        <circle cx="330" cy="18" r="2" fill="#C9A961"/>
+      </svg>
+    </div>
+
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────── -->
+<!-- HERO TREATMENT -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="row-head">
+      <div>
+        <div class="eyebrow">Hero Treatment</div>
+        <h2 class="title">Monogram <em>+ Script</em></h2>
+      </div>
+      <span class="pill">Approve / redirect</span>
+    </div>
+    <p class="lede">Existing Liana script "Our Wedding" stays. The monogram (Variant 1 shown) sits above it as a small mark — quiet, gives the page a recognisable mark for crests on the seat-card and footer.</p>
+
+    <div class="hero-mock">
+      <!-- Monogram -->
+      <svg width="120" height="120" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg" style="display:block;margin:0 auto 0.5rem;">
+        <path d="M 35 50
+                 A 45 45 0 0 0 35 130
+                 L 50 130
+                 A 30 30 0 0 1 50 65
+                 L 50 50 Z
+                 M 125 50
+                 A 45 45 0 0 1 125 130
+                 L 110 130
+                 A 30 30 0 0 0 110 65
+                 L 110 50 Z"
+              fill="#C9A961" opacity="0.95"/>
+        <circle cx="32" cy="78" r="1.6" fill="#4D5028"/>
+        <circle cx="32" cy="100" r="1.6" fill="#4D5028"/>
+        <circle cx="38" cy="120" r="1.6" fill="#4D5028"/>
+        <circle cx="128" cy="78" r="1.6" fill="#4D5028"/>
+        <circle cx="128" cy="100" r="1.6" fill="#4D5028"/>
+        <circle cx="122" cy="120" r="1.6" fill="#4D5028"/>
+        <text x="80" y="106" text-anchor="middle"
+              font-family="Cormorant Garamond, serif" font-style="italic"
+              font-size="58" font-weight="500" fill="#1A1A14">C&amp;M</text>
+        <g transform="translate(60,42)">
+          <path d="M 0 0 Q 6 -8 12 -3 Q 14 6 6 10 Q -2 6 0 0 Z" fill="#686B38"/>
+        </g>
+        <g transform="translate(100,42) scale(-1,1)">
+          <path d="M 0 0 Q 6 -8 12 -3 Q 14 6 6 10 Q -2 6 0 0 Z" fill="#686B38"/>
+        </g>
+      </svg>
+      <div class="hero-script">
+        Our Wedding
+        <span class="hero-script-note">— Liana script in production —</span>
+      </div>
+      <div class="hero-names">CHRISTY &amp; MITCHELL</div>
+      <div class="hero-chambolle">— and Chambolle —</div>
+      <div class="hero-meta">November 12, 2026 &nbsp;·&nbsp; Hong Kong</div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────── -->
+<!-- FLOOR PLAN -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="row-head">
+      <div>
+        <div class="eyebrow">Floor Plan</div>
+        <h2 class="title">The <em>Salisbury Room</em></h2>
+      </div>
+      <span class="pill">13 tables · minimal</span>
+    </div>
+    <p class="lede">Shown to guests after RSVP via a "View Floor Plan" button on the seat card. Their assigned table is filled in olive; others are outlined. Layout follows the venue photo's two-room split (5 left + 8 right). Numbers map directly to the seating planner.</p>
+
+    <div class="floor-plan">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" style="background:#F9F4EB;">
+        <!-- Subtle dividing wall (light) -->
+        <line x1="350" y1="40" x2="350" y2="220" stroke="#C8BFB2" stroke-width="2"/>
+        <line x1="350" y1="320" x2="350" y2="480" stroke="#C8BFB2" stroke-width="2"/>
+        <!-- Outer frame -->
+        <rect x="20" y="40" width="860" height="440" fill="none" stroke="#C8BFB2" stroke-width="1.5"/>
+
+        <!-- Room labels -->
+        <text x="180" y="60" text-anchor="middle"
+              font-family="Raleway, sans-serif" font-size="11" font-weight="500"
+              letter-spacing="3" fill="#8A7E77">ANTECHAMBER</text>
+        <text x="620" y="60" text-anchor="middle"
+              font-family="Raleway, sans-serif" font-size="11" font-weight="500"
+              letter-spacing="3" fill="#8A7E77">SALISBURY ROOM · MAIN</text>
+
+        <!-- Door indicators -->
+        <rect x="345" y="220" width="10" height="100" fill="#EDE6D8"/>
+        <text x="350" y="280" text-anchor="middle" font-family="Raleway, sans-serif"
+              font-size="9" letter-spacing="2" fill="#A09890" transform="rotate(-90 350 280)">DOOR</text>
+
+        <!-- LEFT ROOM: tables 9-13 (mock numbering) -->
+        <!-- Table 10 -->
+        <g class="tbl">
+          <circle cx="120" cy="160" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="120" y="166" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">10</text>
+        </g>
+        <!-- Table 12 -->
+        <g class="tbl">
+          <circle cx="240" cy="160" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="240" y="166" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">12</text>
+        </g>
+        <!-- Table 11 -->
+        <g class="tbl">
+          <circle cx="180" cy="260" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="180" y="266" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">11</text>
+        </g>
+        <!-- Table 13 -->
+        <g class="tbl">
+          <circle cx="100" cy="370" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="100" y="376" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">13</text>
+        </g>
+        <!-- Table 9 (was "14" in venue ref) -->
+        <g class="tbl">
+          <circle cx="240" cy="370" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="240" y="376" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">9</text>
+        </g>
+
+        <!-- RIGHT ROOM: tables 1-8 -->
+        <!-- Table 7 -->
+        <g class="tbl">
+          <circle cx="700" cy="100" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="700" y="106" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">7</text>
+        </g>
+        <!-- Table 4 -->
+        <g class="tbl">
+          <circle cx="540" cy="120" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="540" y="126" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">4</text>
+        </g>
+        <!-- Table 3 -->
+        <g class="tbl">
+          <circle cx="640" cy="180" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="640" y="186" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">3</text>
+        </g>
+        <!-- Table 1 (this is "you") -->
+        <g class="tbl-active">
+          <circle cx="500" cy="240" r="38" fill="#686B38" stroke="#686B38" stroke-width="2"/>
+          <text x="500" y="246" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="600" fill="#EDE6D8">1</text>
+          <text x="500" y="295" text-anchor="middle" font-family="Raleway, sans-serif"
+                font-size="9" letter-spacing="2" font-weight="600" fill="#686B38">YOUR TABLE</text>
+        </g>
+        <!-- Table 2 -->
+        <g class="tbl">
+          <circle cx="500" cy="360" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="500" y="366" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">2</text>
+        </g>
+        <!-- Table 5 -->
+        <g class="tbl">
+          <circle cx="640" cy="320" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="640" y="326" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">5</text>
+        </g>
+        <!-- Table 6 -->
+        <g class="tbl">
+          <circle cx="780" cy="380" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="780" y="386" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">6</text>
+        </g>
+        <!-- Table 8 -->
+        <g class="tbl">
+          <circle cx="600" cy="430" r="38" fill="none" stroke="#686B38" stroke-width="1.5"/>
+          <text x="600" y="436" text-anchor="middle" font-family="Cormorant Garamond, serif"
+                font-size="18" font-weight="500" fill="#1A1A14">8</text>
+        </g>
+
+        <!-- Stage / live band area -->
+        <rect x="800" y="180" width="60" height="180" fill="none"
+              stroke="#C8BFB2" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="830" y="280" text-anchor="middle" font-family="Raleway, sans-serif"
+              font-size="9" letter-spacing="3" fill="#A09890"
+              transform="rotate(-90 830 280)">LIVE BAND</text>
+
+        <!-- Mock cake -->
+        <circle cx="780" cy="160" r="14" fill="none" stroke="#C8BFB2" stroke-width="1"/>
+        <text x="780" y="148" text-anchor="middle" font-family="Raleway, sans-serif"
+              font-size="8" letter-spacing="2" fill="#A09890">CAKE</text>
+
+      </svg>
+      <div class="floor-plan-legend">
+        <span class="legend-pill">Open table</span>
+        <span class="legend-pill you">Your table</span>
+        <span style="margin-left:1rem;color:var(--text-light);">Tap any table to see who's seated there (optional — let me know if you want this).</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ─────────────────────────────────────── -->
+<!-- WHAT TO DECIDE -->
+<!-- ─────────────────────────────────────── -->
+<section>
+  <div class="container">
+    <div class="eyebrow">Your Call</div>
+    <h2 class="title">What to <em>Keep</em>, What to Change</h2>
+    <ol style="max-width:680px;font-size:1rem;color:var(--text-mid);line-height:1.9;margin-top:1.2rem;padding-left:1.2rem;">
+      <li>Pick a monogram variant (1, 2, or 3) — or say "blend X with Y".</li>
+      <li>Pick a divider (A / B / C / D) — could be one site-wide, or different per section.</li>
+      <li>Hero treatment OK as shown? Or larger / smaller / different placement?</li>
+      <li>Floor plan layout: positions OK or want them to mirror the venue photo more exactly?</li>
+      <li>Tap-to-reveal who's seated at each table on the floor plan — yes / no?</li>
+      <li>Anything missing — would you also want grape-cluster section accents, hunt-club gold borders on cards, leather-textured buttons, etc.?</li>
+    </ol>
+    <p style="margin-top:1.4rem;font-style:italic;color:var(--text-light);">
+      Once you decide, I'll wire chosen elements into the live site — separate small PRs so you can review each piece.
+    </p>
+  </div>
+</section>
+
+</body>
+</html>
