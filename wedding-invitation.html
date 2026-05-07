@@ -1630,6 +1630,98 @@
     flex-wrap: wrap;
     gap: 0.5rem;
   }
+
+  /* ─── FLOOR PLAN MODAL ─── */
+  .fp-modal {
+    display: none;
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    background: rgba(26,26,20,0.78);
+    padding: 1.5rem;
+    align-items: center;
+    justify-content: center;
+  }
+  .fp-modal.open { display: flex; }
+  .fp-card {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    max-width: 1000px;
+    width: 100%;
+    max-height: 90vh;
+    overflow: auto;
+    padding: 2rem 1.5rem 1.6rem;
+    position: relative;
+  }
+  .fp-close {
+    position: absolute;
+    top: 0.6rem; right: 1rem;
+    background: transparent;
+    border: none;
+    font-size: 1.6rem;
+    line-height: 1;
+    cursor: pointer;
+    color: var(--text-mid);
+    transition: color 0.15s;
+  }
+  .fp-close:hover { color: var(--text); }
+  .fp-card .fp-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-weight: 300;
+    font-size: 1.6rem;
+    text-align: center;
+    margin-bottom: 0.2rem;
+  }
+  .fp-card .fp-title em { font-style: italic; color: var(--olive); }
+  .fp-card .fp-sub {
+    text-align: center;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.62rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-bottom: 1.4rem;
+  }
+  .fp-svg-wrap {
+    background: #F9F4EB;
+    border: 1px solid var(--divider);
+    padding: 1rem;
+  }
+  .fp-svg-wrap svg { width: 100%; height: auto; display: block; }
+
+  .fp-table circle { fill: none; stroke: var(--olive); stroke-width: 1.5; transition: fill 0.2s; }
+  .fp-table text   { fill: var(--text); font-family: 'Cormorant Garamond', serif; font-size: 18px; font-weight: 500; }
+  .fp-table.active circle { fill: var(--olive); stroke-width: 2; }
+  .fp-table.active text   { fill: var(--bg); font-weight: 600; }
+  .fp-your-label { display: none; font-family: 'Raleway', sans-serif; font-size: 9px; font-weight: 600; letter-spacing: 2px; fill: var(--olive); }
+  .fp-table.active .fp-your-label { display: block; }
+  .fp-room-label { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 500; fill: var(--text-light); }
+  .fp-fixture-label { font-family: 'Raleway', sans-serif; font-size: 9px; letter-spacing: 2px; fill: #A09890; }
+
+  .fp-legend {
+    margin-top: 1rem;
+    text-align: center;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    color: var(--text-mid);
+  }
+  .fp-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: 3px 10px;
+    border-radius: 999px;
+    border: 1px solid var(--divider);
+    margin: 0 0.3rem;
+  }
+  .fp-pill .swatch { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--olive); background: transparent; }
+  .fp-pill.you .swatch { background: var(--olive); }
+
+  @media (max-width: 700px) {
+    .fp-card { padding: 1.6rem 1rem 1.2rem; }
+    .fp-card .fp-title { font-size: 1.3rem; }
+  }
 </style>
 
 <section id="rsvp" style="background:var(--bg-card);">
@@ -1729,6 +1821,7 @@
           <p class="seat-card-note">Seats are pre-arranged. If anything looks wrong, please reach out to us.</p>
           <div class="seat-card-actions">
             <button class="seat-edit-link primary" onclick="toggleCalendarChoices()">Add to Calendar</button>
+            <button class="seat-edit-link" onclick="openFloorPlan()">View Floor Plan</button>
             <button class="seat-edit-link" onclick="editRsvp()">Update my RSVP</button>
           </div>
           <div class="calendar-choices" id="calendar-choices">
@@ -1745,6 +1838,113 @@
     </div>
   </div>
 </section>
+
+<!-- ─── FLOOR PLAN MODAL ─── -->
+<div class="fp-modal" id="floor-plan-modal" onclick="if(event.target===this)closeFloorPlan()">
+  <div class="fp-card">
+    <button class="fp-close" onclick="closeFloorPlan()" aria-label="Close">×</button>
+    <div class="fp-title">The <em>Salisbury Room</em></div>
+    <div class="fp-sub">Floor Plan · 13 Tables</div>
+    <div class="fp-svg-wrap">
+      <svg viewBox="0 0 900 520" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <!-- Outer frame -->
+        <rect x="20" y="40" width="860" height="440" fill="none" stroke="#C8BFB2" stroke-width="1.5"/>
+        <!-- Dividing wall (with door gap) -->
+        <line x1="350" y1="40" x2="350" y2="220" stroke="#C8BFB2" stroke-width="2"/>
+        <line x1="350" y1="320" x2="350" y2="480" stroke="#C8BFB2" stroke-width="2"/>
+        <rect x="345" y="220" width="10" height="100" fill="#F9F4EB"/>
+        <text x="350" y="280" text-anchor="middle" class="fp-fixture-label" transform="rotate(-90 350 280)">DOOR</text>
+
+        <!-- Room labels -->
+        <text x="180" y="60" text-anchor="middle" class="fp-room-label">ANTECHAMBER</text>
+        <text x="620" y="60" text-anchor="middle" class="fp-room-label">SALISBURY ROOM · MAIN</text>
+
+        <!-- LEFT ROOM (tables 9-13) -->
+        <g class="fp-table" data-table="10">
+          <circle cx="120" cy="160" r="38"/>
+          <text x="120" y="166" text-anchor="middle">10</text>
+          <text x="120" y="215" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="12">
+          <circle cx="240" cy="160" r="38"/>
+          <text x="240" y="166" text-anchor="middle">12</text>
+          <text x="240" y="215" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="11">
+          <circle cx="180" cy="260" r="38"/>
+          <text x="180" y="266" text-anchor="middle">11</text>
+          <text x="180" y="315" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="13">
+          <circle cx="100" cy="370" r="38"/>
+          <text x="100" y="376" text-anchor="middle">13</text>
+          <text x="100" y="425" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="9">
+          <circle cx="240" cy="370" r="38"/>
+          <text x="240" y="376" text-anchor="middle">9</text>
+          <text x="240" y="425" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+
+        <!-- RIGHT ROOM (tables 1-8) -->
+        <g class="fp-table" data-table="7">
+          <circle cx="700" cy="100" r="38"/>
+          <text x="700" y="106" text-anchor="middle">7</text>
+          <text x="700" y="155" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="4">
+          <circle cx="540" cy="120" r="38"/>
+          <text x="540" y="126" text-anchor="middle">4</text>
+          <text x="540" y="175" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="3">
+          <circle cx="640" cy="180" r="38"/>
+          <text x="640" y="186" text-anchor="middle">3</text>
+          <text x="640" y="235" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="1">
+          <circle cx="500" cy="240" r="38"/>
+          <text x="500" y="246" text-anchor="middle">1</text>
+          <text x="500" y="295" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="2">
+          <circle cx="500" cy="360" r="38"/>
+          <text x="500" y="366" text-anchor="middle">2</text>
+          <text x="500" y="415" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="5">
+          <circle cx="640" cy="320" r="38"/>
+          <text x="640" y="326" text-anchor="middle">5</text>
+          <text x="640" y="375" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="6">
+          <circle cx="780" cy="380" r="38"/>
+          <text x="780" y="386" text-anchor="middle">6</text>
+          <text x="780" y="435" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+        <g class="fp-table" data-table="8">
+          <circle cx="600" cy="430" r="38"/>
+          <text x="600" y="436" text-anchor="middle">8</text>
+          <text x="600" y="468" text-anchor="middle" class="fp-your-label">YOUR TABLE</text>
+        </g>
+
+        <!-- Stage / live band area -->
+        <rect x="800" y="180" width="60" height="180" fill="none"
+              stroke="#C8BFB2" stroke-width="1" stroke-dasharray="4 4"/>
+        <text x="830" y="280" text-anchor="middle" class="fp-fixture-label"
+              transform="rotate(-90 830 280)">LIVE BAND</text>
+
+        <!-- Mock cake -->
+        <circle cx="780" cy="160" r="14" fill="none" stroke="#C8BFB2" stroke-width="1"/>
+        <text x="780" y="148" text-anchor="middle" class="fp-fixture-label">CAKE</text>
+      </svg>
+    </div>
+    <div class="fp-legend">
+      <span class="fp-pill"><span class="swatch"></span>Open table</span>
+      <span class="fp-pill you"><span class="swatch"></span>Your table</span>
+    </div>
+  </div>
+</div>
 
 <!-- ─── FOOTER ─── -->
 <footer>
@@ -1956,6 +2156,28 @@
     if (!INVITATION) return;
     renderMemberPicker(INVITATION.members);
     setRsvpState('rsvp-form-wrap');
+  }
+
+  // ─── FLOOR PLAN ───
+  function highlightFloorPlanTables() {
+    document.querySelectorAll('.fp-table').forEach(g => g.classList.remove('active'));
+    const tables = new Set(
+      (CURRENT_SEATS || [])
+        .filter(s => s.has_seat && s.table_number != null)
+        .map(s => String(s.table_number))
+    );
+    tables.forEach(t => {
+      document.querySelector(`.fp-table[data-table="${t}"]`)?.classList.add('active');
+    });
+  }
+  function openFloorPlan() {
+    highlightFloorPlanTables();
+    document.getElementById('floor-plan-modal')?.classList.add('open');
+    document.body.style.overflow = 'hidden';
+  }
+  function closeFloorPlan() {
+    document.getElementById('floor-plan-modal')?.classList.remove('open');
+    document.body.style.overflow = '';
   }
 
   // ─── ADD TO CALENDAR ───
@@ -2305,7 +2527,7 @@
   }
 
   document.addEventListener('keydown', e => {
-    if (e.key === 'Escape') { closeLightbox(); closeModal(); }
+    if (e.key === 'Escape') { closeLightbox(); closeFloorPlan(); }
     if (e.key === 'ArrowLeft')  moveLight(-1);
     if (e.key === 'ArrowRight') moveLight(1);
   });
