@@ -1939,7 +1939,7 @@
 
     <div class="fp-body">
       <div class="fp-svg-wrap">
-        <svg viewBox="400 40 780 540" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
+        <svg viewBox="0 0 800 810" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <!-- Reusable 12-seat ring (referenced by every round table via <use>) -->
           <defs>
             <g id="seats-12" fill="#A09890" stroke="none">
@@ -1958,88 +1958,98 @@
             </g>
           </defs>
 
-          <!-- Outer venue frame (cropped to dinner area only) -->
-          <rect x="420" y="60" width="760" height="500" fill="none" stroke="#C8BFB2" stroke-width="2"/>
+          <!-- Outer venue frame -->
+          <rect x="20" y="20" width="760" height="770" fill="none" stroke="#C8BFB2" stroke-width="2"/>
 
-          <!-- Tables 9-13 in middle cluster -->
-          <g class="fp-table" data-table="11" onclick="selectTable(11)" transform="translate(560, 320)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">11</text>
-          </g>
-          <g class="fp-table" data-table="13" onclick="selectTable(13)" transform="translate(670, 320)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">13</text>
-          </g>
-          <g class="fp-table" data-table="12" onclick="selectTable(12)" transform="translate(500, 410)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">12</text>
-          </g>
-          <g class="fp-table" data-table="10" onclick="selectTable(10)" transform="translate(610, 410)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">10</text>
-          </g>
-          <g class="fp-table" data-table="9" onclick="selectTable(9)" transform="translate(560, 500)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">9</text>
-          </g>
+          <!-- Stage: horizontal at top centre -->
+          <rect x="180" y="35" width="440" height="55" fill="#3a3a30" opacity="0.85"/>
+          <text x="400" y="71" text-anchor="middle" class="fp-stage-label">STAGE</text>
 
-          <!-- Tables 1-8, two columns -->
-          <g class="fp-table" data-table="7" onclick="selectTable(7)" transform="translate(830, 140)">
+          <!-- Live Band: top-right -->
+          <rect x="640" y="40" width="135" height="35" fill="#F9F4EB" stroke="#A09890" stroke-width="1"/>
+          <text x="707" y="62" text-anchor="middle" class="fp-fixture-label">LIVE BAND</text>
+
+          <!-- ── TOP HALF ── tables 7, 3, 9, 1 on the left; 6, 5, 8, 2 on the right -->
+          <g class="fp-table" data-table="7" onclick="selectTable(7)" transform="translate(95, 170)">
             <use href="#seats-12"/>
             <circle class="fp-table-circle" r="34"/>
             <text class="fp-table-num" y="6" text-anchor="middle">7</text>
           </g>
-          <g class="fp-table" data-table="4" onclick="selectTable(4)" transform="translate(970, 140)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">4</text>
-          </g>
-          <g class="fp-table" data-table="3" onclick="selectTable(3)" transform="translate(830, 240)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">3</text>
-          </g>
-          <g class="fp-table" data-table="1" onclick="selectTable(1)" transform="translate(970, 240)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">1</text>
-          </g>
-          <g class="fp-table" data-table="2" onclick="selectTable(2)" transform="translate(830, 340)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">2</text>
-          </g>
-          <g class="fp-table" data-table="5" onclick="selectTable(5)" transform="translate(970, 340)">
-            <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
-            <text class="fp-table-num" y="6" text-anchor="middle">5</text>
-          </g>
-          <g class="fp-table" data-table="6" onclick="selectTable(6)" transform="translate(830, 440)">
+          <g class="fp-table" data-table="6" onclick="selectTable(6)" transform="translate(705, 170)">
             <use href="#seats-12"/>
             <circle class="fp-table-circle" r="34"/>
             <text class="fp-table-num" y="6" text-anchor="middle">6</text>
           </g>
-          <g class="fp-table" data-table="8" onclick="selectTable(8)" transform="translate(970, 440)">
+
+          <g class="fp-table" data-table="3" onclick="selectTable(3)" transform="translate(260, 255)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">3</text>
+          </g>
+          <g class="fp-table" data-table="5" onclick="selectTable(5)" transform="translate(540, 255)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">5</text>
+          </g>
+          <!-- Mock cake between T3 and T5 -->
+          <circle cx="400" cy="255" r="13" fill="#F5EEE4" stroke="#A09890" stroke-width="1"/>
+          <text x="400" y="288" text-anchor="middle" class="fp-fixture-label">MOCK CAKE</text>
+
+          <g class="fp-table" data-table="9" onclick="selectTable(9)" transform="translate(95, 340)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">9</text>
+          </g>
+          <g class="fp-table" data-table="8" onclick="selectTable(8)" transform="translate(705, 340)">
             <use href="#seats-12"/>
             <circle class="fp-table-circle" r="34"/>
             <text class="fp-table-num" y="6" text-anchor="middle">8</text>
           </g>
 
-          <!-- Mock cake (above stage) -->
-          <circle cx="1110" cy="120" r="14" fill="#F5EEE4" stroke="#A09890" stroke-width="1"/>
-          <text x="1110" y="100" text-anchor="middle" class="fp-fixture-label">MOCK CAKE</text>
+          <g class="fp-table" data-table="1" onclick="selectTable(1)" transform="translate(260, 425)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">1</text>
+          </g>
+          <g class="fp-table" data-table="2" onclick="selectTable(2)" transform="translate(540, 425)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">2</text>
+          </g>
 
-          <!-- Stage -->
-          <rect x="1060" y="160" width="100" height="280" fill="#3a3a30" opacity="0.85"/>
-          <text x="1110" y="305" text-anchor="middle" class="fp-stage-label">STAGE</text>
+          <!-- Door divider between the two halves -->
+          <line x1="40"  y1="510" x2="350" y2="510" stroke="#A09890" stroke-width="1" stroke-dasharray="6,4"/>
+          <text x="400" y="514" text-anchor="middle" class="fp-fixture-label">DOOR</text>
+          <line x1="450" y1="510" x2="760" y2="510" stroke="#A09890" stroke-width="1" stroke-dasharray="6,4"/>
 
-          <!-- Live band (under stage) -->
-          <text x="1110" y="475" text-anchor="middle" class="fp-fixture-label">LIVE BAND</text>
+          <!-- ── BOTTOM HALF ── tables 10, 11 on top; 15 centred; 12, 13 below -->
+          <g class="fp-table" data-table="10" onclick="selectTable(10)" transform="translate(260, 575)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">10</text>
+          </g>
+          <g class="fp-table" data-table="11" onclick="selectTable(11)" transform="translate(540, 575)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">11</text>
+          </g>
+
+          <g class="fp-table" data-table="15" onclick="selectTable(15)" transform="translate(400, 655)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">15</text>
+          </g>
+
+          <g class="fp-table" data-table="12" onclick="selectTable(12)" transform="translate(260, 735)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">12</text>
+          </g>
+          <g class="fp-table" data-table="13" onclick="selectTable(13)" transform="translate(540, 735)">
+            <use href="#seats-12"/>
+            <circle class="fp-table-circle" r="34"/>
+            <text class="fp-table-num" y="6" text-anchor="middle">13</text>
+          </g>
         </svg>
       </div>
 
@@ -2177,6 +2187,27 @@
       if (!entry) return Promise.resolve({ success: false, error: 'Invalid code (demo).' });
       sessionStorage.setItem('demo-rsvp-' + code, '1');
       return Promise.resolve({ success: true });
+    }
+    if (fn === 'lookup_all_table_assignments') {
+      // Mock floor-plan data so the preview shows a realistic chart.
+      return Promise.resolve({
+        valid: true,
+        tables: {
+          '1':  [{name:'Auntie Wong',     seat:1},{name:'Uncle Wong',      seat:2},{name:'Cousin Ada',     seat:3},{name:'Cousin Ben',    seat:4},{name:'Auntie Lam',    seat:5},{name:'Uncle Lam',     seat:6},{name:'Pastor Cheung', seat:7},{name:'Mrs Cheung',     seat:8},{name:'Helen Kwok',    seat:9},{name:'Peter Kwok',    seat:10}],
+          '2':  [{name:'James Tsui',      seat:1},{name:'Linda Tsui',      seat:2},{name:'Auntie Mei',    seat:3},{name:'Uncle Ho',      seat:4},{name:'Cousin Jay',    seat:5},{name:'Cousin Kay',    seat:6}],
+          '3':  [{name:'Christy Chow',    seat:1},{name:'Mitchell Tsui',   seat:2},{name:'Mr Chow',       seat:3},{name:'Mrs Chow',      seat:4},{name:'Mr Tsui',       seat:5},{name:'Mrs Tsui',      seat:6},{name:'Maid of Honour', seat:7},{name:'Best Man',       seat:8}],
+          '5':  [{name:'Mark Chan',       seat:3},{name:'Sarah Chan',      seat:4},{name:'Demo Guest',    seat:5},{name:'Eric Lo',       seat:6},{name:'Mandy Lo',      seat:7},{name:'Vince Yip',     seat:8}],
+          '6':  [{name:'Auntie Lee',      seat:1},{name:'Uncle Lee',       seat:2},{name:'Auntie Ng',     seat:3},{name:'Uncle Ng',      seat:4},{name:'Cousin Faye',   seat:5}],
+          '7':  [{name:'Wong Family',     seat:1},{name:'Mrs Wong',        seat:2},{name:'Edmund Wong',   seat:3},{name:'Vivian Wong',   seat:4}],
+          '8':  [{name:'Friend Group A',  seat:1},{name:'Friend B',        seat:2},{name:'Friend C',      seat:3},{name:'Friend D',      seat:4},{name:'Friend E',      seat:5}],
+          '9':  [{name:'Choir Director',  seat:1},{name:'Soprano 1',       seat:2},{name:'Soprano 2',     seat:3},{name:'Alto 1',        seat:4},{name:'Alto 2',        seat:5},{name:'Tenor 1',       seat:6}],
+          '10': [{name:'Office Friend 1', seat:1},{name:'Office Friend 2', seat:2},{name:'Office Friend 3',seat:3},{name:'Office Friend 4',seat:4}],
+          '11': [{name:'School Friend 1', seat:1},{name:'School Friend 2', seat:2},{name:'School Friend 3',seat:3}],
+          '12': [{name:'Cousin Rita',     seat:1},{name:'Cousin Sam',      seat:2}],
+          '13': [{name:'Wine Friend 1',   seat:1},{name:'Wine Friend 2',   seat:2},{name:'Wine Friend 3', seat:3},{name:'Wine Friend 4', seat:4}],
+          '15': [{name:'Late Addition 1', seat:1},{name:'Late Addition 2', seat:2}]
+        }
+      });
     }
     return Promise.resolve({});
   }
