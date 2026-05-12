@@ -300,9 +300,77 @@
   }
   .tables-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
-    gap: 1.2rem;
+    grid-template-columns: repeat(5, minmax(195px, 1fr));
+    grid-auto-rows: min-content;
+    gap: 1rem 1.2rem;
+    min-width: 1080px;
+    align-items: start;
   }
+
+  /* Floor-plan labels (STAGE / CAKE / LIVE BAND / DOOR) */
+  .floor-label {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Cormorant Garamond', serif;
+    color: var(--text-mid);
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    text-align: center;
+    user-select: none;
+  }
+  .floor-label.stage {
+    border: 1px solid var(--divider);
+    background: var(--bg-card);
+    font-size: 0.85rem;
+    font-weight: 500;
+    padding: 0.8rem 1rem;
+    min-height: 56px;
+  }
+  .floor-label.live-band {
+    border: 1px solid var(--divider);
+    background: var(--bg-card);
+    font-size: 0.7rem;
+    padding: 0.55rem 0.8rem;
+    min-height: 40px;
+  }
+  .floor-label.cake {
+    font-size: 0.6rem;
+    letter-spacing: 0.2em;
+    color: var(--text-light);
+    padding: 0.4rem;
+  }
+  .floor-label.door {
+    border-top: 1px dashed var(--divider);
+    border-bottom: 1px dashed var(--divider);
+    padding: 0.6rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.3em;
+    margin: 0.4rem 0;
+  }
+
+  /* Floor-plan grid positions — top section (stage area) */
+  .pos-stage     { grid-column: 2 / 5; grid-row: 1; }
+  .pos-liveband  { grid-column: 5;     grid-row: 1; }
+  .pos-t7        { grid-column: 1;     grid-row: 2; }
+  .pos-t6        { grid-column: 5;     grid-row: 2; }
+  .pos-t3        { grid-column: 2;     grid-row: 3; }
+  .pos-cake      { grid-column: 3;     grid-row: 3; align-self: center; }
+  .pos-t5        { grid-column: 4;     grid-row: 3; }
+  .pos-t9        { grid-column: 1;     grid-row: 4; }
+  .pos-t8        { grid-column: 5;     grid-row: 4; }
+  .pos-t1        { grid-column: 2;     grid-row: 5; }
+  .pos-t2        { grid-column: 4;     grid-row: 5; }
+
+  /* Door divider */
+  .pos-door      { grid-column: 1 / -1; grid-row: 6; }
+
+  /* Bottom section (door area) */
+  .pos-t10       { grid-column: 2;     grid-row: 7; }
+  .pos-t11       { grid-column: 4;     grid-row: 7; }
+  .pos-t15       { grid-column: 3;     grid-row: 8; }
+  .pos-t12       { grid-column: 2;     grid-row: 9; }
+  .pos-t13       { grid-column: 4;     grid-row: 9; }
 
   /* ─── TABLE CARD ─── */
   .table-card {
@@ -525,7 +593,25 @@ const ADMIN_ALLOWLIST = [
   'mitchell.tsui.mc@gmail.com'
 ];
 
-const TABLE_COUNT = 13;
+// Floor-plan layout: matches The Salisbury Room schematic.
+// Tables 4 and 14 do not exist in this venue layout.
+const TABLES = [
+  { n: 7,  pos: 'pos-t7'  },
+  { n: 3,  pos: 'pos-t3'  },
+  { n: 5,  pos: 'pos-t5'  },
+  { n: 6,  pos: 'pos-t6'  },
+  { n: 9,  pos: 'pos-t9'  },
+  { n: 8,  pos: 'pos-t8'  },
+  { n: 1,  pos: 'pos-t1'  },
+  { n: 2,  pos: 'pos-t2'  },
+  { n: 10, pos: 'pos-t10' },
+  { n: 11, pos: 'pos-t11' },
+  { n: 15, pos: 'pos-t15' },
+  { n: 12, pos: 'pos-t12' },
+  { n: 13, pos: 'pos-t13' },
+];
+const TABLE_NUMBERS = TABLES.map(t => t.n);
+const TABLE_COUNT = TABLES.length;
 const SEATS_PER_TABLE = 12;
 
 let sb = null;          // supabase client
@@ -764,7 +850,13 @@ function renderTables() {
   const grid = document.getElementById('tables-grid');
   grid.innerHTML = '';
 
-  for (let t = 1; t <= TABLE_COUNT; t++) {
+  // Floor-plan labels (positioned via CSS grid classes)
+  grid.innerHTML += `<div class="floor-label stage pos-stage">Stage</div>`;
+  grid.innerHTML += `<div class="floor-label live-band pos-liveband">Live Band</div>`;
+  grid.innerHTML += `<div class="floor-label cake pos-cake">Cake</div>`;
+  grid.innerHTML += `<div class="floor-label door pos-door">Door</div>`;
+
+  for (const { n: t, pos } of TABLES) {
     const seatsAtTable = guests.filter(g => g.table_number === t);
     const count = seatsAtTable.length;
     const full = count >= SEATS_PER_TABLE;
@@ -820,7 +912,7 @@ function renderTables() {
     }
 
     grid.innerHTML += `
-      <div class="table-card ${full ? 'full' : ''}" id="tc-${t}">
+      <div class="table-card ${full ? 'full' : ''} ${pos}" id="tc-${t}">
         <div class="table-header">
           <div class="table-name">Table ${t}</div>
           <div class="table-count ${full ? 'at-capacity' : ''}">${count}/${SEATS_PER_TABLE}</div>
@@ -935,7 +1027,7 @@ function updateStats() {
 // ─── SUMMARY ───
 function openSummary() {
   let html = '';
-  for (let t = 1; t <= TABLE_COUNT; t++) {
+  for (const t of TABLE_NUMBERS) {
     const seated = guests
       .filter(g => g.table_number === t)
       .sort((a, b) => (a.seat_number || 0) - (b.seat_number || 0));
