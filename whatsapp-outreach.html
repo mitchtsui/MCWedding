@@ -640,39 +640,45 @@ const RSVP_DEADLINE = '12 September 2026';
 // ─── DEFAULT TEMPLATES ───
 const DEFAULT_TEMPLATES = {
   bilingual:
-`Hi {name}! 👋
+`Hi {name}!
 
 Christy & Mitchell here — we'd love to have you celebrate our wedding with us on Thursday, 12 November 2026 at The Salisbury Room, The Peninsula Hong Kong.
 
-We've made a personal invitation page for you (please don't share — it's tied to your seat):
+We've made a personal invitation page just for you (please don't share — it's tied to your seat):
 {link}
 
-Kindly RSVP by {deadline} 🙏
+Kindly RSVP by {deadline}.
 
-Christy & Mitchell 黃志良 & 周詩茵 誠意邀請 {fullname} 出席我們的婚禮:
-🗓 2026年11月12日 (星期四)
-📍 香港半島酒店 The Salisbury Room
+——
+
+黃志良 & 周詩茵 誠意邀請 {fullname} 出席我們的婚禮:
+
+• 日期: 2026年11月12日 (星期四)
+• 地點: 香港半島酒店 The Salisbury Room
+• 時間: 5:00pm 賓客到場 · 6:30pm 證婚 · 7:45pm 晚宴
+
 請於 {deadline} 前透過上面的連結回覆,謝謝!
 
 With love,
-Christy, Mitchell (& Chambolle 🐕)`,
+Christy, Mitchell & Chambolle`,
 
   friends:
-`Hey {name}! 🥂
+`Hey {name}!
 
 Christy & Mitch here — saving the date didn't quite cover the full picture, so here's the real one:
 
-📅 Thursday, 12 November 2026
-📍 The Salisbury Room, The Peninsula Hong Kong
-🕔 Arrival 5pm · Ceremony 6:30pm · Dinner 7:45pm
-👔 Elegant evening attire
+• Thursday, 12 November 2026
+• The Salisbury Room, The Peninsula Hong Kong
+• Arrival 5pm · Ceremony 6:30pm · Dinner 7:45pm
+• Elegant evening attire
 
-We've set up a personalised invitation page for you (it remembers your name, plus-one, dietary, and later your seat):
-👉 {link}
+We've set up a personalised invitation page for you — it remembers your name, plus-one and dietary, and later shows your seat:
 
-Please RSVP by {deadline} so we can finalise seating 🙏
+{link}
 
-Chambolle the corgi will not be attending (Peninsula policy 🐕💔) but sends his regards and is hoping you'll bring him stinky treats afterwards.
+Please RSVP by {deadline} so we can finalise seating.
+
+Chambolle the corgi will not be attending (Peninsula policy) but sends his regards and is hoping you'll bring him stinky treats afterwards.
 
 Can't wait to celebrate with you!
 Christy & Mitchell`,
@@ -682,15 +688,15 @@ Christy & Mitchell`,
 
 Christy and Mitchell would be honoured by your presence at their wedding celebration:
 
-🗓 Thursday, 12 November 2026
-📍 The Salisbury Room, The Peninsula Hong Kong
-   Salisbury Road, Tsim Sha Tsui, Kowloon
-🕔 Guest Arrival 5:00 pm
-   Ceremony 6:30 pm
-   Dinner Reception 7:45 pm
-👔 Elegant Evening Attire
+• Date: Thursday, 12 November 2026
+• Venue: The Salisbury Room, The Peninsula Hong Kong
+         Salisbury Road, Tsim Sha Tsui, Kowloon
+• Schedule: Guest Arrival 5:00 pm
+            Ceremony 6:30 pm
+            Dinner Reception 7:45 pm
+• Attire: Elegant Evening Attire
 
-A personal invitation page has been prepared for you, with details and an RSVP form:
+A personal invitation page has been prepared for you, with full details and an RSVP form:
 {link}
 
 We would be most grateful if you could kindly confirm your attendance by {deadline}.
@@ -918,7 +924,7 @@ async function markHouseholdSent(code) {
 }
 
 // ─── TEMPLATES (localStorage) ───
-const LS_TPL = 'mc-outreach-templates-v1';
+const LS_TPL = 'mc-outreach-templates-v2';
 const LS_OVERRIDES = 'mc-outreach-overrides-v1';
 
 function loadTemplatesFromStorage() {
