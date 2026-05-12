@@ -772,9 +772,11 @@ function renderTemplate(tplKey, g) {
 function waLink(phone, message) {
   const encoded = encodeURIComponent(message);
   const clean = (phone || '').replace(/[^0-9]/g, '');
+  // api.whatsapp.com/send preserves non-ASCII characters (emoji, 中文,
+  // em dashes) more reliably than wa.me on iOS Safari → WhatsApp app.
   return clean
-    ? `https://wa.me/${clean}?text=${encoded}`
-    : `https://wa.me/?text=${encoded}`;
+    ? `https://api.whatsapp.com/send?phone=${clean}&text=${encoded}`
+    : `https://api.whatsapp.com/send?text=${encoded}`;
 }
 
 // ─── AUTH ───
@@ -1154,6 +1156,13 @@ function attachHandlers(root) {
       alert(renderTemplate(tplKey, g));
     });
     card.querySelector('[data-act="wa-open"]')?.addEventListener('click', () => {
+      // Copy message to clipboard as a fallback — wa.me's redirect to the
+      // WhatsApp app sometimes mangles emoji / 中文 on iOS Safari, so the
+      // user can always paste manually if the auto-fill came through broken.
+      const tplKey = effectiveTemplate(g);
+      const message = renderTemplate(tplKey, g);
+      navigator.clipboard.writeText(message).catch(() => {});
+      toast('Message copied — paste if WhatsApp didn\'t auto-fill');
       // Auto-mark as Sent if currently Not Contacted (after a beat — open first)
       const currentStatus = g.outreach_status || 'Not Contacted';
       if (currentStatus === 'Not Contacted') {
