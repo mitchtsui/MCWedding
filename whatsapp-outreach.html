@@ -1,0 +1,1241 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>WhatsApp Outreach — Christy &amp; Mitchell</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
+<!-- Loads SUPABASE_URL / SUPABASE_ANON_KEY onto window from Vercel env vars -->
+<script src="/api/config.js"></script>
+<style>
+  :root {
+    --bg: #EAE5DB;
+    --bg-card: #F2EDE5;
+    --bg-panel: #F7F3EE;
+    --text: #2C2820;
+    --text-mid: #5A4E45;
+    --text-light: #8A7E77;
+    --accent: #7A4F5A;
+    --accent-light: #C4A0AB;
+    --olive: #686B38;
+    --whatsapp: #25D366;
+    --whatsapp-dark: #128C7E;
+    --divider: #C8BFB2;
+    --white: #FAF7F2;
+    --shadow: 0 2px 16px rgba(44,40,32,0.08);
+    --error: #8B3A3A;
+    --warn: #B8841F;
+    --ok: #4F7A4F;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Raleway', sans-serif;
+    font-size: 13px;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* ─── AUTH GATE ─── */
+  .auth-gate {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: 1;
+    background: var(--bg);
+    padding: 2rem;
+    min-height: 100vh;
+  }
+  .auth-card {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 2.5rem 2rem;
+    max-width: 380px;
+    width: 100%;
+    text-align: center;
+  }
+  .auth-card h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.6rem;
+    font-weight: 400;
+    margin-bottom: 0.6rem;
+  }
+  .auth-card p {
+    color: var(--text-mid);
+    font-size: 0.85rem;
+    margin-bottom: 1.4rem;
+    line-height: 1.5;
+  }
+  .auth-input {
+    width: 100%;
+    padding: 0.6rem 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+    outline: none;
+    margin-bottom: 0.8rem;
+  }
+  .auth-input:focus { border-color: var(--text-mid); }
+  .auth-btn {
+    width: 100%;
+    padding: 0.7rem;
+    background: var(--text);
+    color: var(--bg);
+    border: none;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+  .auth-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+  .auth-btn:hover:not(:disabled) { background: var(--text-mid); }
+  .auth-msg {
+    margin-top: 1rem;
+    font-size: 0.78rem;
+    color: var(--text-mid);
+    line-height: 1.5;
+  }
+  .auth-msg.error { color: var(--error); }
+
+  /* ─── HEADER ─── */
+  header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.85rem 1.5rem;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--divider);
+    gap: 1rem;
+    flex-wrap: wrap;
+  }
+  .header-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    color: var(--text);
+  }
+  .header-title em { font-style: italic; color: var(--accent); font-weight: 300; }
+  .header-meta {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    letter-spacing: 0.06em;
+    margin-top: 0.15rem;
+  }
+  .header-stats {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+  }
+  .stat-chip {
+    background: var(--bg-panel);
+    border: 1px solid var(--divider);
+    padding: 0.4rem 0.7rem;
+    font-size: 0.7rem;
+    color: var(--text-mid);
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .stat-chip strong {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    color: var(--text);
+    font-weight: 500;
+  }
+  .header-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.6rem;
+    margin-left: auto;
+  }
+  .who { color: var(--text-light); font-size: 0.75rem; }
+  .btn {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 0.5rem 0.9rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    color: var(--text-mid);
+    transition: all 0.15s;
+  }
+  .btn:hover { background: var(--bg-card); border-color: var(--text-mid); color: var(--text); }
+  .btn-primary {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+  .btn-primary:hover { background: var(--text-mid); color: var(--bg); }
+  .sync-indicator {
+    font-size: 0.7rem;
+    color: var(--text-light);
+    min-width: 70px;
+    text-align: right;
+  }
+  .sync-indicator.saving { color: var(--warn); }
+  .sync-indicator.saved  { color: var(--ok); }
+  .sync-indicator.error  { color: var(--error); }
+
+  /* ─── PAGE LAYOUT ─── */
+  .app-body {
+    flex: 1;
+    padding: 1.2rem 1.5rem 2rem;
+    display: flex;
+    flex-direction: column;
+    gap: 1.2rem;
+  }
+
+  /* ─── PANEL ─── */
+  .panel {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+  }
+  .panel-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0.7rem 1rem;
+    border-bottom: 1px solid var(--divider);
+    background: var(--bg-panel);
+    gap: 0.8rem;
+    flex-wrap: wrap;
+  }
+  .panel-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.1rem;
+    font-weight: 400;
+  }
+  .panel-body { padding: 0.9rem 1rem; }
+
+  /* ─── TEMPLATES ─── */
+  .template-tabs {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .tpl-tab {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 0.4rem 0.8rem;
+    font-size: 0.72rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    color: var(--text-mid);
+    text-transform: uppercase;
+  }
+  .tpl-tab.active {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+  .tpl-textarea {
+    width: 100%;
+    min-height: 170px;
+    padding: 0.7rem 0.85rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+    line-height: 1.55;
+    resize: vertical;
+    outline: none;
+    white-space: pre-wrap;
+  }
+  .tpl-textarea:focus { border-color: var(--text-mid); }
+  .tpl-help {
+    font-size: 0.72rem;
+    color: var(--text-light);
+    margin: 0.5rem 0 0.25rem;
+    line-height: 1.55;
+  }
+  .tpl-help code {
+    background: var(--bg);
+    padding: 0.05rem 0.35rem;
+    border: 1px solid var(--divider);
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.7rem;
+    color: var(--accent);
+  }
+  .tpl-actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0.5rem;
+    margin-top: 0.5rem;
+    flex-wrap: wrap;
+  }
+
+  /* ─── FILTER BAR ─── */
+  .filter-bar {
+    display: flex;
+    gap: 0.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .filter-chip {
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 0.4rem 0.7rem;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    color: var(--text-mid);
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .filter-chip.active {
+    background: var(--text);
+    color: var(--bg);
+    border-color: var(--text);
+  }
+  .search-input {
+    padding: 0.45rem 0.7rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.8rem;
+    color: var(--text);
+    outline: none;
+    min-width: 200px;
+  }
+  .search-input:focus { border-color: var(--text-mid); }
+  .select-input {
+    padding: 0.45rem 0.5rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.78rem;
+    color: var(--text);
+    outline: none;
+  }
+
+  /* ─── GUEST CARD ─── */
+  .guest-card {
+    background: var(--bg-card);
+    border: 1px solid var(--divider);
+    padding: 0.9rem 1rem;
+    margin-bottom: 0.6rem;
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0.75rem;
+  }
+  @media (min-width: 900px) {
+    .guest-card {
+      grid-template-columns: minmax(220px, 1.2fr) minmax(260px, 1.4fr) minmax(220px, 1fr);
+      align-items: start;
+    }
+  }
+  .guest-card.is-sent { border-left: 3px solid var(--ok); }
+  .guest-card.is-responded { border-left: 3px solid var(--accent); background: var(--bg-panel); }
+  .guest-card.is-skip { opacity: 0.55; }
+  .guest-info-name {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.25rem;
+    font-weight: 500;
+    color: var(--text);
+    line-height: 1.2;
+    margin-bottom: 0.25rem;
+  }
+  .guest-info-meta {
+    font-size: 0.72rem;
+    color: var(--text-light);
+    letter-spacing: 0.04em;
+    line-height: 1.55;
+  }
+  .guest-info-meta .pill {
+    display: inline-block;
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    padding: 0.08rem 0.4rem;
+    margin-right: 0.25rem;
+    margin-top: 0.2rem;
+    font-size: 0.66rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-mid);
+  }
+  .guest-info-meta .pill.side-f { color: var(--accent); border-color: var(--accent-light); }
+  .guest-info-meta .pill.side-m { color: var(--olive); border-color: #a8b099; }
+  .guest-info-meta .pill.shared { color: var(--warn); border-color: #d6c094; }
+  .guest-info-meta .pill.rsvp-yes { color: var(--ok); border-color: #a8c0a8; }
+  .guest-info-meta .pill.rsvp-no  { color: var(--error); border-color: #d6a8a8; }
+  .guest-info-meta .pill.rsvp-pending  { color: var(--warn); border-color: #d6c094; }
+
+  .link-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .link-row {
+    display: flex;
+    align-items: center;
+    gap: 0.35rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    padding: 0.35rem 0.5rem;
+    font-family: 'SF Mono', Menlo, monospace;
+    font-size: 0.72rem;
+    color: var(--text-mid);
+    overflow: hidden;
+  }
+  .link-row span {
+    flex: 1;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  .icon-btn {
+    background: transparent;
+    border: 1px solid var(--divider);
+    color: var(--text-mid);
+    padding: 0.18rem 0.45rem;
+    font-size: 0.65rem;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-transform: uppercase;
+  }
+  .icon-btn:hover { background: var(--bg); color: var(--text); }
+  .icon-btn.copied { color: var(--ok); border-color: var(--ok); }
+
+  .action-row {
+    display: flex;
+    gap: 0.4rem;
+    flex-wrap: wrap;
+  }
+  .wa-btn {
+    background: var(--whatsapp);
+    color: white;
+    border: none;
+    padding: 0.55rem 0.9rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.72rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    cursor: pointer;
+    text-decoration: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    transition: background 0.15s;
+  }
+  .wa-btn:hover { background: var(--whatsapp-dark); }
+  .wa-btn svg { width: 14px; height: 14px; fill: white; }
+
+  .tracker-block {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+  }
+  .field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+  }
+  .field-row label {
+    font-size: 0.68rem;
+    color: var(--text-light);
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+    min-width: 56px;
+  }
+  .field-row select,
+  .field-row input[type="text"],
+  .field-row input[type="tel"] {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.78rem;
+    color: var(--text);
+    outline: none;
+  }
+  .field-row textarea {
+    flex: 1;
+    padding: 0.35rem 0.5rem;
+    background: var(--white);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.78rem;
+    color: var(--text);
+    outline: none;
+    resize: vertical;
+    min-height: 38px;
+    line-height: 1.45;
+  }
+  .field-row select:focus,
+  .field-row input:focus,
+  .field-row textarea:focus { border-color: var(--text-mid); }
+  .sent-meta {
+    font-size: 0.68rem;
+    color: var(--text-light);
+    letter-spacing: 0.04em;
+    padding-left: 60px;
+  }
+
+  /* ─── EMPTY / LOADING ─── */
+  .empty {
+    padding: 3rem 1rem;
+    text-align: center;
+    color: var(--text-light);
+    font-size: 0.85rem;
+  }
+
+  /* ─── PRINT ─── */
+  @media print {
+    .panel-header, .header-actions, .auth-gate, .filter-bar, .template-panel { display: none; }
+    .guest-card { break-inside: avoid; page-break-inside: avoid; }
+  }
+
+  /* ─── TOAST ─── */
+  .toast {
+    position: fixed;
+    bottom: 1.5rem;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--text);
+    color: var(--bg);
+    padding: 0.65rem 1.1rem;
+    font-size: 0.75rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    border-radius: 2px;
+    z-index: 9999;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.25s;
+  }
+  .toast.show { opacity: 1; }
+</style>
+</head>
+<body>
+
+<!-- ─── AUTH GATE ─── -->
+<div id="auth-gate" class="auth-gate">
+  <div class="auth-card">
+    <h1>WhatsApp Outreach</h1>
+    <p>Christy &amp; Mitchell — admin only.<br>Sign in via magic link.</p>
+    <input type="email" class="auth-input" id="auth-email" placeholder="Your email">
+    <button class="auth-btn" id="auth-btn" onclick="sendMagicLink()">Send Magic Link</button>
+    <div class="auth-msg" id="auth-msg"></div>
+  </div>
+</div>
+
+<!-- ─── APP (hidden until authenticated) ─── -->
+<div id="app" style="display:none;flex-direction:column;flex:1;">
+  <header>
+    <div>
+      <div class="header-title">WhatsApp Outreach — <em>Christy &amp; Mitchell</em></div>
+      <div class="header-meta">12 November 2026 · RSVP by 12 September 2026</div>
+    </div>
+    <div class="header-stats">
+      <div class="stat-chip"><strong id="stat-total">0</strong>Total</div>
+      <div class="stat-chip"><strong id="stat-sent">0</strong>Sent</div>
+      <div class="stat-chip"><strong id="stat-pending">0</strong>Pending</div>
+      <div class="stat-chip"><strong id="stat-responded">0</strong>Responded</div>
+      <div class="stat-chip"><strong id="stat-households">0</strong>Households</div>
+    </div>
+    <div class="header-actions">
+      <span class="who" id="who"></span>
+      <span class="sync-indicator" id="sync"></span>
+      <button class="btn" onclick="reload()">Reload</button>
+      <button class="btn" onclick="exportCsv()">Export CSV</button>
+      <button class="btn" onclick="signOut()">Sign Out</button>
+    </div>
+  </header>
+
+  <div class="app-body">
+
+    <!-- ─── MESSAGE TEMPLATES ─── -->
+    <div class="panel template-panel">
+      <div class="panel-header">
+        <div class="panel-title">WhatsApp Message Templates</div>
+        <div class="template-tabs" id="template-tabs">
+          <button class="tpl-tab active" data-tpl="bilingual" onclick="selectTemplate('bilingual')">Relatives · 中英</button>
+          <button class="tpl-tab" data-tpl="friends" onclick="selectTemplate('friends')">Friends · English</button>
+          <button class="tpl-tab" data-tpl="formal" onclick="selectTemplate('formal')">Parents' Friends · Formal</button>
+        </div>
+      </div>
+      <div class="panel-body">
+        <textarea class="tpl-textarea" id="tpl-editor" oninput="onTemplateInput()"></textarea>
+        <div class="tpl-help">
+          Placeholders: <code>{name}</code> first name · <code>{fullname}</code> full name · <code>{link}</code> personalised RSVP link · <code>{code}</code> 5-character code · <code>{deadline}</code> 12 Sep 2026.
+          Templates auto-save to this browser. Tool picks a default per group; you can override on any guest below.
+        </div>
+        <div class="tpl-actions">
+          <div style="font-size: 0.72rem; color: var(--text-light);">
+            Preview will render with the first matching guest's details below.
+          </div>
+          <div style="display:flex;gap:0.4rem;">
+            <button class="btn" onclick="resetTemplate()">Reset to default</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ─── FILTERS ─── -->
+    <div class="panel">
+      <div class="panel-header">
+        <div class="panel-title">Guest List</div>
+        <div class="filter-bar">
+          <input type="text" id="search-input" class="search-input" placeholder="Search name or group…" oninput="render()">
+          <select id="filter-status" class="select-input" onchange="render()">
+            <option value="">All statuses</option>
+            <option value="Not Contacted">Not Contacted</option>
+            <option value="Sent">Sent</option>
+            <option value="Responded">Responded</option>
+            <option value="Bounced">Bounced</option>
+            <option value="Skip">Skip</option>
+          </select>
+          <select id="filter-rsvp" class="select-input" onchange="render()">
+            <option value="">All RSVPs</option>
+            <option value="Yes">RSVP Yes</option>
+            <option value="No">RSVP No</option>
+            <option value="Pending">RSVP Pending</option>
+          </select>
+          <select id="filter-side" class="select-input" onchange="render()">
+            <option value="">Both sides</option>
+            <option value="女方">Christy 女方</option>
+            <option value="男方">Mitchell 男方</option>
+          </select>
+          <select id="filter-group" class="select-input" onchange="render()">
+            <option value="">All groups</option>
+          </select>
+          <button class="filter-chip" id="toggle-household" onclick="toggleHousehold()">One row per household</button>
+        </div>
+      </div>
+      <div class="panel-body" id="guest-list">
+        <div class="empty">Loading…</div>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── SUPABASE CONFIG ───
+const SUPABASE_URL      = (typeof window !== 'undefined' && window.SUPABASE_URL)      || '';
+const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || '';
+
+const ADMIN_ALLOWLIST = [
+  'christychowtc@gmail.com',
+  'mitchell.tsui.mc@gmail.com'
+];
+
+const RSVP_DEADLINE = '12 September 2026';
+
+// ─── DEFAULT TEMPLATES ───
+const DEFAULT_TEMPLATES = {
+  bilingual:
+`Hi {name}! 👋
+
+Christy & Mitchell here — we'd love to have you celebrate our wedding with us on Thursday, 12 November 2026 at The Salisbury Room, The Peninsula Hong Kong.
+
+We've made a personal invitation page for you (please don't share — it's tied to your seat):
+{link}
+
+Kindly RSVP by {deadline} 🙏
+
+Christy & Mitchell 黃志良 & 周詩茵 誠意邀請 {fullname} 出席我們的婚禮:
+🗓 2026年11月12日 (星期四)
+📍 香港半島酒店 The Salisbury Room
+請於 {deadline} 前透過上面的連結回覆,謝謝!
+
+With love,
+Christy, Mitchell (& Chambolle 🐕)`,
+
+  friends:
+`Hey {name}! 🥂
+
+Christy & Mitch here — saving the date didn't quite cover the full picture, so here's the real one:
+
+📅 Thursday, 12 November 2026
+📍 The Salisbury Room, The Peninsula Hong Kong
+🕔 Arrival 5pm · Ceremony 6:30pm · Dinner 7:45pm
+👔 Elegant evening attire
+
+We've set up a personalised invitation page for you (it remembers your name, plus-one, dietary, and later your seat):
+👉 {link}
+
+Please RSVP by {deadline} so we can finalise seating 🙏
+
+Chambolle the corgi will not be attending (Peninsula policy 🐕💔) but sends his regards and is hoping you'll bring him stinky treats afterwards.
+
+Can't wait to celebrate with you!
+Christy & Mitchell`,
+
+  formal:
+`Dear {fullname},
+
+Christy and Mitchell would be honoured by your presence at their wedding celebration:
+
+🗓 Thursday, 12 November 2026
+📍 The Salisbury Room, The Peninsula Hong Kong
+   Salisbury Road, Tsim Sha Tsui, Kowloon
+🕔 Guest Arrival 5:00 pm
+   Ceremony 6:30 pm
+   Dinner Reception 7:45 pm
+👔 Elegant Evening Attire
+
+A personal invitation page has been prepared for you, with details and an RSVP form:
+{link}
+
+We would be most grateful if you could kindly confirm your attendance by {deadline}.
+
+With warm regards,
+Christy Chow & Mitchell Tsui`
+};
+
+// Heuristic: pick a default template based on guest group_name
+function defaultTemplateFor(group) {
+  const g = (group || '').toLowerCase();
+  if (/(relatives|family|grandma|爸|媽|舅|表|姑|伯|姨)/i.test(group || '')) return 'bilingual';
+  if (/relatives|family/.test(g)) return 'bilingual';
+  if (/dad friends|mom friends|parents/.test(g)) return 'formal';
+  if (/church/.test(g)) return 'bilingual';
+  return 'friends';
+}
+
+// ─── STATE ───
+let sb = null;
+let session = null;
+let guests = [];
+let currentTemplate = 'bilingual';
+let templates = { ...DEFAULT_TEMPLATES };
+let householdMode = false;
+let saveTimers = {};
+let groupOverrides = {}; // { guest_id: templateKey }
+
+// ─── UTIL ───
+function escHtml(s) {
+  return String(s == null ? '' : s)
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function firstName(full) {
+  if (!full) return '';
+  // For names with mixed scripts, take the first run before space.
+  const parts = full.trim().split(/\s+/);
+  return parts[0] || full;
+}
+function fmtSent(ts) {
+  if (!ts) return '';
+  try {
+    const d = new Date(ts);
+    return d.toLocaleString('en-GB', { day: '2-digit', month: 'short', year: '2-digit',
+      hour: '2-digit', minute: '2-digit' });
+  } catch { return ts; }
+}
+function toast(text) {
+  const t = document.getElementById('toast');
+  t.textContent = text;
+  t.classList.add('show');
+  clearTimeout(toast._h);
+  toast._h = setTimeout(() => t.classList.remove('show'), 1800);
+}
+function setSync(state, text) {
+  const el = document.getElementById('sync');
+  el.className = 'sync-indicator ' + (state || '');
+  el.textContent = text || '';
+}
+function inviteUrl(code) {
+  const origin = window.location.origin || '';
+  return `${origin}/?code=${encodeURIComponent(code)}`;
+}
+function renderTemplate(tplKey, g) {
+  const tpl = templates[tplKey] || '';
+  return tpl
+    .replace(/\{name\}/g,     firstName(g.name))
+    .replace(/\{fullname\}/g, g.name || '')
+    .replace(/\{link\}/g,     inviteUrl(g.invitation_code || ''))
+    .replace(/\{code\}/g,     g.invitation_code || '')
+    .replace(/\{deadline\}/g, RSVP_DEADLINE);
+}
+function waLink(phone, message) {
+  const encoded = encodeURIComponent(message);
+  const clean = (phone || '').replace(/[^0-9]/g, '');
+  return clean
+    ? `https://wa.me/${clean}?text=${encoded}`
+    : `https://wa.me/?text=${encoded}`;
+}
+
+// ─── AUTH ───
+function isConfigured() { return !!(SUPABASE_URL && SUPABASE_ANON_KEY); }
+
+function initSupabase() {
+  if (!isConfigured()) return null;
+  if (!window.supabase) { console.error('Supabase SDK not loaded'); return null; }
+  sb = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+    auth: { persistSession: true, detectSessionInUrl: true, autoRefreshToken: true }
+  });
+  return sb;
+}
+
+async function bootstrap() {
+  loadTemplatesFromStorage();
+  loadOverridesFromStorage();
+  initSupabase();
+  if (!sb) {
+    const m = document.getElementById('auth-msg');
+    m.className = 'auth-msg error';
+    m.textContent = 'Supabase not configured. Set SUPABASE_URL and SUPABASE_ANON_KEY in Vercel env vars.';
+    return;
+  }
+  const { data: { session: s } } = await sb.auth.getSession();
+  if (s) enterApp(s);
+  sb.auth.onAuthStateChange((_e, newSession) => {
+    if (newSession) enterApp(newSession);
+    else exitApp();
+  });
+}
+
+async function sendMagicLink() {
+  const email = document.getElementById('auth-email').value.trim().toLowerCase();
+  const msg = document.getElementById('auth-msg');
+  msg.className = 'auth-msg';
+  if (!email) { msg.textContent = 'Please enter your email.'; msg.className = 'auth-msg error'; return; }
+  if (!ADMIN_ALLOWLIST.includes(email)) {
+    msg.textContent = 'This email is not authorised.';
+    msg.className = 'auth-msg error';
+    return;
+  }
+  const btn = document.getElementById('auth-btn');
+  btn.disabled = true; btn.textContent = 'Sending…';
+  const { error } = await sb.auth.signInWithOtp({
+    email,
+    options: { emailRedirectTo: window.location.origin + window.location.pathname }
+  });
+  btn.disabled = false; btn.textContent = 'Send Magic Link';
+  if (error) {
+    msg.className = 'auth-msg error';
+    msg.textContent = error.message || 'Failed to send link.';
+  } else {
+    msg.textContent = 'Check your inbox for the magic link.';
+  }
+}
+
+async function signOut() { await sb.auth.signOut(); }
+
+function enterApp(s) {
+  session = s;
+  const email = (s.user && s.user.email || '').toLowerCase();
+  if (!ADMIN_ALLOWLIST.includes(email)) {
+    const m = document.getElementById('auth-msg');
+    m.className = 'auth-msg error';
+    m.textContent = `Email "${email}" is not authorised.`;
+    sb.auth.signOut();
+    return;
+  }
+  document.getElementById('auth-gate').style.display = 'none';
+  document.getElementById('app').style.display = 'flex';
+  document.getElementById('who').textContent = email;
+  selectTemplate(currentTemplate);
+  loadGuests();
+}
+
+function exitApp() {
+  session = null;
+  document.getElementById('auth-gate').style.display = 'flex';
+  document.getElementById('app').style.display = 'none';
+  guests = [];
+}
+
+// ─── DATA ───
+async function loadGuests() {
+  setSync('saving', 'Loading…');
+  const { data, error } = await sb
+    .from('guests')
+    .select('id, guest_number, name, group_name, side, invited, rsvp_status, invitation_code, phone, outreach_status, outreach_channel, outreach_sent_at, outreach_notes')
+    .order('guest_number', { ascending: true });
+  if (error) {
+    console.error(error);
+    setSync('error', 'Load failed: ' + error.message);
+    document.getElementById('guest-list').innerHTML =
+      `<div class="empty" style="color:var(--error)">Failed to load guests: ${escHtml(error.message)}</div>`;
+    return;
+  }
+  guests = data || [];
+  setSync('saved', 'Loaded');
+  populateGroupFilter();
+  render();
+  setTimeout(() => setSync('', ''), 1200);
+}
+async function reload() { await loadGuests(); }
+
+function populateGroupFilter() {
+  const set = new Set();
+  guests.forEach(g => { if (g.group_name) set.add(g.group_name); });
+  const sel = document.getElementById('filter-group');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">All groups</option>' +
+    [...set].sort().map(g => `<option value="${escHtml(g)}">${escHtml(g)}</option>`).join('');
+  if (current) sel.value = current;
+}
+
+async function patchGuest(id, fields) {
+  setSync('saving', 'Saving…');
+  const { error } = await sb.from('guests').update(fields).eq('id', id);
+  if (error) {
+    console.error(error);
+    setSync('error', 'Save failed');
+    toast('Save failed');
+    return false;
+  }
+  setSync('saved', 'Saved');
+  clearTimeout(saveTimers._fade);
+  saveTimers._fade = setTimeout(() => setSync('', ''), 1000);
+  return true;
+}
+
+async function markHouseholdSent(code) {
+  if (!code) return false;
+  setSync('saving', 'Marking household…');
+  const { data, error } = await sb.rpc('mark_household_sent', {
+    p_code: code, p_channel: 'WhatsApp'
+  });
+  if (error) {
+    console.error(error);
+    setSync('error', 'Failed');
+    toast('Mark household failed');
+    return false;
+  }
+  setSync('saved', `Marked ${data || 0} guest(s)`);
+  toast(`Marked household as sent (${data || 0})`);
+  await loadGuests();
+  return true;
+}
+
+// ─── TEMPLATES (localStorage) ───
+const LS_TPL = 'mc-outreach-templates-v1';
+const LS_OVERRIDES = 'mc-outreach-overrides-v1';
+
+function loadTemplatesFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_TPL);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      templates = { ...DEFAULT_TEMPLATES, ...parsed };
+    }
+  } catch (e) { /* ignore */ }
+}
+function saveTemplatesToStorage() {
+  try { localStorage.setItem(LS_TPL, JSON.stringify(templates)); }
+  catch (e) { /* ignore */ }
+}
+function loadOverridesFromStorage() {
+  try {
+    const raw = localStorage.getItem(LS_OVERRIDES);
+    if (raw) groupOverrides = JSON.parse(raw) || {};
+  } catch (e) { groupOverrides = {}; }
+}
+function saveOverridesToStorage() {
+  try { localStorage.setItem(LS_OVERRIDES, JSON.stringify(groupOverrides)); }
+  catch (e) { /* ignore */ }
+}
+
+function selectTemplate(key) {
+  currentTemplate = key;
+  document.querySelectorAll('.tpl-tab').forEach(b => {
+    b.classList.toggle('active', b.dataset.tpl === key);
+  });
+  document.getElementById('tpl-editor').value = templates[key] || '';
+}
+function onTemplateInput() {
+  templates[currentTemplate] = document.getElementById('tpl-editor').value;
+  saveTemplatesToStorage();
+  // Re-render so previews update
+  render();
+}
+function resetTemplate() {
+  if (!confirm(`Reset the "${currentTemplate}" template to the default?`)) return;
+  templates[currentTemplate] = DEFAULT_TEMPLATES[currentTemplate];
+  saveTemplatesToStorage();
+  document.getElementById('tpl-editor').value = templates[currentTemplate];
+  render();
+}
+
+// ─── RENDER ───
+function effectiveTemplate(g) {
+  return groupOverrides[g.id] || defaultTemplateFor(g.group_name);
+}
+
+function applyFilters() {
+  const q = (document.getElementById('search-input').value || '').toLowerCase();
+  const status = document.getElementById('filter-status').value;
+  const rsvp   = document.getElementById('filter-rsvp').value;
+  const side   = document.getElementById('filter-side').value;
+  const group  = document.getElementById('filter-group').value;
+
+  return guests.filter(g => {
+    if (q && !`${g.name || ''} ${g.group_name || ''} ${g.invitation_code || ''}`.toLowerCase().includes(q)) return false;
+    if (status && (g.outreach_status || 'Not Contacted') !== status) return false;
+    if (rsvp && (g.rsvp_status || 'Pending') !== rsvp) return false;
+    if (side && g.side !== side) return false;
+    if (group && g.group_name !== group) return false;
+    return true;
+  });
+}
+
+function collapseHouseholds(list) {
+  // One representative per invitation_code (first by guest_number).
+  const seen = new Map();
+  const codeless = [];
+  list.forEach(g => {
+    if (!g.invitation_code) { codeless.push(g); return; }
+    if (!seen.has(g.invitation_code)) seen.set(g.invitation_code, g);
+  });
+  return [...seen.values(), ...codeless];
+}
+
+function householdMembers(code) {
+  if (!code) return [];
+  return guests.filter(g => g.invitation_code === code);
+}
+
+function updateStats() {
+  const total = guests.length;
+  const sent = guests.filter(g => g.outreach_status === 'Sent' || g.outreach_status === 'Responded').length;
+  const pending = guests.filter(g => !g.outreach_status || g.outreach_status === 'Not Contacted').length;
+  const responded = guests.filter(g => g.outreach_status === 'Responded').length;
+  const households = new Set(guests.map(g => g.invitation_code).filter(Boolean)).size;
+  document.getElementById('stat-total').textContent = total;
+  document.getElementById('stat-sent').textContent = sent;
+  document.getElementById('stat-pending').textContent = pending;
+  document.getElementById('stat-responded').textContent = responded;
+  document.getElementById('stat-households').textContent = households;
+}
+
+function toggleHousehold() {
+  householdMode = !householdMode;
+  const btn = document.getElementById('toggle-household');
+  btn.classList.toggle('active', householdMode);
+  btn.textContent = householdMode ? 'Per-guest view' : 'One row per household';
+  render();
+}
+
+function render() {
+  updateStats();
+  let list = applyFilters();
+  if (householdMode) list = collapseHouseholds(list);
+
+  const container = document.getElementById('guest-list');
+  if (list.length === 0) {
+    container.innerHTML = `<div class="empty">No guests match the current filters.</div>`;
+    return;
+  }
+  container.innerHTML = list.map(renderCard).join('');
+  attachHandlers(container);
+}
+
+function renderCard(g) {
+  const tplKey = effectiveTemplate(g);
+  const link = inviteUrl(g.invitation_code || '');
+  const msg  = renderTemplate(tplKey, g);
+  const status = g.outreach_status || 'Not Contacted';
+  const codeShared = g.invitation_code && householdMembers(g.invitation_code).length > 1;
+  const cardCls = [
+    'guest-card',
+    status === 'Sent' ? 'is-sent' : '',
+    status === 'Responded' ? 'is-responded' : '',
+    status === 'Skip' ? 'is-skip' : ''
+  ].filter(Boolean).join(' ');
+
+  const sideLabel = g.side === '女方' ? 'Christy 女方'
+                   : g.side === '男方' ? 'Mitchell 男方' : '';
+  const sideCls = g.side === '女方' ? 'side-f' : g.side === '男方' ? 'side-m' : '';
+  const rsvp = g.rsvp_status || 'Pending';
+  const rsvpCls = rsvp === 'Yes' ? 'rsvp-yes' : rsvp === 'No' ? 'rsvp-no' : 'rsvp-pending';
+  const householdLabel = codeShared
+    ? `<span class="pill shared">Shared code · ${householdMembers(g.invitation_code).length} ppl</span>`
+    : '';
+
+  return `
+  <div class="${cardCls}" data-id="${g.id}" data-code="${escHtml(g.invitation_code || '')}">
+    <div>
+      <div class="guest-info-name">${escHtml(g.name || '(no name)')}</div>
+      <div class="guest-info-meta">
+        ${sideLabel ? `<span class="pill ${sideCls}">${escHtml(sideLabel)}</span>` : ''}
+        <span class="pill">${escHtml(g.group_name || '—')}</span>
+        <span class="pill ${rsvpCls}">RSVP: ${escHtml(rsvp)}</span>
+        ${householdLabel}
+        ${g.invitation_code ? `<span class="pill" style="font-family:'SF Mono',Menlo,monospace;color:var(--accent);">${escHtml(g.invitation_code)}</span>` : `<span class="pill" style="color:var(--error);">NO CODE</span>`}
+      </div>
+    </div>
+
+    <div class="link-block">
+      <div class="link-row" title="${escHtml(link)}">
+        <span>${escHtml(link)}</span>
+        <button class="icon-btn" data-act="copy-link">Copy</button>
+      </div>
+      <div class="action-row">
+        <a class="wa-btn" data-act="wa-open"
+           href="${escHtml(waLink(g.phone, msg))}"
+           target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M20.52 3.48A11.86 11.86 0 0 0 12 0a11.94 11.94 0 0 0-10.3 17.94L0 24l6.21-1.63A12 12 0 0 0 12 24a11.94 11.94 0 0 0 8.52-20.52ZM12 21.86a9.85 9.85 0 0 1-5.03-1.38l-.36-.21-3.69.97.99-3.6-.23-.37A9.85 9.85 0 1 1 21.86 12 9.87 9.87 0 0 1 12 21.86Zm5.4-7.4c-.3-.15-1.74-.86-2-.96s-.46-.15-.66.15-.76.96-.93 1.16-.34.23-.64.08a8.08 8.08 0 0 1-2.38-1.47 9 9 0 0 1-1.65-2.05c-.17-.3 0-.46.13-.6s.3-.34.45-.51a2 2 0 0 0 .3-.5.55.55 0 0 0 0-.53c-.07-.15-.66-1.6-.91-2.19s-.48-.5-.66-.51h-.57a1.1 1.1 0 0 0-.78.36 3.31 3.31 0 0 0-1 2.46 5.74 5.74 0 0 0 1.21 3.05 13.21 13.21 0 0 0 5.06 4.46c.71.3 1.26.48 1.69.62a4.1 4.1 0 0 0 1.87.12 3.06 3.06 0 0 0 2-1.41 2.47 2.47 0 0 0 .17-1.41c-.07-.13-.27-.21-.57-.36Z"/></svg>
+          Send via WhatsApp
+        </a>
+        <button class="icon-btn" data-act="copy-msg">Copy Message</button>
+        <button class="icon-btn" data-act="preview-msg">Preview</button>
+        ${codeShared ? `<button class="icon-btn" data-act="mark-household">Mark household sent</button>` : ''}
+      </div>
+      <div class="field-row" style="margin-top:0.2rem;">
+        <label>Template</label>
+        <select data-act="set-template">
+          <option value="bilingual" ${tplKey==='bilingual'?'selected':''}>Bilingual (中英)</option>
+          <option value="friends"   ${tplKey==='friends'?'selected':''}>Friends</option>
+          <option value="formal"    ${tplKey==='formal'?'selected':''}>Formal</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="tracker-block">
+      <div class="field-row">
+        <label>Status</label>
+        <select data-act="set-status">
+          <option ${status==='Not Contacted'?'selected':''}>Not Contacted</option>
+          <option ${status==='Sent'?'selected':''}>Sent</option>
+          <option ${status==='Responded'?'selected':''}>Responded</option>
+          <option ${status==='Bounced'?'selected':''}>Bounced</option>
+          <option ${status==='Skip'?'selected':''}>Skip</option>
+        </select>
+      </div>
+      <div class="field-row">
+        <label>Phone</label>
+        <input type="tel" data-act="set-phone" placeholder="+852 …"
+               value="${escHtml(g.phone || '')}">
+      </div>
+      <div class="field-row">
+        <label>Notes</label>
+        <textarea data-act="set-notes" placeholder="e.g. needs Cantonese version">${escHtml(g.outreach_notes || '')}</textarea>
+      </div>
+      ${g.outreach_sent_at ? `<div class="sent-meta">Sent: ${escHtml(fmtSent(g.outreach_sent_at))}${g.outreach_channel ? ` · ${escHtml(g.outreach_channel)}` : ''}</div>` : ''}
+    </div>
+  </div>`;
+}
+
+function attachHandlers(root) {
+  root.querySelectorAll('.guest-card').forEach(card => {
+    const id = card.dataset.id;
+    const code = card.dataset.code;
+    const g = guests.find(x => x.id === id);
+    if (!g) return;
+
+    card.querySelector('[data-act="copy-link"]')?.addEventListener('click', async e => {
+      const link = inviteUrl(g.invitation_code || '');
+      await navigator.clipboard.writeText(link).catch(()=>{});
+      flashCopied(e.currentTarget);
+    });
+    card.querySelector('[data-act="copy-msg"]')?.addEventListener('click', async e => {
+      const tplKey = effectiveTemplate(g);
+      const msg = renderTemplate(tplKey, g);
+      await navigator.clipboard.writeText(msg).catch(()=>{});
+      flashCopied(e.currentTarget);
+    });
+    card.querySelector('[data-act="preview-msg"]')?.addEventListener('click', () => {
+      const tplKey = effectiveTemplate(g);
+      alert(renderTemplate(tplKey, g));
+    });
+    card.querySelector('[data-act="wa-open"]')?.addEventListener('click', () => {
+      // Auto-mark as Sent if currently Not Contacted (after a beat — open first)
+      const currentStatus = g.outreach_status || 'Not Contacted';
+      if (currentStatus === 'Not Contacted') {
+        setTimeout(() => updateStatus(g, 'Sent'), 250);
+      }
+    });
+    card.querySelector('[data-act="mark-household"]')?.addEventListener('click', async () => {
+      if (!code) return;
+      if (!confirm(`Mark every guest sharing code ${code} as Sent?`)) return;
+      await markHouseholdSent(code);
+    });
+    card.querySelector('[data-act="set-template"]')?.addEventListener('change', e => {
+      groupOverrides[g.id] = e.target.value;
+      saveOverridesToStorage();
+      render();
+    });
+    card.querySelector('[data-act="set-status"]')?.addEventListener('change', e => {
+      updateStatus(g, e.target.value);
+    });
+    card.querySelector('[data-act="set-phone"]')?.addEventListener('change', e => {
+      const v = e.target.value.trim() || null;
+      g.phone = v;
+      patchGuest(g.id, { phone: v });
+    });
+    card.querySelector('[data-act="set-notes"]')?.addEventListener('change', e => {
+      const v = e.target.value.trim() || null;
+      g.outreach_notes = v;
+      patchGuest(g.id, { outreach_notes: v });
+    });
+  });
+}
+
+function flashCopied(btn) {
+  const orig = btn.textContent;
+  btn.textContent = 'Copied';
+  btn.classList.add('copied');
+  setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 900);
+}
+
+async function updateStatus(g, newStatus) {
+  const fields = { outreach_status: newStatus };
+  if (newStatus === 'Sent' && !g.outreach_sent_at) {
+    fields.outreach_sent_at = new Date().toISOString();
+    fields.outreach_channel = 'WhatsApp';
+  }
+  if (newStatus === 'Not Contacted') {
+    fields.outreach_sent_at = null;
+    fields.outreach_channel = null;
+  }
+  Object.assign(g, fields);
+  const ok = await patchGuest(g.id, fields);
+  if (ok) render();
+}
+
+// ─── EXPORT ───
+function exportCsv() {
+  const cols = [
+    'guest_number','name','group_name','side','invited','rsvp_status',
+    'invitation_code','phone','outreach_status','outreach_channel',
+    'outreach_sent_at','outreach_notes','invite_url'
+  ];
+  const rows = [cols.join(',')];
+  guests.forEach(g => {
+    const row = cols.map(c => {
+      const v = c === 'invite_url'
+        ? inviteUrl(g.invitation_code || '')
+        : (g[c] == null ? '' : String(g[c]));
+      return `"${v.replace(/"/g, '""')}"`;
+    });
+    rows.push(row.join(','));
+  });
+  const blob = new Blob([rows.join('\n')], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = `mc-outreach-${new Date().toISOString().slice(0,10)}.csv`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  toast('CSV downloaded');
+}
+
+document.getElementById('auth-email').addEventListener('keydown', e => {
+  if (e.key === 'Enter') sendMagicLink();
+});
+
+bootstrap();
+</script>
+</body>
+</html>

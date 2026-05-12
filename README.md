@@ -10,6 +10,7 @@
 |------|-------------|
 | `wedding-invitation.html` | Main wedding invitation website — fully self-contained single file |
 | `seating-planner.html` | Drag-and-drop guest seating manager (15 tables × 12 seats) |
+| `whatsapp-outreach.html` | Admin tool: per-guest WhatsApp invitation links + outreach tracker |
 | `supabase/schema_seed.sql` | Supabase database schema + all 198 guests pre-seeded |
 | `supabase/seed-guests.js` | Node.js alternative seed script |
 | `CLAUDE.md` | Full project reference for AI-assisted development |
@@ -96,6 +97,28 @@ node supabase/seed-guests.js
 7. Plus-ones not on the master list appear in the `pending_plus_ones` view for manual placement.
 
 The anon key never has direct read access to `guests` — it can only call the three SECURITY DEFINER RPCs, which return at most one household.
+
+---
+
+## WhatsApp invitations (`whatsapp-outreach.html`)
+
+Admin-only tool for sending out the personal RSVP links by WhatsApp and tracking who you've reached.
+
+1. Open `https://[host]/whatsapp-outreach.html` and sign in with `christychowtc@gmail.com` or `mitchell.tsui.mc@gmail.com` (same magic-link auth as the seating planner).
+2. Three editable message templates ship with the tool:
+   - **Bilingual (中英)** — auto-selected for relatives and church friends
+   - **Friends · English** — auto-selected for friends / colleagues / classmates
+   - **Formal** — auto-selected for parents' friends (`*Dad Friends` / `*Mom Friends`)
+   - Templates support placeholders: `{name}`, `{fullname}`, `{link}`, `{code}`, `{deadline}`. Edits auto-save to your browser; per-guest overrides are possible.
+3. Each guest row shows their personal `?code=MC-XXXXX` URL, a copy button, the rendered WhatsApp link, and:
+   - **Status** (Not Contacted / Sent / Responded / Bounced / Skip) — clicking the green "Send via WhatsApp" button auto-flips a guest from `Not Contacted` → `Sent` and stamps `outreach_sent_at`.
+   - **Phone** — if filled, the WhatsApp link opens that contact directly (`wa.me/<phone>?text=…`); if blank, WhatsApp lets you pick the recipient.
+   - **Notes** — free-text per guest.
+   - **Mark household sent** — for couples on a shared invitation code, one click stamps everyone in the household.
+4. Filters: search, status, RSVP, side (女方/男方), group, plus a **one-row-per-household** toggle so you don't message both halves of a couple.
+5. `Export CSV` produces a snapshot of every guest with their URL and outreach state — handy as a backup or for sharing.
+
+State persists in the `guests` table (`outreach_status`, `outreach_channel`, `outreach_sent_at`, `outreach_notes`, `phone`) via the same admin RLS policy as the seating planner. Re-running `schema_seed.sql` is idempotent and adds these columns if missing.
 
 ---
 
