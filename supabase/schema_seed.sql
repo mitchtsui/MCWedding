@@ -733,3 +733,62 @@ END;
 $$;
 
 GRANT EXECUTE ON FUNCTION lookup_all_table_assignments(TEXT) TO anon, authenticated;
+
+
+-- ============================================================
+-- Phase 5: WhatsApp / outreach tracker
+-- Idempotent — safe to re-run.
+-- ============================================================
+
+-- 20. Per-guest contact + outreach state
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS phone            TEXT;
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS outreach_status  TEXT DEFAULT 'Not Contacted';
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS outreach_channel TEXT;
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS outreach_sent_at TIMESTAMPTZ;
+ALTER TABLE guests ADD COLUMN IF NOT EXISTS outreach_notes   TEXT;
+
+-- Keep existing rows on the canonical "Not Contacted" default if NULL
+UPDATE guests SET outreach_status = 'Not Contacted'
+ WHERE outreach_status IS NULL;
+
+-- 21. Outreach planning view — one row per guest, with code_type so the
+--     admin tool can collapse couples onto a single household row.
+CREATE OR REPLACE VIEW outreach_list AS
+SELECT
+  g.id, g.guest_number, g.name, g.group_name, g.side,
+  g.invited, g.rsvp_status, g.invitation_code, g.phone,
+  g.outreach_status, g.outreach_channel, g.outreach_sent_at, g.outreach_notes,
+  CASE WHEN COUNT(*) OVER (PARTITION BY g.invitation_code) > 1
+       THEN 'shared' ELSE 'solo' END AS code_type
+FROM guests g;
+
+GRANT SELECT ON outreach_list TO authenticated;
+
+-- 22. Bulk-mark every guest sharing an invitation code (admin only). Used
+--     when a couple share one code and you message just one of them.
+CREATE OR REPLACE FUNCTION mark_household_sent(p_code TEXT, p_channel TEXT DEFAULT 'WhatsApp')
+RETURNS INTEGER
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  norm TEXT;
+  affected INTEGER;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+  norm := upper(trim(coalesce(p_code, '')));
+  UPDATE guests
+     SET outreach_status  = 'Sent',
+         outreach_channel = p_channel,
+         outreach_sent_at = NOW()
+   WHERE invitation_code = norm
+     AND outreach_status <> 'Responded';
+  GET DIAGNOSTICS affected = ROW_COUNT;
+  RETURN affected;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION mark_household_sent(TEXT, TEXT) TO authenticated;
