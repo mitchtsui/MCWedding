@@ -2084,24 +2084,6 @@
   const SUPABASE_URL      = (typeof window !== 'undefined' && window.SUPABASE_URL)      || '';
   const SUPABASE_ANON_KEY = (typeof window !== 'undefined' && window.SUPABASE_ANON_KEY) || '';
 
-  // ─── SEATING REVEAL GATE ───
-  // Seating chart is hidden from guests until this date — the layout shifts as
-  // RSVPs come in, so we don't want anyone screenshotting a stale assignment.
-  // Hong Kong local time (UTC+8). Override for previews with ?seating=preview.
-  const SEATING_REVEAL_DATE = new Date('2026-10-12T00:00:00+08:00');
-  function isSeatingRevealed() {
-    try {
-      const p = new URLSearchParams(window.location.search);
-      if (p.get('seating') === 'preview') return true;
-    } catch (e) { /* ignore */ }
-    return Date.now() >= SEATING_REVEAL_DATE.getTime();
-  }
-  function formatRevealDate() {
-    return SEATING_REVEAL_DATE.toLocaleDateString('en-GB', {
-      day: 'numeric', month: 'long', year: 'numeric'
-    });
-  }
-
   // ─── INVITATION CODE FLOW ───
   // Reads ?code=MC-XXXXX from the URL, looks up the household,
   // then either shows the prefilled RSVP form or the seat card.
@@ -2290,26 +2272,6 @@
   function renderSeatCard(members) {
     CURRENT_SEATS = members || [];
     document.getElementById('calendar-choices')?.classList.remove('open');
-
-    const revealed = isSeatingRevealed();
-    const revealOn = formatRevealDate();
-    const card = document.querySelector('#seat-card .seat-card');
-
-    // Header copy + standard note adapt to the reveal state.
-    const headScript = card?.querySelector('.seat-card-head .script');
-    if (headScript) headScript.textContent = revealed ? 'Your Seat' : 'Thank You';
-
-    const note = card?.querySelector('.seat-card-note');
-    if (note) {
-      note.textContent = revealed
-        ? 'Seats are pre-arranged. If anything looks wrong, please reach out to us.'
-        : `Your RSVP is in — thank you! We're still finalising the seating chart and will reveal table and seat assignments here from ${revealOn}. Please check back closer to the day.`;
-    }
-
-    // Hide "View Floor Plan" until reveal — the chart shifts as RSVPs arrive.
-    const fpBtn = card?.querySelector('button[onclick="openFloorPlan()"]');
-    if (fpBtn) fpBtn.style.display = revealed ? '' : 'none';
-
     const rows = document.getElementById('seat-card-rows');
     rows.innerHTML = '';
     members.forEach(m => {
@@ -2317,8 +2279,6 @@
       let locHtml;
       if (declined) {
         locHtml = `<span class="pending">Will be missed</span>`;
-      } else if (!revealed) {
-        locHtml = `<span class="pending">Revealed ${revealOn}</span>`;
       } else if (m.has_seat) {
         locHtml = `<span class="table">Table ${m.table_number}</span><span class="seat">Seat ${m.seat_number}</span>`;
       } else {
@@ -2417,7 +2377,6 @@
   }
 
   async function openFloorPlan() {
-    if (!isSeatingRevealed()) return; // Seating chart is hidden until reveal date.
     highlightFloorPlanTables();
     document.getElementById('floor-plan-modal')?.classList.add('open');
     document.body.style.overflow = 'hidden';
@@ -2481,7 +2440,7 @@
     ];
 
     const seated = (CURRENT_SEATS || []).filter(s => s.has_seat);
-    if (seated.length && isSeatingRevealed()) {
+    if (seated.length) {
       lines.push('', 'Your seat' + (seated.length > 1 ? 's' : '') + ':');
       seated.forEach(s => {
         lines.push(`  ${s.name}: Table ${s.table_number}, Seat ${s.seat_number}`);
