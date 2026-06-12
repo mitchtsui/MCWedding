@@ -802,12 +802,37 @@ GRANT EXECUTE ON FUNCTION mark_household_sent(TEXT, TEXT) TO authenticated;
 --     flow without borrowing a real guest's code. Each is wired up like a
 --     normal household entry, pre-seated at Table 2 so the seat card shows
 --     real table/seat info. Re-running the script leaves existing rows
---     untouched (matched by invitation_code).
+--     untouched (matched by invitation_code) and dynamically picks two
+--     currently-empty seats so it never collides with real guests.
+DO $$
+DECLARE
+  bride_seat INT;
+  groom_seat INT;
+BEGIN
+  SELECT s INTO bride_seat
+  FROM generate_series(1, 12) AS gs(s)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM guests WHERE table_number = 2 AND seat_number = gs.s
+  )
+  ORDER BY s DESC
+  LIMIT 1;
 
-INSERT INTO guests (name, group_name, side, invited, rsvp_status, invitation_code, table_number, seat_number)
-SELECT '[PREVIEW] Bride', 'Admin Preview', '女方', true, NULL, 'MC-BRIDE', 2, 1
-WHERE NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-BRIDE');
+  SELECT s INTO groom_seat
+  FROM generate_series(1, 12) AS gs(s)
+  WHERE NOT EXISTS (
+    SELECT 1 FROM guests WHERE table_number = 2 AND seat_number = gs.s
+  )
+    AND s <> bride_seat
+  ORDER BY s DESC
+  LIMIT 1;
 
-INSERT INTO guests (name, group_name, side, invited, rsvp_status, invitation_code, table_number, seat_number)
-SELECT '[PREVIEW] Groom', 'Admin Preview', '男方', true, NULL, 'MC-GROOM', 2, 2
-WHERE NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-GROOM');
+  INSERT INTO guests (name, group_name, side, invited, rsvp_status, invitation_code, table_number, seat_number)
+  SELECT '[PREVIEW] Bride', 'Admin Preview', '女方', true, NULL, 'MC-BRIDE', 2, bride_seat
+  WHERE bride_seat IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-BRIDE');
+
+  INSERT INTO guests (name, group_name, side, invited, rsvp_status, invitation_code, table_number, seat_number)
+  SELECT '[PREVIEW] Groom', 'Admin Preview', '男方', true, NULL, 'MC-GROOM', 2, groom_seat
+  WHERE groom_seat IS NOT NULL
+    AND NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-GROOM');
+END $$;
