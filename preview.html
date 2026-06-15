@@ -1,0 +1,333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=1280">
+<title>Preview — Christy &amp; Mitchell</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500&family=Raleway:wght@300;400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #EAE5DB;
+    --bg-card: #F2EDE5;
+    --bg-panel: #F7F3EE;
+    --text: #2C2820;
+    --text-mid: #5A4E45;
+    --text-light: #8A7E77;
+    --divider: #C8BFB2;
+    --olive: #686B38;
+    --accent: #7A4F5A;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    font-family: 'Raleway', sans-serif;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 13px;
+    color: var(--text);
+  }
+
+  header {
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--divider);
+    padding: 0.7rem 1.5rem;
+    display: flex;
+    align-items: center;
+    gap: 1.5rem;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+  }
+  h1 {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 1.3rem;
+    font-weight: 400;
+    line-height: 1;
+  }
+  h1 em { font-style: italic; color: var(--text-mid); }
+  .header-meta {
+    font-size: 0.6rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-top: 0.2rem;
+  }
+  .controls {
+    display: flex;
+    gap: 1.2rem;
+    align-items: center;
+    flex: 1;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .ctrl {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    min-width: 0;
+  }
+  .ctrl label {
+    font-size: 0.54rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    font-weight: 600;
+  }
+  .ctrl input, .ctrl select {
+    padding: 0.4rem 0.6rem;
+    background: var(--bg);
+    border: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.72rem;
+    color: var(--text);
+    outline: none;
+    min-width: 0;
+  }
+  .ctrl input { width: 280px; }
+  .ctrl input:focus, .ctrl select:focus { border-color: var(--text-mid); }
+
+  .btn {
+    padding: 0.55rem 1rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.6rem;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    cursor: pointer;
+    border: 1px solid var(--divider);
+    background: transparent;
+    color: var(--text-mid);
+    transition: background 0.15s, color 0.15s;
+    align-self: flex-end;
+  }
+  .btn:hover { background: var(--text); color: var(--bg); }
+  .btn-primary { background: var(--text); color: var(--bg); border-color: var(--text); }
+  .btn-primary:hover { background: var(--text-mid); border-color: var(--text-mid); }
+
+  /* ─── BODY: side-by-side iframes ─── */
+  .stage {
+    flex: 1;
+    display: flex;
+    gap: 1.4rem;
+    padding: 1.4rem;
+    overflow: auto;
+    background:
+      radial-gradient(circle at 0% 0%, rgba(122,79,90,0.04), transparent 40%),
+      radial-gradient(circle at 100% 100%, rgba(104,107,56,0.05), transparent 40%);
+  }
+  .frame-wrap {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .frame-wrap.mobile { flex-shrink: 0; }
+  .frame-wrap.desktop { flex: 1; min-width: 0; }
+
+  .frame-label {
+    font-size: 0.56rem;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 0 0.2rem;
+  }
+  .frame-label .dim { color: var(--text-mid); font-weight: 600; }
+  .frame-label a {
+    color: var(--text-light);
+    text-decoration: none;
+    border-bottom: 1px dotted var(--divider);
+  }
+  .frame-label a:hover { color: var(--text); border-bottom-color: var(--text); }
+
+  .device {
+    flex: 1;
+    background: white;
+    border: 1px solid var(--divider);
+    overflow: hidden;
+    position: relative;
+    min-height: 0;
+  }
+  .mobile .device {
+    border-radius: 36px;
+    border: 8px solid #1A1A14;
+    box-shadow: 0 14px 38px rgba(26,26,20,0.18);
+  }
+  iframe {
+    width: 100%;
+    height: 100%;
+    border: 0;
+    display: block;
+    background: white;
+  }
+
+  /* loading skeleton */
+  .device.loading::before {
+    content: "Loading…";
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-light);
+    font-size: 0.7rem;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    z-index: 1;
+    background: var(--bg-panel);
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <div>
+    <h1>Preview — <em>Christy &amp; Mitchell</em></h1>
+    <div class="header-meta">Side-by-side mobile + desktop</div>
+  </div>
+
+  <div class="controls">
+    <div class="ctrl">
+      <label for="ctl-path">Path</label>
+      <input id="ctl-path" type="text" value="/wedding-invitation.html" placeholder="/wedding-invitation.html">
+    </div>
+
+    <div class="ctrl">
+      <label for="ctl-code">Invitation code</label>
+      <select id="ctl-code">
+        <option value="">— None —</option>
+        <option value="MC-BRIDE">MC-BRIDE (preview)</option>
+        <option value="MC-GROOM">MC-GROOM (preview)</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="ctl-device">Mobile device</label>
+      <select id="ctl-device">
+        <option value="375x667">iPhone SE · 375 × 667</option>
+        <option value="390x844" selected>iPhone 14 · 390 × 844</option>
+        <option value="393x852">iPhone 15 Pro · 393 × 852</option>
+        <option value="430x932">iPhone 14 Pro Max · 430 × 932</option>
+        <option value="412x915">Pixel 7 · 412 × 915</option>
+        <option value="768x1024">iPad · 768 × 1024</option>
+      </select>
+    </div>
+
+    <div class="ctrl">
+      <label for="ctl-source">Source</label>
+      <select id="ctl-source">
+        <option value="relative" selected>Same host (this preview's origin)</option>
+        <option value="production">Production (mc-wedding-ten.vercel.app)</option>
+      </select>
+    </div>
+
+    <button class="btn" onclick="reload()">Reload</button>
+    <button class="btn btn-primary" onclick="loadFrames()">Apply</button>
+  </div>
+</header>
+
+<div class="stage">
+  <div class="frame-wrap mobile" id="mobile-wrap">
+    <div class="frame-label">
+      <span>Mobile · <span class="dim" id="mobile-dim">390 × 844</span></span>
+      <a id="mobile-open" href="#" target="_blank" rel="noopener">Open ↗</a>
+    </div>
+    <div class="device" id="mobile-device">
+      <iframe id="mobile-frame" title="Mobile preview"></iframe>
+    </div>
+  </div>
+
+  <div class="frame-wrap desktop">
+    <div class="frame-label">
+      <span>Desktop · <span class="dim">fills window</span></span>
+      <a id="desktop-open" href="#" target="_blank" rel="noopener">Open ↗</a>
+    </div>
+    <div class="device" id="desktop-device">
+      <iframe id="desktop-frame" title="Desktop preview"></iframe>
+    </div>
+  </div>
+</div>
+
+<script>
+  const PRODUCTION_ORIGIN = 'https://mc-wedding-ten.vercel.app';
+
+  function $(id) { return document.getElementById(id); }
+
+  function buildUrl() {
+    const path = ($('ctl-path').value || '/').trim();
+    const code = $('ctl-code').value;
+    const source = $('ctl-source').value;
+
+    const origin = source === 'production' ? PRODUCTION_ORIGIN : '';
+    const sep = path.includes('?') ? '&' : '?';
+    const withCode = code ? `${path}${sep}code=${code}` : path;
+    return origin + withCode;
+  }
+
+  function applyDeviceSize() {
+    const [w] = $('ctl-device').value.split('x').map(Number);
+    const h = Number($('ctl-device').value.split('x')[1]);
+    $('mobile-wrap').style.width = w + 'px';
+    $('mobile-device').style.height = h + 'px';
+    $('mobile-dim').textContent = `${w} × ${h}`;
+  }
+
+  function loadFrames() {
+    applyDeviceSize();
+    const url = buildUrl();
+    $('mobile-device').classList.add('loading');
+    $('desktop-device').classList.add('loading');
+    $('mobile-frame').src = url;
+    $('desktop-frame').src = url;
+    $('mobile-open').href = url;
+    $('desktop-open').href = url;
+    // persist
+    try {
+      localStorage.setItem('preview-state', JSON.stringify({
+        path: $('ctl-path').value,
+        code: $('ctl-code').value,
+        device: $('ctl-device').value,
+        source: $('ctl-source').value,
+      }));
+    } catch (e) { /* ignore */ }
+  }
+
+  function reload() {
+    const m = $('mobile-frame'), d = $('desktop-frame');
+    $('mobile-device').classList.add('loading');
+    $('desktop-device').classList.add('loading');
+    // Re-assign src to force reload (also bypasses any cached state)
+    m.src = m.src;
+    d.src = d.src;
+  }
+
+  ['mobile-frame', 'desktop-frame'].forEach(id => {
+    $(id).addEventListener('load', () => {
+      const dev = id === 'mobile-frame' ? 'mobile-device' : 'desktop-device';
+      $(dev).classList.remove('loading');
+    });
+  });
+
+  // Auto-apply on dropdown changes
+  ['ctl-code', 'ctl-device', 'ctl-source'].forEach(id =>
+    $(id).addEventListener('change', loadFrames));
+  $('ctl-path').addEventListener('keydown', e => {
+    if (e.key === 'Enter') loadFrames();
+  });
+
+  // Restore last state from localStorage
+  try {
+    const saved = JSON.parse(localStorage.getItem('preview-state') || 'null');
+    if (saved) {
+      if (saved.path)   $('ctl-path').value   = saved.path;
+      if (saved.code)   $('ctl-code').value   = saved.code;
+      if (saved.device) $('ctl-device').value = saved.device;
+      if (saved.source) $('ctl-source').value = saved.source;
+    }
+  } catch (e) { /* ignore */ }
+
+  loadFrames();
+</script>
+</body>
+</html>
