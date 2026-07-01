@@ -375,6 +375,20 @@
     line-height: 1.2;
     margin-bottom: 0.25rem;
   }
+  .tpl-badge {
+    display: inline-block;
+    vertical-align: middle;
+    margin-left: 0.4rem;
+    padding: 0.12rem 0.45rem;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.6rem;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--accent);
+    background: var(--bg-panel);
+    border: 1px solid var(--accent-light);
+  }
   .guest-info-meta {
     font-size: 0.72rem;
     color: var(--text-light);
@@ -571,7 +585,7 @@
     <div class="header-stats">
       <div class="stat-chip"><strong id="stat-total">0</strong>Total</div>
       <div class="stat-chip"><strong id="stat-sent">0</strong>Sent</div>
-      <div class="stat-chip"><strong id="stat-pending">0</strong>Pending</div>
+      <div class="stat-chip"><strong id="stat-pending">0</strong>Not Contacted</div>
       <div class="stat-chip"><strong id="stat-responded">0</strong>Responded</div>
       <div class="stat-chip"><strong id="stat-households">0</strong>Households</div>
     </div>
@@ -1097,11 +1111,15 @@ function renderCard(g) {
   const householdLabel = codeShared
     ? `<span class="pill shared">Shared code · ${householdMembers(g.invitation_code).length} ppl</span>`
     : '';
+  const groupDefault = defaultTemplateFor(g.group_name);
+  const overrideBadge = (groupOverrides[g.id] && groupOverrides[g.id] !== groupDefault)
+    ? `<span class="tpl-badge" title="Template overridden from group default (${groupDefault})">${escHtml(tplKey)}</span>`
+    : '';
 
   return `
   <div class="${cardCls}" data-id="${g.id}" data-code="${escHtml(g.invitation_code || '')}">
     <div>
-      <div class="guest-info-name">${escHtml(g.name || '(no name)')}</div>
+      <div class="guest-info-name">${escHtml(g.name || '(no name)')}${overrideBadge}</div>
       <div class="guest-info-meta">
         ${sideLabel ? `<span class="pill ${sideCls}">${escHtml(sideLabel)}</span>` : ''}
         <span class="pill">${escHtml(g.group_name || '—')}</span>
