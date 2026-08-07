@@ -53,12 +53,14 @@ All active files live at these paths. Always edit in-place; never create duplica
 ### Typography
 | Role | Font | Notes |
 |------|------|-------|
-| Script / Hero | `liana` (weight 400) | Embedded as base64 `@font-face` from `liana.ttf`. No Adobe kit needed. |
+| Script / Hero | `'Alex Brush'` (Google Fonts CDN) | Used on "Our Wedding" only. Replaced Liana here on 2026-08-07. |
 | Body / Headings | `'Cormorant Garamond'` | Serif, weight 300–600 |
 | Labels / Caps | `'Raleway'` | Sans-serif, spaced uppercase |
 
+Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the file and still used on `.rsvp-success .success-script` and `.seat-card-head .script` — do not remove the `@font-face` block. It was only replaced on the hero "Our Wedding" text.
+
 ### Key CSS Rules to Preserve
-- Hero "Our Wedding": `font-size: clamp(4rem,9vw,7rem)`, olive colour, Liana font
+- Hero "Our Wedding": `font-size: clamp(4rem,9vw,7rem)`, olive colour, **Alex Brush** font (was Liana — changed 2026-08-07 per user request)
 - "CHRISTY & MITCHELL": near-black `#1A1A14`, Cormorant Garamond, weight 300
 - "and Chambolle": Rose Bisque `#B89AA4`, half font size, centred with line rules
 - Date line "NOVEMBER 12, 2026 · HONG KONG": black `#1A1A14`, weight 800
@@ -75,7 +77,7 @@ All active files live at these paths. Always edit in-place; never create duplica
 ### Section Status
 
 #### 🏠 Hero
-- "Our Wedding" in Liana, olive, large script
+- "Our Wedding" in Alex Brush (Google Font), olive, large script
 - "CHRISTY & MITCHELL" — Cormorant Garamond, weight 300, near-black
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800
@@ -224,7 +226,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 
 ### When working on the website
 - **Always edit `/home/claude/wedding-invitation.html` in place.** Never create `wedding-invitation-v2.html` or similar.
-- **Always preserve the Liana font** — it is base64-embedded. Do not replace with Google Fonts.
+- **Preserve the Liana `@font-face` block** — it is base64-embedded and still used on the RSVP success screen and seat-lookup card script text. Do not remove it. As of 2026-08-07, the hero "Our Wedding" text no longer uses Liana — it uses 'Alex Brush' (Google Fonts CDN) per explicit user request; don't revert that without asking.
 - **Always preserve the design tokens** in `:root {}`. Do not introduce new colours outside the palette.
 - **Always copy the finished file** to `/mnt/user-data/outputs/wedding-invitation.html` after edits.
 - **The Peninsula watercolour image** is base64 in the Wedding Day section — do not remove it.
@@ -261,7 +263,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 | Layer | Technology |
 |-------|-----------|
 | Website | Single-file HTML/CSS/JS (no framework, no build step) |
-| Fonts | Liana (base64), Cormorant Garamond + Raleway (Google Fonts CDN) |
+| Fonts | Liana (base64, RSVP success/seat-card scripts only), Alex Brush + Cormorant Garamond + Raleway (Google Fonts CDN) |
 | Backend | Supabase (PostgreSQL + REST API) |
 | Hosting | Static file host (e.g. Netlify, Vercel, or direct) |
 | Seating Planner | Single-file HTML/CSS/JS (drag-and-drop, no framework) |
