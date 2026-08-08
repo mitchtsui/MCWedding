@@ -82,7 +82,6 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800
 - Countdown (live, 1s interval, tick animation) — Days / Hours / Minutes / Seconds
-- Background: Paris engagement photo (`photos/hero/20260609-ChristyandMitchParisPW-160.jpg`, referenced by file path, resized from a 22MB/11399×8560 original down to 2400×1802 for web), `background-size:cover`, `background-position:center 30%`, with a `rgba(237,230,216,0.72)` gardenia tint overlay (`#home::before`, same pattern as the Wedding Day background) plus the existing golden radial accent, for text legibility. Added 2026-08-08. To swap it, replace the file in `photos/hero/` and update the filename in the `#home` CSS `background-image` rule.
 - Peninsula Hotel watercolour illustration as background of Wedding Day section
 
 #### 📖 Our Story
@@ -257,7 +256,6 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 - Chambolle details: Pembroke Welsh Corgi, 3 years old, male, named after Chambolle-Musigny village in Burgundy. Lives at 2 Merino Gardens. Expects **stinky** (not sticky) treats.
 - The RSVP deadline is **12 September 2026**.
 - When referencing the venue, always use the full name: **The Salisbury Room at The Peninsula Hong Kong**.
-- **Standing authorization (2026-08-08, from Christy):** after making a change, commit it and push it to GitHub on a new `claude/*` branch without asking for confirmation first. Still open the PR link for review rather than merging directly — Christy reviews and merges herself. This overrides the general default of confirming before pushing.
 
 ---
 
