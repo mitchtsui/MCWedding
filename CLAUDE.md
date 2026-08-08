@@ -85,7 +85,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Peninsula Hotel watercolour illustration as background of Wedding Day section
 
 #### 📖 Our Story
-- Left: slideshow (5 photos: IMG_9838, IMG_7830, IMG_0274, IMG_0318, IMG_5751 — all base64 embedded, HEIC→JPEG converted)
+- Left: slideshow (5 photos, referenced from `photos/our-story/` as file paths — changed from base64 on 2026-08-08 per user request, so photos can be swapped by replacing files in that folder instead of re-embedding base64). Current files: IMG_9838.jpg, IMG_7830.jpg, IMG_0274.jpg, IMG_0318.jpg, IMG_5751.jpg.
+  - To swap/add/remove a photo: drop the file into `photos/our-story/`, then add/edit/remove the matching `<div class="story-slide" style="background-image:url('photos/our-story/FILENAME')"></div>` + matching `<span class="dot">` in the `#story-slideshow` / `#story-dots` blocks in `wedding-invitation.html`. The JS (`goStorySlide`) already queries the DOM generically, so slide count isn't hardcoded elsewhere.
 - Right: title, pull quote, body text
 - Auto-advances every 4s, offset 2s from Chambolle slideshow
 - Dot indicators
