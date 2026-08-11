@@ -2376,14 +2376,39 @@
   // refuses to return anyone else's, so other tables render as locked and
   // show no names.
   let TABLE_DATA = null;   // { '5': [{name, seat}, ...] }  — own table(s) only
+  let MY_TABLES  = null;   // ['5'] — authoritative, straight from the RPC
   let SELECTED_TABLE = null;
+  let TABLE_LOAD = 'idle'; // 'idle' | 'loading' | 'ok' | 'error'
 
+  // Which table(s) belong to this guest. Prefer the RPC's my_tables, which is
+  // correct even when the occupant list comes back empty (e.g. everyone else
+  // at the table has declined). Fall back to the seat card data we already
+  // hold from lookup_seats, so a failed floor-plan fetch doesn't leave the
+  // guest locked out of their own table.
   function ownTableNumbers() {
-    return new Set(Object.keys(TABLE_DATA || {}).map(String));
+    if (MY_TABLES && MY_TABLES.length) return new Set(MY_TABLES);
+    if (TABLE_DATA && Object.keys(TABLE_DATA).length) {
+      return new Set(Object.keys(TABLE_DATA).map(String));
+    }
+    return new Set(
+      (CURRENT_SEATS || [])
+        .filter(s => s.has_seat && s.table_number != null)
+        .map(s => String(s.table_number))
+    );
   }
 
   function isOwnTable(num) {
     return ownTableNumbers().has(String(num));
+  }
+
+  // The guest's own seat, straight from lookup_seats — used as a fallback
+  // when the floor-plan fetch fails, so we can still show something true.
+  function ownSeatLine() {
+    const mine = (CURRENT_SEATS || []).filter(s => s.has_seat);
+    if (!mine.length) return '';
+    return mine
+      .map(s => `${escHtml(s.name)} &nbsp;·&nbsp; Table ${s.table_number}, Seat ${s.seat_number}`)
+      .join('<br>');
   }
 
   function highlightFloorPlanTables() {
@@ -2399,17 +2424,34 @@
   }
 
   async function loadTableData() {
-    if (TABLE_DATA) return TABLE_DATA;
+    if (TABLE_LOAD === 'ok') return TABLE_DATA;
+
     const code = (INVITATION && INVITATION.code) || readCodeFromUrl();
-    if (!code) return null;
+    if (!code) { TABLE_LOAD = 'error'; return null; }
+
+    TABLE_LOAD = 'loading';
     try {
       const res = await rpc('lookup_my_table', { p_code: code });
       if (res && res.valid) {
         TABLE_DATA = res.tables || {};
+        MY_TABLES  = Array.isArray(res.my_tables) ? res.my_tables.map(String) : null;
+        TABLE_LOAD = 'ok';
+        return TABLE_DATA;
       }
-      return TABLE_DATA;
+      TABLE_LOAD = 'error';
+      return null;
     } catch (e) {
-      console.error('Floor plan data load failed:', e);
+      TABLE_LOAD = 'error';
+      // A 404 here almost always means schema_seed.sql hasn't been re-run
+      // against this database yet, so lookup_my_table doesn't exist.
+      if (/\(404\)|PGRST202/.test(String(e && e.message))) {
+        console.error(
+          'Floor plan: the lookup_my_table function is missing from Supabase. ' +
+          'Run supabase/schema_seed.sql in the SQL Editor.', e
+        );
+      } else {
+        console.error('Floor plan data load failed:', e);
+      }
       return null;
     }
   }
@@ -2425,8 +2467,19 @@
 
     titleEl.innerHTML = `Table <em>${tableNum}</em>`;
 
-    if (!TABLE_DATA) {
+    if (TABLE_LOAD === 'loading' || TABLE_LOAD === 'idle') {
       listEl.innerHTML = '<p class="fp-panel-hint">Loading…</p>';
+      return;
+    }
+
+    // Never leave the panel spinning: if the fetch failed, say so, and fall
+    // back to the seat details we already have from the seat card.
+    if (TABLE_LOAD === 'error') {
+      const seat = ownSeatLine();
+      listEl.innerHTML = seat
+        ? `<div class="fp-occupant you"><span>${seat}</span></div>
+           <p class="fp-panel-hint">We couldn't load the rest of your table just now — please refresh and try again.</p>`
+        : '<p class="fp-panel-hint">We couldn\'t load your table just now — please refresh and try again.</p>';
       return;
     }
 
@@ -2436,7 +2489,7 @@
       return;
     }
 
-    const occupants = TABLE_DATA[String(tableNum)] || [];
+    const occupants = (TABLE_DATA || {})[String(tableNum)] || [];
     if (occupants.length === 0) {
       listEl.innerHTML = '<p class="fp-empty">Seats being arranged.</p>';
       return;
@@ -2493,7 +2546,11 @@
     const own = [...ownTableNumbers()];
     if (own.length) {
       selectTable(own[0]);
+    } else if (TABLE_LOAD === 'error' && listEl) {
+      if (titleEl) titleEl.textContent = '—';
+      listEl.innerHTML = '<p class="fp-panel-hint">We couldn\'t load your table just now — please refresh and try again.</p>';
     } else if (listEl) {
+      if (titleEl) titleEl.textContent = '—';
       listEl.innerHTML = '<p class="fp-panel-hint">Your seat hasn\'t been assigned yet — check back closer to the day.</p>';
     }
   }
@@ -2787,6 +2844,8 @@
 
       // Invalidate floor-plan data cache so the next open re-fetches.
       TABLE_DATA = null;
+      MY_TABLES  = null;
+      TABLE_LOAD = 'idle';
 
       // Fetch seat info and show the card.
       const seats = await rpc('lookup_seats', { p_code: INVITATION.code });
