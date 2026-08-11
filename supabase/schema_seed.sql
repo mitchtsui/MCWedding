@@ -36,6 +36,15 @@ CREATE TABLE IF NOT EXISTS rsvp (
 ALTER TABLE guests ENABLE ROW LEVEL SECURITY;
 ALTER TABLE rsvp   ENABLE ROW LEVEL SECURITY;
 
+-- NOTE: these four are the Phase 1 policies. Phase 3 below drops them and
+-- replaces them with the admin/service policies — "Public read guests" in
+-- particular is NOT the final state (anon must not read the guest list).
+-- Dropped first so the whole file can be re-run without erroring.
+DROP POLICY IF EXISTS "Public read guests"   ON guests;
+DROP POLICY IF EXISTS "Service write guests" ON guests;
+DROP POLICY IF EXISTS "Public insert rsvp"   ON rsvp;
+DROP POLICY IF EXISTS "Service manage rsvp"  ON rsvp;
+
 -- Allow public read on guests (for seating display etc.)
 CREATE POLICY "Public read guests"
   ON guests FOR SELECT USING (true);
@@ -58,12 +67,77 @@ RETURNS TRIGGER AS $$
 BEGIN NEW.updated_at = NOW(); RETURN NEW; END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS guests_updated_at ON guests;
 CREATE TRIGGER guests_updated_at
   BEFORE UPDATE ON guests
   FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 
 
--- SEED: Insert all 198 guests
+-- ------------------------------------------------------------
+-- SEED: the master roster, keyed on guest_number.
+--
+-- guest_number is the stable identity for a guest — NOT name, which
+-- genuinely repeats in this list (four separate 'Anthony Yip and Family'
+-- rows, etc., each standing for one seat).
+--
+-- Re-running this file upserts the roster: it refreshes the roster columns
+-- (name / group_name / side / invited / is_kid) and deliberately leaves the
+-- live columns alone — rsvp_status, dietary, table_number, seat_number,
+-- invitation_code and the outreach_* fields are owned by the website, the
+-- seating planner and the WhatsApp tool, and must survive a re-seed.
+--
+-- To change the guest list: edit the VALUES below and re-run this file.
+--   · add a guest    → append a row with the next unused guest_number
+--   · rename/regroup → edit that guest_number's row in place
+--   · remove a guest → see uninvite_guest() at the end of this file
+-- ------------------------------------------------------------
+
+-- Self-heal: an earlier version of this file had no unique key and used
+-- ON CONFLICT DO NOTHING, so re-running it inserted a second copy of all
+-- 198 guests. Collapse any such duplicates before the unique index goes on.
+-- Keeps the richest row per guest_number (one with an RSVP, else a seat,
+-- else the oldest) and re-points any rsvp rows at the survivor.
+DO $$
+DECLARE
+  dupes INTEGER;
+BEGIN
+  SELECT count(*) INTO dupes FROM (
+    SELECT guest_number FROM guests
+    WHERE guest_number IS NOT NULL
+    GROUP BY guest_number HAVING count(*) > 1
+  ) d;
+
+  IF dupes = 0 THEN RETURN; END IF;
+
+  RAISE NOTICE 'Collapsing duplicate rows for % guest_number(s) from an earlier re-seed', dupes;
+
+  CREATE TEMP TABLE _keep ON COMMIT DROP AS
+  SELECT DISTINCT ON (g.guest_number) g.guest_number, g.id
+  FROM guests g
+  WHERE g.guest_number IS NOT NULL
+  ORDER BY g.guest_number,
+           (EXISTS (SELECT 1 FROM rsvp r WHERE r.guest_id = g.id)) DESC,
+           (g.table_number IS NOT NULL) DESC,
+           (g.invitation_code IS NOT NULL) DESC,
+           g.created_at ASC;
+
+  UPDATE rsvp r
+  SET guest_id = k.id
+  FROM guests g
+  JOIN _keep k ON k.guest_number = g.guest_number
+  WHERE r.guest_id = g.id AND g.id <> k.id;
+
+  DELETE FROM guests g
+  USING _keep k
+  WHERE g.guest_number = k.guest_number AND g.id <> k.id;
+END $$;
+
+-- The key that makes the upsert below possible. Partial, because the
+-- [PREVIEW] admin rows at the end of this file carry no guest_number.
+CREATE UNIQUE INDEX IF NOT EXISTS guests_guest_number_uniq
+  ON guests(guest_number)
+  WHERE guest_number IS NOT NULL;
+
 INSERT INTO guests (guest_number, name, group_name, side, invited, rsvp_status, dietary, is_kid, table_number)
 VALUES
   (1, 'Susana Lo', 'Christy Relatives', '女方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
@@ -264,7 +338,15 @@ VALUES
   (196, 'Charine', 'Mitch Work Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
   (197, 'Jia Jhang', 'Uni Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
   (198, 'Huang Jia', 'Uni Friends', '男方', 'Pending', 'Pending', NULLIF('',''), FALSE, NULL)
-ON CONFLICT DO NOTHING;
+ON CONFLICT (guest_number) WHERE guest_number IS NOT NULL
+DO UPDATE SET
+  name       = EXCLUDED.name,
+  group_name = EXCLUDED.group_name,
+  side       = EXCLUDED.side,
+  invited    = EXCLUDED.invited,
+  is_kid     = EXCLUDED.is_kid;
+  -- rsvp_status / dietary / table_number / seat_number / invitation_code /
+  -- outreach_* are intentionally absent: they are live state, not roster data.
 
 
 -- ============================================================
@@ -679,23 +761,31 @@ GRANT SELECT ON admin_messages TO authenticated;
 -- Phase 4: Floor plan tap-to-reveal
 -- ============================================================
 
--- 19. lookup_all_table_assignments(code) → returns every assigned guest's
---     name + table + seat, grouped by table number. Used by the floor-plan
---     modal to show "who's at table N" when a guest taps a table.
+-- 19. lookup_my_table(code) → returns the occupants of ONLY the table(s) the
+--     caller's own invitation is seated at. Used by the floor-plan modal so a
+--     guest can see who they're sitting with, without seeing any other table.
 --
---     Validates that the supplied code exists (i.e. the caller is at least
---     one of our invited guests) before returning anything. Excludes guests
---     who have RSVP'd 'No' so the chart doesn't show absences.
-CREATE OR REPLACE FUNCTION lookup_all_table_assignments(p_code TEXT)
+--     Replaces the earlier lookup_all_table_assignments(), which returned the
+--     whole room to any valid code holder. That function is dropped below —
+--     leaving it in place would keep the full guest list readable by anyone
+--     holding a single invitation code.
+--
+--     Validates that the supplied code exists (i.e. the caller is one of our
+--     invited guests) before returning anything. Excludes guests who have
+--     RSVP'd 'No' so the chart doesn't show absences.
+DROP FUNCTION IF EXISTS lookup_all_table_assignments(TEXT);
+
+CREATE OR REPLACE FUNCTION lookup_my_table(p_code TEXT)
 RETURNS JSONB
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = public
 AS $$
 DECLARE
-  norm    TEXT;
+  norm     TEXT;
   is_valid BOOLEAN;
-  result  JSONB;
+  my_tables INTEGER[];
+  result   JSONB;
 BEGIN
   IF p_code IS NULL OR length(trim(p_code)) = 0 THEN
     RETURN jsonb_build_object('valid', false);
@@ -708,6 +798,19 @@ BEGIN
 
   IF NOT is_valid THEN
     RETURN jsonb_build_object('valid', false);
+  END IF;
+
+  -- The table(s) this invitation is seated at. Normally one, but a household
+  -- split across two tables gets both.
+  SELECT COALESCE(array_agg(DISTINCT g.table_number), '{}'::INTEGER[])
+  INTO my_tables
+  FROM guests g
+  WHERE g.invitation_code = norm
+    AND g.table_number IS NOT NULL;
+
+  IF array_length(my_tables, 1) IS NULL THEN
+    -- Seats not assigned yet: valid code, nothing to reveal.
+    RETURN jsonb_build_object('valid', true, 'tables', '{}'::jsonb, 'my_tables', '[]'::jsonb);
   END IF;
 
   SELECT jsonb_object_agg(table_number::text, members)
@@ -723,16 +826,20 @@ BEGIN
         ORDER BY g.seat_number NULLS LAST
       ) AS members
     FROM guests g
-    WHERE g.table_number IS NOT NULL
+    WHERE g.table_number = ANY(my_tables)
       AND COALESCE(g.rsvp_status, '') NOT IN ('No', 'no')
     GROUP BY g.table_number
   ) t;
 
-  RETURN jsonb_build_object('valid', true, 'tables', COALESCE(result, '{}'::jsonb));
+  RETURN jsonb_build_object(
+    'valid',     true,
+    'tables',    COALESCE(result, '{}'::jsonb),
+    'my_tables', to_jsonb(my_tables)
+  );
 END;
 $$;
 
-GRANT EXECUTE ON FUNCTION lookup_all_table_assignments(TEXT) TO anon, authenticated;
+GRANT EXECUTE ON FUNCTION lookup_my_table(TEXT) TO anon, authenticated;
 
 
 -- ============================================================
@@ -811,3 +918,80 @@ WHERE NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-BRIDE');
 INSERT INTO guests (name, group_name, side, invited, rsvp_status, invitation_code, table_number, seat_number)
 SELECT '[PREVIEW] Groom', 'Admin Preview', '男方', true, NULL, 'MC-GROOM', 2, 2
 WHERE NOT EXISTS (SELECT 1 FROM guests WHERE invitation_code = 'MC-GROOM');
+
+
+-- ============================================================
+-- Phase 7: Roster maintenance helpers
+-- Idempotent — safe to re-run.
+-- ============================================================
+
+-- 23. uninvite_guest(guest_number) → removes a guest from the roster.
+--     Deleting the row from the seed VALUES list is not enough: the upsert
+--     only adds and updates, it never deletes. Run this once for anyone who
+--     drops off the list, then remove their row from the VALUES block so the
+--     file and the database agree.
+--
+--     Clears their RSVP rows first (rsvp.guest_id has no ON DELETE rule) and
+--     frees their seat. Returns the name removed, or NULL if not found.
+CREATE OR REPLACE FUNCTION uninvite_guest(p_guest_number INTEGER)
+RETURNS TEXT
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  gid       UUID;
+  gname     TEXT;
+BEGIN
+  IF NOT is_admin() THEN
+    RAISE EXCEPTION 'Forbidden';
+  END IF;
+
+  SELECT id, name INTO gid, gname
+  FROM guests WHERE guest_number = p_guest_number;
+
+  IF gid IS NULL THEN
+    RETURN NULL;
+  END IF;
+
+  DELETE FROM rsvp   WHERE guest_id = gid;
+  DELETE FROM guests WHERE id = gid;
+
+  RETURN gname;
+END;
+$$;
+
+GRANT EXECUTE ON FUNCTION uninvite_guest(INTEGER) TO authenticated;
+
+
+-- 24. next_guest_number() → the next free guest_number, for adding guests.
+--     Use it to pick the number for a new row in the seed VALUES block.
+CREATE OR REPLACE FUNCTION next_guest_number()
+RETURNS INTEGER
+LANGUAGE sql
+STABLE
+AS $$ SELECT COALESCE(MAX(guest_number), 0) + 1 FROM guests $$;
+
+GRANT EXECUTE ON FUNCTION next_guest_number() TO authenticated;
+
+
+-- 25. roster_diff → rows whose live state disagrees with expectations,
+--     as a quick sanity check after editing the guest list.
+CREATE OR REPLACE VIEW roster_diff AS
+SELECT
+  g.guest_number,
+  g.name,
+  g.group_name,
+  g.side,
+  g.rsvp_status,
+  g.invitation_code,
+  g.table_number,
+  g.seat_number,
+  EXISTS (SELECT 1 FROM rsvp r WHERE r.guest_id = g.id) AS has_rsvp
+FROM guests g
+WHERE g.invitation_code IS NULL          -- code never generated
+   OR g.name IS NULL
+   OR length(trim(g.name)) = 0
+ORDER BY g.guest_number;
+
+GRANT SELECT ON roster_diff TO authenticated;

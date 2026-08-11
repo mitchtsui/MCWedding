@@ -1680,6 +1680,12 @@
   .fp-table.selected .fp-table-circle { stroke: #722F37; stroke-width: 3; }
   .fp-table.active.selected .fp-table-circle { stroke: #722F37; }
 
+  /* Other people's tables: shown for orientation, but inert and nameless. */
+  .fp-table.locked { cursor: default; }
+  .fp-table.locked .fp-table-circle { fill: #F0EAE0; stroke: #C8BFB2; stroke-width: 1.2; }
+  .fp-table.locked .fp-table-num    { fill: var(--text-light); }
+  .fp-table.locked:hover .fp-table-circle { fill: #F0EAE0; stroke-width: 1.2; }
+
   .fp-room-label    { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 500; fill: var(--text-light); }
   .fp-fixture-label { font-family: 'Raleway', sans-serif; font-size: 9px;  letter-spacing: 2px; fill: #A09890; }
   .fp-stage-label   { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 600; fill: #EDE6D8; }
@@ -2009,7 +2015,7 @@
 <div class="fp-modal" id="floor-plan-modal" onclick="if(event.target===this)closeFloorPlan()">
   <div class="fp-card">
     <button class="fp-close" onclick="closeFloorPlan()" aria-label="Close">×</button>
-    <div class="fp-sub">Tap any table to see who's seated</div>
+    <div class="fp-sub">Your table is highlighted — tap it to see who you're with</div>
 
     <div class="fp-body">
       <div class="fp-svg-wrap">
@@ -2127,11 +2133,11 @@
       <!-- Side / bottom panel — table occupants -->
       <aside class="fp-panel" id="fp-panel">
         <div class="fp-panel-head">
-          <div class="fp-panel-eyebrow">Tap a table</div>
+          <div class="fp-panel-eyebrow">Your table</div>
           <div class="fp-panel-title" id="fp-panel-title">—</div>
         </div>
         <div class="fp-panel-list" id="fp-panel-list">
-          <p class="fp-panel-hint">Tap any table on the floor plan to see who's seated there.</p>
+          <p class="fp-panel-hint">Loading your table…</p>
         </div>
       </aside>
     </div>
@@ -2241,26 +2247,19 @@
       sessionStorage.setItem('demo-rsvp-' + code, '1');
       return Promise.resolve({ success: true });
     }
-    if (fn === 'lookup_all_table_assignments') {
-      // Mock floor-plan data so the preview shows a realistic chart.
-      return Promise.resolve({
-        valid: true,
-        tables: {
-          '1':  [{name:'Auntie Wong',     seat:1},{name:'Uncle Wong',      seat:2},{name:'Cousin Ada',     seat:3},{name:'Cousin Ben',    seat:4},{name:'Auntie Lam',    seat:5},{name:'Uncle Lam',     seat:6},{name:'Pastor Cheung', seat:7},{name:'Mrs Cheung',     seat:8},{name:'Helen Kwok',    seat:9},{name:'Peter Kwok',    seat:10}],
-          '2':  [{name:'James Tsui',      seat:1},{name:'Linda Tsui',      seat:2},{name:'Auntie Mei',    seat:3},{name:'Uncle Ho',      seat:4},{name:'Cousin Jay',    seat:5},{name:'Cousin Kay',    seat:6}],
-          '3':  [{name:'Christy Chow',    seat:1},{name:'Mitchell Tsui',   seat:2},{name:'Mr Chow',       seat:3},{name:'Mrs Chow',      seat:4},{name:'Mr Tsui',       seat:5},{name:'Mrs Tsui',      seat:6},{name:'Maid of Honour', seat:7},{name:'Best Man',       seat:8}],
-          '5':  [{name:'Mark Chan',       seat:3},{name:'Sarah Chan',      seat:4},{name:'Demo Guest',    seat:5},{name:'Eric Lo',       seat:6},{name:'Mandy Lo',      seat:7},{name:'Vince Yip',     seat:8}],
-          '6':  [{name:'Auntie Lee',      seat:1},{name:'Uncle Lee',       seat:2},{name:'Auntie Ng',     seat:3},{name:'Uncle Ng',      seat:4},{name:'Cousin Faye',   seat:5}],
-          '7':  [{name:'Wong Family',     seat:1},{name:'Mrs Wong',        seat:2},{name:'Edmund Wong',   seat:3},{name:'Vivian Wong',   seat:4}],
-          '8':  [{name:'Friend Group A',  seat:1},{name:'Friend B',        seat:2},{name:'Friend C',      seat:3},{name:'Friend D',      seat:4},{name:'Friend E',      seat:5}],
-          '9':  [{name:'Choir Director',  seat:1},{name:'Soprano 1',       seat:2},{name:'Soprano 2',     seat:3},{name:'Alto 1',        seat:4},{name:'Alto 2',        seat:5},{name:'Tenor 1',       seat:6}],
-          '10': [{name:'Office Friend 1', seat:1},{name:'Office Friend 2', seat:2},{name:'Office Friend 3',seat:3},{name:'Office Friend 4',seat:4}],
-          '11': [{name:'School Friend 1', seat:1},{name:'School Friend 2', seat:2},{name:'School Friend 3',seat:3}],
-          '12': [{name:'Cousin Rita',     seat:1},{name:'Cousin Sam',      seat:2}],
-          '13': [{name:'Wine Friend 1',   seat:1},{name:'Wine Friend 2',   seat:2},{name:'Wine Friend 3', seat:3},{name:'Wine Friend 4', seat:4}],
-          '15': [{name:'Late Addition 1', seat:1},{name:'Late Addition 2', seat:2}]
-        }
-      });
+    if (fn === 'lookup_my_table') {
+      // Mirrors the real RPC: the demo guest only ever sees their own table.
+      // Both demo codes are seated at table 5.
+      if (!entry) return Promise.resolve({ valid: false });
+      const myTables = [...new Set(entry.seats.filter(s => s.has_seat).map(s => s.table_number))];
+      const TABLE_5 = [
+        {name:'Mark Chan',  seat:3},{name:'Sarah Chan', seat:4},
+        {name:'Demo Guest', seat:5},{name:'Eric Lo',    seat:6},
+        {name:'Mandy Lo',   seat:7},{name:'Vince Yip',  seat:8}
+      ];
+      const tables = {};
+      myTables.forEach(t => { if (t === 5) tables['5'] = TABLE_5; });
+      return Promise.resolve({ valid: true, tables, my_tables: myTables });
     }
     return Promise.resolve({});
   }
@@ -2373,8 +2372,19 @@
   }
 
   // ─── FLOOR PLAN ───
-  let TABLE_DATA = null;   // { '1': [{name, seat}, ...], ... }
+  // TABLE_DATA only ever holds the guest's OWN table(s) — lookup_my_table
+  // refuses to return anyone else's, so other tables render as locked and
+  // show no names.
+  let TABLE_DATA = null;   // { '5': [{name, seat}, ...] }  — own table(s) only
   let SELECTED_TABLE = null;
+
+  function ownTableNumbers() {
+    return new Set(Object.keys(TABLE_DATA || {}).map(String));
+  }
+
+  function isOwnTable(num) {
+    return ownTableNumbers().has(String(num));
+  }
 
   function highlightFloorPlanTables() {
     document.querySelectorAll('.fp-table').forEach(g => g.classList.remove('active'));
@@ -2393,7 +2403,7 @@
     const code = (INVITATION && INVITATION.code) || readCodeFromUrl();
     if (!code) return null;
     try {
-      const res = await rpc('lookup_all_table_assignments', { p_code: code });
+      const res = await rpc('lookup_my_table', { p_code: code });
       if (res && res.valid) {
         TABLE_DATA = res.tables || {};
       }
@@ -2420,6 +2430,12 @@
       return;
     }
 
+    // Only the guest's own table reveals names. Everything else stays private.
+    if (!isOwnTable(tableNum)) {
+      listEl.innerHTML = '<p class="fp-panel-hint">This isn\'t your table — we only show you the people you\'re sitting with.</p>';
+      return;
+    }
+
     const occupants = TABLE_DATA[String(tableNum)] || [];
     if (occupants.length === 0) {
       listEl.innerHTML = '<p class="fp-empty">Seats being arranged.</p>';
@@ -2441,6 +2457,12 @@
   }
 
   function selectTable(num) {
+    // Tapping someone else's table explains itself rather than dead-clicking,
+    // but never highlights and never reveals names.
+    if (!isOwnTable(num)) {
+      renderTablePanel(num);
+      return;
+    }
     SELECTED_TABLE = num;
     document.querySelectorAll('.fp-table').forEach(g => g.classList.remove('selected'));
     document.querySelector(`.fp-table[data-table="${num}"]`)?.classList.add('selected');
@@ -2458,16 +2480,31 @@
     const titleEl = document.getElementById('fp-panel-title');
     const listEl  = document.getElementById('fp-panel-list');
     if (titleEl) titleEl.textContent = '—';
-    if (listEl)  listEl.innerHTML = '<p class="fp-panel-hint">Loading seating chart…</p>';
+    if (listEl)  listEl.innerHTML = '<p class="fp-panel-hint">Loading your table…</p>';
+
+    // Lock everything until we know which table is theirs, so a fast tap
+    // during the fetch can't select a table it shouldn't.
+    markLockedTables();
 
     // Fetch data, then auto-select the user's table if they have one
     await loadTableData();
-    const ownTable = (CURRENT_SEATS || []).find(s => s.has_seat && s.table_number != null);
-    if (ownTable) {
-      selectTable(ownTable.table_number);
+    markLockedTables();
+
+    const own = [...ownTableNumbers()];
+    if (own.length) {
+      selectTable(own[0]);
     } else if (listEl) {
-      listEl.innerHTML = '<p class="fp-panel-hint">Tap any table on the floor plan to see who\'s seated there.</p>';
+      listEl.innerHTML = '<p class="fp-panel-hint">Your seat hasn\'t been assigned yet — check back closer to the day.</p>';
     }
+  }
+
+  // Every table that isn't the guest's own is inert: no pointer, no hover,
+  // and selectTable() refuses to open it.
+  function markLockedTables() {
+    document.querySelectorAll('.fp-table').forEach(g => {
+      const num = g.getAttribute('data-table');
+      g.classList.toggle('locked', !isOwnTable(num));
+    });
   }
 
   function closeFloorPlan() {
