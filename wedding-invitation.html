@@ -1659,36 +1659,47 @@
   }
   .fp-svg-wrap svg { width: 100%; height: auto; display: block; }
 
+  /* Venue shell — dark frame, olive stage block, banded room divider */
+  .fp-frame {
+    fill: none;
+    stroke: var(--text);
+    stroke-width: 2.5;
+    opacity: 0.85;
+  }
+  .fp-stage { fill: var(--olive); }
+  .fp-divider-line {
+    stroke: var(--divider);
+    stroke-width: 1.5;
+  }
+  .fp-seat-dots { fill: #A09890; }
+
   /* Tables — interactive */
   .fp-table { cursor: pointer; }
   .fp-table-circle {
-    fill: #F5EEE4;
-    stroke: var(--olive);
-    stroke-width: 1.5;
-    transition: fill 0.15s, stroke-width 0.15s;
+    fill: var(--white);
+    stroke: var(--divider);
+    stroke-width: 1.4;
+    transition: fill 0.15s, stroke 0.15s, stroke-width 0.15s;
   }
   .fp-table-num {
-    fill: var(--text);
+    fill: var(--olive);
     font-family: 'Cormorant Garamond', serif;
-    font-size: 18px;
+    font-size: 20px;
     font-weight: 500;
     pointer-events: none;
   }
-  .fp-table:hover .fp-table-circle { fill: #E8DFCF; stroke-width: 2.2; }
-  .fp-table.active .fp-table-circle { fill: var(--olive); stroke-width: 2; }
-  .fp-table.active  .fp-table-num   { fill: var(--bg); font-weight: 600; }
-  .fp-table.selected .fp-table-circle { stroke: #722F37; stroke-width: 3; }
-  .fp-table.active.selected .fp-table-circle { stroke: #722F37; }
+  .fp-table:hover .fp-table-circle { fill: var(--bg-card); stroke: var(--olive); }
 
-  /* Other people's tables: shown for orientation, but inert and nameless. */
+  /* Your table — solid olive, the one piece of colour on the plan */
+  .fp-table.active .fp-table-circle { fill: var(--olive); stroke: var(--olive); }
+  .fp-table.active .fp-table-num    { fill: var(--gardenia); font-weight: 600; }
+  .fp-table.selected:not(.active) .fp-table-circle { stroke: var(--sea-spray); stroke-width: 2.4; }
+
+  /* Other people's tables: drawn for orientation, but inert and nameless. */
   .fp-table.locked { cursor: default; }
-  .fp-table.locked .fp-table-circle { fill: #F0EAE0; stroke: #C8BFB2; stroke-width: 1.2; }
-  .fp-table.locked .fp-table-num    { fill: var(--text-light); }
-  .fp-table.locked:hover .fp-table-circle { fill: #F0EAE0; stroke-width: 1.2; }
+  .fp-table.locked:hover .fp-table-circle { fill: var(--white); stroke: var(--divider); stroke-width: 1.4; }
 
-  .fp-room-label    { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 500; fill: var(--text-light); }
-  .fp-fixture-label { font-family: 'Raleway', sans-serif; font-size: 9px;  letter-spacing: 2px; fill: #A09890; }
-  .fp-stage-label   { font-family: 'Raleway', sans-serif; font-size: 11px; letter-spacing: 3px; font-weight: 600; fill: #EDE6D8; }
+  .fp-stage-label   { font-family: 'Cormorant Garamond', serif; font-size: 30px; font-weight: 400; fill: var(--gardenia); }
 
   /* Side panel */
   .fp-panel {
@@ -2022,109 +2033,104 @@
         <svg viewBox="0 0 800 810" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet">
           <!-- Reusable 12-seat ring (referenced by every round table via <use>) -->
           <defs>
-            <g id="seats-12" fill="#A09890" stroke="none">
-              <circle cx="0"   cy="-44" r="3"/>
-              <circle cx="22"  cy="-38" r="3"/>
-              <circle cx="38"  cy="-22" r="3"/>
-              <circle cx="44"  cy="0"   r="3"/>
-              <circle cx="38"  cy="22"  r="3"/>
-              <circle cx="22"  cy="38"  r="3"/>
-              <circle cx="0"   cy="44"  r="3"/>
-              <circle cx="-22" cy="38"  r="3"/>
-              <circle cx="-38" cy="22"  r="3"/>
-              <circle cx="-44" cy="0"   r="3"/>
-              <circle cx="-38" cy="-22" r="3"/>
-              <circle cx="-22" cy="-38" r="3"/>
+            <g id="seats-12" class="fp-seat-dots" stroke="none">
+              <circle cx="0"     cy="-48"   r="3.4"/>
+              <circle cx="24"    cy="-41.6" r="3.4"/>
+              <circle cx="41.6"  cy="-24"   r="3.4"/>
+              <circle cx="48"    cy="0"     r="3.4"/>
+              <circle cx="41.6"  cy="24"    r="3.4"/>
+              <circle cx="24"    cy="41.6"  r="3.4"/>
+              <circle cx="0"     cy="48"    r="3.4"/>
+              <circle cx="-24"   cy="41.6"  r="3.4"/>
+              <circle cx="-41.6" cy="24"    r="3.4"/>
+              <circle cx="-48"   cy="0"     r="3.4"/>
+              <circle cx="-41.6" cy="-24"   r="3.4"/>
+              <circle cx="-24"   cy="-41.6" r="3.4"/>
             </g>
           </defs>
 
           <!-- Outer venue frame -->
-          <rect x="20" y="20" width="760" height="770" fill="none" stroke="#C8BFB2" stroke-width="2"/>
+          <rect class="fp-frame" x="16" y="16" width="768" height="778"/>
 
-          <!-- Stage: horizontal at top centre -->
-          <rect x="180" y="35" width="440" height="55" fill="#3a3a30" opacity="0.85"/>
-          <text x="400" y="71" text-anchor="middle" class="fp-stage-label">STAGE</text>
-
-          <!-- Live Band: top-right -->
-          <rect x="640" y="40" width="135" height="35" fill="#F9F4EB" stroke="#A09890" stroke-width="1"/>
-          <text x="707" y="62" text-anchor="middle" class="fp-fixture-label">LIVE BAND</text>
+          <!-- Stage: tall block, top centre -->
+          <rect class="fp-stage" x="303" y="32" width="194" height="172"/>
+          <text x="400" y="128" text-anchor="middle" class="fp-stage-label">Stage</text>
 
           <!-- ── TOP HALF ── tables 7, 3, 9, 1 on the left; 6, 5, 8, 2 on the right -->
           <g class="fp-table" data-table="7" onclick="selectTable(7)" transform="translate(95, 170)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">7</text>
           </g>
           <g class="fp-table" data-table="6" onclick="selectTable(6)" transform="translate(705, 170)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">6</text>
           </g>
 
           <g class="fp-table" data-table="3" onclick="selectTable(3)" transform="translate(260, 255)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">3</text>
           </g>
           <g class="fp-table" data-table="5" onclick="selectTable(5)" transform="translate(540, 255)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">5</text>
           </g>
 
           <g class="fp-table" data-table="9" onclick="selectTable(9)" transform="translate(95, 340)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">9</text>
           </g>
           <g class="fp-table" data-table="8" onclick="selectTable(8)" transform="translate(705, 340)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">8</text>
           </g>
 
           <g class="fp-table" data-table="1" onclick="selectTable(1)" transform="translate(260, 425)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">1</text>
           </g>
           <g class="fp-table" data-table="2" onclick="selectTable(2)" transform="translate(540, 425)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">2</text>
           </g>
 
-          <!-- Door divider between the two halves -->
-          <line x1="40"  y1="510" x2="350" y2="510" stroke="#A09890" stroke-width="1" stroke-dasharray="6,4"/>
-          <text x="400" y="514" text-anchor="middle" class="fp-fixture-label">DOOR</text>
-          <line x1="450" y1="510" x2="760" y2="510" stroke="#A09890" stroke-width="1" stroke-dasharray="6,4"/>
+          <!-- Room divider between the two halves — a plain banded corridor -->
+          <line class="fp-divider-line" x1="16" y1="472" x2="784" y2="472"/>
+          <line class="fp-divider-line" x1="16" y1="513" x2="784" y2="513"/>
 
           <!-- ── BOTTOM HALF ── tables 10, 11 on top; 15 centred; 12, 13 below -->
           <g class="fp-table" data-table="10" onclick="selectTable(10)" transform="translate(260, 575)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">10</text>
           </g>
           <g class="fp-table" data-table="11" onclick="selectTable(11)" transform="translate(540, 575)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">11</text>
           </g>
 
           <g class="fp-table" data-table="15" onclick="selectTable(15)" transform="translate(400, 655)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">15</text>
           </g>
 
           <g class="fp-table" data-table="12" onclick="selectTable(12)" transform="translate(260, 735)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">12</text>
           </g>
           <g class="fp-table" data-table="13" onclick="selectTable(13)" transform="translate(540, 735)">
             <use href="#seats-12"/>
-            <circle class="fp-table-circle" r="34"/>
+            <circle class="fp-table-circle" r="38"/>
             <text class="fp-table-num" y="6" text-anchor="middle">13</text>
           </g>
         </svg>
