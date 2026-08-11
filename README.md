@@ -13,6 +13,7 @@
 | `whatsapp-outreach.html` | Admin tool: per-guest WhatsApp invitation links + outreach tracker |
 | `supabase/schema_seed.sql` | Supabase database schema + all 198 guests pre-seeded |
 | `supabase/seed-guests.js` | Node.js alternative seed script |
+| `supabase/migrations/` | Standalone SQL you can run without re-seeding the roster |
 | `CLAUDE.md` | Full project reference for AI-assisted development |
 
 ---
@@ -109,6 +110,10 @@ The anon key never has direct read access to `guests` — it can only call the S
 ## Updating the guest list
 
 `supabase/schema_seed.sql` is the source of truth for **who is invited**. The database is the source of truth for **everything that happens to them** — RSVP status, dietary notes, table and seat, invitation code, outreach state.
+
+> ⚠️ **If you have edited the `guests` table by hand in Supabase**, the seed file is now behind the database. Running the full `schema_seed.sql` will push the file's older `name` / `group_name` / `side` / `invited` / `is_kid` values back over your manual edits, and will re-add anyone you deleted. Before you run it, sync the file to reality with `supabase/migrations/export_roster_as_seed.sql`: it prints the live table as a ready-to-paste `VALUES` block (plus a few sanity queries for rows with no `guest_number` or no invitation code). Live state — RSVP, dietary, seats, codes, outreach — is never at risk either way.
+>
+> To apply a schema change **without** touching the roster at all, run the standalone file in `supabase/migrations/` instead of the full seed.
 
 Editing the `VALUES` block and re-running the whole file is the intended workflow. The seed upserts on `guest_number`, so a re-run refreshes the roster columns (`name`, `group_name`, `side`, `invited`, `is_kid`) and leaves live state untouched. Guests keep their invitation codes and their seats.
 
