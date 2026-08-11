@@ -305,47 +305,41 @@
     gap: 1rem 1.2rem;
     min-width: 1080px;
     align-items: start;
+    /* Venue shell — matches the guest-facing floor plan */
+    border: 2.5px solid var(--text);
+    padding: 1.4rem 1.2rem;
+    background: var(--bg-panel);
   }
 
-  /* Floor-plan labels (STAGE / LIVE BAND / DOOR) */
+  /* Floor-plan labels (Stage / room divider) */
   .floor-label {
     display: flex;
     align-items: center;
     justify-content: center;
     font-family: 'Cormorant Garamond', serif;
     color: var(--text-mid);
-    letter-spacing: 0.18em;
-    text-transform: uppercase;
     text-align: center;
     user-select: none;
   }
   .floor-label.stage {
-    border: 1px solid var(--divider);
-    background: var(--bg-card);
-    font-size: 0.85rem;
-    font-weight: 500;
-    padding: 0.8rem 1rem;
-    min-height: 56px;
+    background: var(--olive);
+    color: #EDE6D8;
+    font-size: 1.5rem;
+    font-weight: 400;
+    letter-spacing: 0.01em;
+    padding: 1rem;
+    min-height: 120px;
   }
-  .floor-label.live-band {
-    border: 1px solid var(--divider);
-    background: var(--bg-card);
-    font-size: 0.7rem;
-    padding: 0.55rem 0.8rem;
-    min-height: 40px;
-  }
+  /* Banded corridor between the two halves — two rules, no label */
   .floor-label.door {
-    border-top: 1px dashed var(--divider);
-    border-bottom: 1px dashed var(--divider);
-    padding: 0.6rem;
-    font-size: 0.7rem;
-    letter-spacing: 0.3em;
-    margin: 0.4rem 0;
+    border-top: 1.5px solid var(--divider);
+    border-bottom: 1.5px solid var(--divider);
+    min-height: 26px;
+    margin: 0.5rem 0;
   }
 
   /* Floor-plan grid positions — top section (stage area) */
-  .pos-stage     { grid-column: 2 / 5; grid-row: 1; }
-  .pos-liveband  { grid-column: 5;     grid-row: 1; }
+  .pos-stage     { grid-column: 3;     grid-row: 1; }
   .pos-t7        { grid-column: 1;     grid-row: 2; }
   .pos-t6        { grid-column: 5;     grid-row: 2; }
   .pos-t3        { grid-column: 2;     grid-row: 3; }
@@ -845,8 +839,7 @@ function renderTables() {
 
   // Floor-plan labels (positioned via CSS grid classes)
   grid.innerHTML += `<div class="floor-label stage pos-stage">Stage</div>`;
-  grid.innerHTML += `<div class="floor-label live-band pos-liveband">Live Band</div>`;
-  grid.innerHTML += `<div class="floor-label door pos-door">Door</div>`;
+  grid.innerHTML += `<div class="floor-label door pos-door"></div>`;
 
   for (const { n: t, pos } of TABLES) {
     const seatsAtTable = guests.filter(g => g.table_number === t);
@@ -911,7 +904,7 @@ function renderTables() {
         </div>
         <div class="table-visual">
           <svg viewBox="0 0 88 88" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
-            <circle cx="44" cy="44" r="22" fill="#EAE5DB" stroke="#C8BFB2" stroke-width="1.5"/>
+            <circle cx="44" cy="44" r="22" fill="#FAF7F2" stroke="#C8BFB2" stroke-width="1.4"/>
             ${seatsSvg.join('')}
           </svg>
         </div>
