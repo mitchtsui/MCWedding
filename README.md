@@ -96,6 +96,7 @@ node supabase/seed-guests.js
 5. Guest can revisit the same URL anytime to see their seat or update their RSVP.
 6. **You assign seats** in `seating-planner.html` (magic-link sign-in for `christychowtc@gmail.com` / `mitchell.tsui.mc@gmail.com`). Drag-drop persists `table_number` + `seat_number` to Supabase.
 7. Plus-ones not on the master list appear in the `pending_plus_ones` view for manual placement.
+8. To move a whole table's worth of guests at once, install `supabase/migrations/swap_tables.sql` and call `SELECT swap_tables(1, 2);` — everyone swaps places, keeping their seat numbers. Dragging them one by one in the planner works too, but `guests` has a unique index on `(table_number, seat_number)`, so a bulk hand-written `UPDATE` collides; the function parks one side on a scratch number to get around it. Running a swap twice undoes it, and `SELECT * FROM table_occupancy;` shows who is where.
 
 ### What a guest can see of the seating plan
 
