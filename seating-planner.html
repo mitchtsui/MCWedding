@@ -364,6 +364,7 @@
     background: var(--bg-card);
     border: 1px solid var(--divider);
     padding: 0.8rem;
+    min-width: 0;
     transition: border-color 0.15s, box-shadow 0.15s;
   }
   .table-card.full { border-color: var(--table-full); }
@@ -388,10 +389,14 @@
   .table-visual { display: flex; justify-content: center; margin-bottom: 0.6rem; }
   .table-visual svg { display: block; }
 
-  /* 12 numbered seat slots */
+  /* 12 numbered seat slots.
+     minmax(0,…) and min-width:0 are load-bearing: grid and flex children
+     default to min-width:auto, which makes them refuse to shrink below
+     their text. Without them a long guest name widens its column and the
+     whole seat list spills out past the card border. */
   .seats-grid {
     display: grid;
-    grid-template-columns: repeat(2, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
     gap: 3px;
   }
   .seat-slot {
@@ -404,6 +409,7 @@
     font-size: 0.62rem;
     color: var(--text-mid);
     min-height: 22px;
+    min-width: 0;
     transition: border-color 0.15s, background 0.15s;
   }
   .seat-slot.drag-over {
@@ -423,6 +429,7 @@
   }
   .seat-name-text {
     flex: 1;
+    min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
@@ -446,6 +453,9 @@
     body { overflow: auto; height: auto; }
     .app-body { overflow: visible; }
     .floor-plan { overflow: visible; }
+    /* Seat lists run a full 12 rows, so keep a table from splitting
+       across a page break mid-list. */
+    .table-card { break-inside: avoid; page-break-inside: avoid; }
   }
 
   /* ─── MODAL ─── */
@@ -880,7 +890,7 @@ function renderTables() {
                ondragleave="seatDragLeave(event,${t},${s})"
                ondrop="dropOnSeat(event,${t},${s})">
             <span class="seat-num">${s}</span>
-            <span class="seat-name-text">${escHtml(occupant.name)}</span>
+            <span class="seat-name-text" title="${escHtml(occupant.name)}">${escHtml(occupant.name)}</span>
             <span class="seat-remove" onclick="removeFromSeat('${occupant.id}')" title="Remove">×</span>
           </div>`);
       } else {
