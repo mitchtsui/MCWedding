@@ -31,8 +31,8 @@ Both HTML files are **fully self-contained** — no build step, no dependencies,
 
 1. Create a project at [supabase.com](https://supabase.com)
 2. Run `supabase/schema_seed.sql` in the Supabase SQL Editor
-   - Creates both tables, seeds all 198 guests, **and** generates a unique invitation code per guest, sets up RLS, and creates the public RPCs (`lookup_invitation`, `lookup_seats`, `submit_rsvp`).
-   - The script is idempotent — safe to run multiple times.
+   - Creates both tables, seeds all 198 guests, **and** generates a unique invitation code per guest, sets up RLS, and creates the public RPCs (`lookup_invitation`, `lookup_seats`, `submit_rsvp`, `lookup_my_table`).
+   - The script is idempotent — safe to run multiple times. The guest seed upserts on `guest_number` and never overwrites live RSVP, seating or outreach state. See [Updating the guest list](#updating-the-guest-list).
 3. In Vercel → Project → **Settings → Environment Variables**, add:
    - `SUPABASE_URL` → `https://yourproject.supabase.co`
    - `SUPABASE_ANON_KEY` → the anon public JWT (starts `eyJ…`)
@@ -96,7 +96,41 @@ node supabase/seed-guests.js
 6. **You assign seats** in `seating-planner.html` (magic-link sign-in for `christychowtc@gmail.com` / `mitchell.tsui.mc@gmail.com`). Drag-drop persists `table_number` + `seat_number` to Supabase.
 7. Plus-ones not on the master list appear in the `pending_plus_ones` view for manual placement.
 
-The anon key never has direct read access to `guests` — it can only call the three SECURITY DEFINER RPCs, which return at most one household.
+### What a guest can see of the seating plan
+
+A guest sees **only their own table**. Opening "View Floor Plan" calls `lookup_my_table`, which returns the occupants of the table(s) that guest's own invitation is seated at and nothing else. Every other table is drawn on the plan for orientation — so they can find their way across the room — but is greyed out, not tappable, and carries no names. Guests who have RSVP'd "No" are excluded from the list, so the table doesn't show absences.
+
+This replaces the earlier `lookup_all_table_assignments`, which handed the entire seating chart to anyone holding any valid code. That function is dropped by `schema_seed.sql`; re-running the file removes it.
+
+The anon key never has direct read access to `guests` — it can only call the SECURITY DEFINER RPCs, which return at most one household (or, for the floor plan, one table).
+
+---
+
+## Updating the guest list
+
+`supabase/schema_seed.sql` is the source of truth for **who is invited**. The database is the source of truth for **everything that happens to them** — RSVP status, dietary notes, table and seat, invitation code, outreach state.
+
+Editing the `VALUES` block and re-running the whole file is the intended workflow. The seed upserts on `guest_number`, so a re-run refreshes the roster columns (`name`, `group_name`, `side`, `invited`, `is_kid`) and leaves live state untouched. Guests keep their invitation codes and their seats.
+
+**`guest_number` is the identity, not `name`.** 25 of the 198 rows share a name with another row — there are four separate `Anthony Yip and Family` rows, each standing for one seat. Never key anything off the name.
+
+| Change | How |
+|--------|-----|
+| **Add a guest** | `SELECT next_guest_number();` for the next free number, append a row to the `VALUES` block, re-run the file. The DB trigger generates their invitation code automatically. |
+| **Rename / regroup / fix a side** | Edit that `guest_number`'s row in place, re-run the file. |
+| **Remove a guest** | `SELECT uninvite_guest(<guest_number>);` — deletes them and any RSVP rows, frees their seat — **then** delete their row from the `VALUES` block. Skipping the second step means the next re-run re-adds them. |
+| **Change someone's RSVP by hand** | Do it in the database (Supabase Table Editor), not the seed file. The seed deliberately never overwrites `rsvp_status`. |
+| **Bulk changes (10+ rows)** | Edit the `VALUES` block in your editor and re-run once. |
+| **One or two quick changes** | Supabase Table Editor is faster, but mirror the edit back into the seed file or the two drift apart. |
+
+Re-running `schema_seed.sql` is genuinely safe — verified by running it three times against a fresh Postgres with seats, RSVPs and outreach state in place, and diffing: guest count stayed at 200, live state byte-identical.
+
+> **If you ran the old version of this file more than once**, you have a duplicate copy of all 198 guests. The seed now self-heals: it collapses duplicate `guest_number` rows before applying the unique index, keeping the richest row (one with an RSVP, else a seat, else the oldest) and re-pointing RSVP rows at the survivor. Check with:
+> ```sql
+> SELECT guest_number, count(*) FROM guests
+> WHERE guest_number IS NOT NULL
+> GROUP BY guest_number HAVING count(*) > 1;
+> ```
 
 ---
 
@@ -141,7 +175,9 @@ guests  — pre-seeded master guest list (198 guests)
 rsvp    — live form submissions from the website
 ```
 
-Row-level security is enabled. Public users can read `guests` and insert to `rsvp`.
+Row-level security is enabled, and the final policy set gives the public **no** direct read on either table — the early "Public read guests" policy is dropped later in the same file. Anonymous visitors reach data only through the SECURITY DEFINER RPCs (`lookup_invitation`, `lookup_seats`, `submit_rsvp`, `lookup_my_table`), each of which is scoped to a single invitation code. Full read/write belongs to the two admin emails and the service role.
+
+`guests` also carries a partial unique index on `guest_number` (the roster key) and one on `(table_number, seat_number)` (one guest per seat).
 
 ---
 
