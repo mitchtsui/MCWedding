@@ -89,15 +89,17 @@ GRANT SELECT ON table_occupancy TO authenticated;
 --   SELECT swap_tables(1, 2);
 --   SELECT swap_tables(3, 5);
 --   SELECT swap_tables(6, 7);
---   SELECT swap_tables(9, 8);   -- CONFIRM: 8 was assumed, see note below
+--   SELECT swap_tables(9, 8);
 -- COMMIT;
 
 -- Then check the result:
 --     SELECT * FROM table_occupancy;
 --
--- NOTE on the fourth line: the request read "table 9 guests to table 9",
--- which cannot be a swap. The other three pairs are all left/right mirror
--- images on the floor plan (1|2, 3|5, 6|7), and table 9's mirror is table
--- 8 — so 8 is the assumption. Change it before running if that is wrong.
+-- These four are left/right mirror pairs on the floor plan, so running all
+-- of them flips the top half of the room.
 --
--- To undo any swap, run it again — swapping twice restores the original.
+-- They stay commented out on purpose: this file is safe to re-run to
+-- reinstall the function, and a swap left live here would silently undo
+-- itself on the next run. Copy the block out to run it.
+--
+-- To undo a swap, run it again — swapping twice restores the original.
