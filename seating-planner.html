@@ -382,8 +382,38 @@
     color: var(--text-mid);
     font-weight: 600;
   }
+  .table-header-right {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex-shrink: 0;
+  }
   .table-count { font-size: 0.6rem; letter-spacing: 0.08em; color: var(--text-light); }
   .table-count.at-capacity { color: var(--accent); font-weight: 600; }
+
+  /* Per-table "Empty" — clears every seat back to the unassigned list */
+  .table-clear {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.5rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 2px 6px;
+    border: 1px solid var(--divider);
+    background: transparent;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s;
+  }
+  .table-clear:hover:not(:disabled) {
+    background: var(--error);
+    border-color: var(--error);
+    color: var(--white);
+  }
+  .table-clear:disabled {
+    opacity: 0.35;
+    cursor: default;
+  }
+  @media print { .table-clear { display: none; } }
 
   /* Round table SVG */
   .table-visual { display: flex; justify-content: center; margin-bottom: 0.6rem; }
@@ -768,6 +798,28 @@ async function persistSeat(guestId, tableNumber, seatNumber) {
   return true;
 }
 
+// Same as persistSeat, but for a whole group of guests in one request.
+// Clearing a table one guest at a time would be 12 round trips, and a
+// failure halfway through would leave the table half-emptied.
+async function persistSeats(guestIds, tableNumber, seatNumber) {
+  if (!guestIds.length) return true;
+  setSync('saving', 'Saving…');
+  const { error } = await sb
+    .from('guests')
+    .update({ table_number: tableNumber, seat_number: seatNumber })
+    .in('id', guestIds);
+  if (error) {
+    console.error(error);
+    setSync('error', 'Save failed');
+    await loadGuests();
+    return false;
+  }
+  setSync('saved', 'Saved');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => setSync('', ''), 1200);
+  return true;
+}
+
 function setSync(state, text) {
   const el = document.getElementById('sync');
   el.className = 'sync-indicator ' + (state || '');
@@ -910,7 +962,14 @@ function renderTables() {
       <div class="table-card ${full ? 'full' : ''} ${pos}" id="tc-${t}">
         <div class="table-header">
           <div class="table-name">Table ${t}</div>
-          <div class="table-count ${full ? 'at-capacity' : ''}">${count}/${SEATS_PER_TABLE}</div>
+          <div class="table-header-right">
+            <span class="table-count ${full ? 'at-capacity' : ''}">${count}/${SEATS_PER_TABLE}</span>
+            <button class="table-clear" onclick="clearTable(${t})"
+                    ${count ? '' : 'disabled'}
+                    title="${count ? `Empty table ${t} — sends all ${count} back to unassigned` : 'Table is already empty'}">
+              Empty
+            </button>
+          </div>
         </div>
         <div class="table-visual">
           <svg viewBox="0 0 88 88" width="88" height="88" xmlns="http://www.w3.org/2000/svg">
@@ -1008,6 +1067,33 @@ async function removeFromSeat(guestId) {
   g.seat_number  = null;
   render();
   await persistSeat(guestId, null, null);
+}
+
+// Empty one table: everyone on it goes back to the unassigned list, ready
+// to be re-seated. Nobody is deleted and no RSVP is touched — only their
+// table and seat are cleared.
+async function clearTable(t) {
+  const seated = guests.filter(g => g.table_number === t);
+  if (!seated.length) return;
+
+  const names = seated
+    .slice()
+    .sort((a, b) => (a.seat_number || 0) - (b.seat_number || 0))
+    .map(g => g.name)
+    .join(', ');
+
+  const ok = window.confirm(
+    `Empty Table ${t}?\n\n` +
+    `${seated.length} guest${seated.length === 1 ? '' : 's'} will move back to the ` +
+    `unassigned list so you can re-seat them:\n\n${names}\n\n` +
+    `Nobody is removed from the guest list.`
+  );
+  if (!ok) return;
+
+  const ids = seated.map(g => g.id);
+  seated.forEach(g => { g.table_number = null; g.seat_number = null; });
+  render();
+  await persistSeats(ids, null, null);
 }
 
 // ─── STATS ───
