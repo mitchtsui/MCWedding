@@ -1047,10 +1047,17 @@
     background: var(--bg-card);
   }
   .footer-script {
-    font-family: liana, script;
+    font-family: 'Besotted Love', 'Alex Brush', script;
     font-size: 2.4rem;
     color: var(--olive);
     margin-bottom: 0.5rem;
+    /* No explicit line-height here (unlike .hero-names), so it uses the
+       browser's "normal" — computed from the font's own hhea ascent/descent
+       (Besotted Love declares ~1.6em/~0.4em), which is generous enough on
+       its own to contain the tall loops. The hero needed padding-top:0.48em
+       specifically because it overrides line-height to a tight 1.05; this
+       element doesn't, so it doesn't need the same fix. Verify this holds
+       if a line-height is ever added here. */
   }
   footer p {
     font-family: 'Raleway', sans-serif;

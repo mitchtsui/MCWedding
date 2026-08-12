@@ -53,11 +53,11 @@ All active files live at these paths. Always edit in-place; never create duplica
 ### Typography
 | Role | Font | Notes |
 |------|------|-------|
-| Script / Hero | `'Besotted Love'` (base64 `@font-face`, licensed OTF from the couple) | Used on "Christy & Mitchell" only. Was on "Save the Date" until the two lines swapped roles on 2026-08-12 (same day the font was added) — see below. Falls back to `'Alex Brush'` (still CDN-loaded) if the embedded font ever fails. |
+| Script / Hero | `'Besotted Love'` (base64 `@font-face`, licensed OTF from the couple) | Used on the hero's "Christy & Mitchell" (`.hero-names`) and, since 2026-08-12, also on the footer's "Christy & Mitchell" (`.footer-script`, switched from Liana). Was on "Save the Date" until the two hero lines swapped roles on 2026-08-12 (same day the font was added) — see below. Falls back to `'Alex Brush'` (still CDN-loaded) if the embedded font ever fails. |
 | Body / Headings | `'Cormorant Garamond'` | Serif, weight 300–600. Used for "Save the Date" (small caps label) since the swap — was previously used for "Christy & Mitchell". |
 | Labels / Caps | `'Raleway'` | Sans-serif, spaced uppercase |
 
-Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the file and still used on `.rsvp-success .success-script` and `.seat-card-head .script` — do not remove the `@font-face` block. It has never been used on either hero line.
+Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the file and still used on `.rsvp-success .success-script` and `.seat-card-head .script` — do not remove the `@font-face` block. It has never been used on either hero line, and as of 2026-08-12 is no longer used on the footer either (moved to Besotted Love, see above).
 
 **`Besotted Love`** is a licensed font (Mila Garret Studio, purchased on Creative Market), not a free Google Font — it can't be linked from a CDN. It's embedded the same way Liana is: base64 `@font-face` directly in `wedding-invitation.html`. The embedded copy is subsetted to printable ASCII only (`fonttools subset`, ~253 glyphs, all OpenType layout features retained) rather than the full 377-glyph original, since the hero only ever needs "Christy & Mitchell" plus headroom for a future wording tweak. Source file lives outside the repo (received from the couple as an upload, not committed) — if it needs re-subsetting, ask them for the `.otf` again.
 
@@ -67,6 +67,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 
 1. **`.hero-names` needs `padding-top: 0.48em`.** Besotted Love's own ascent metric is ~1.6em (vs. ~0.8em for a typical script font) — its big loops overshoot a `line-height: 1.05` line box at the top by about 0.44em, measured empirically against actual rendered glyph ink in headless Chromium (not derived from the font's stated metrics, which don't reliably predict visual overshoot). Without this padding, the loops render into the hero photo above. `#home` uses `min-height` not `height`, so a taller `.hero-names` just makes the section taller — it's safe to grow this if the copy or font ever changes again, just re-measure the overshoot first. This value is a font property (ascent metric), not a string property — it does not need re-deriving when the wording changes, only when the font does.
 2. **Mobile `.hero-names` font-size is `clamp(1.5rem, 7.6vw, 3.35rem)`, desktop is `clamp(3.3rem, 7.6vw, 7rem)`.** These are specific to "Christy & Mitchell" (measures 11.36x font-size wide via canvas `measureText`) — different from the 8.75x ratio "Save the Date" measured at when Besotted Love was on that line. Unlike the ascent fix above, **width is a string property and must be re-measured any time the copy on whichever line carries Besotted Love changes.** Don't copy these numbers onto a different string without re-measuring first — that's exactly the mistake that caused the original mobile overflow bug this pattern is meant to prevent.
+
+**`.footer-script` (footer "Christy & Mitchell", switched to Besotted Love 2026-08-12) does NOT need the `padding-top: 0.48em` overshoot fix above.** It has no explicit `line-height` set (base rule or the mobile override), so it uses the browser's default `line-height: normal`, computed from Besotted Love's own hhea ascent/descent (~1.6em + ~0.4em ≈ 2.0em) — generous enough on its own to contain the tall loops. The hero only needs the fix because `.hero-names` overrides `line-height` down to a tight `1.05`. Verified empirically in headless Chromium at both desktop and mobile widths: no overshoot into the Q&A divider above, no width clipping. If a `line-height` is ever added to `.footer-script`, re-check for overshoot.
 
 ### Key CSS Rules to Preserve
 - Hero "Christy & Mitchell": `font-size: clamp(3.3rem, 7.6vw, 7rem)`, olive colour, **Besotted Love** font (moved here from "Save the Date" on 2026-08-12 per user request — the two lines swapped roles, see Typography above)
@@ -252,7 +254,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 ### When working on the website
 - **Always edit `/home/claude/wedding-invitation.html` in place.** Never create `wedding-invitation-v2.html` or similar.
 - **Preserve the Liana `@font-face` block** — it is base64-embedded and still used on the RSVP success screen and seat-lookup card script text. Do not remove it. Liana has never been used on either hero line.
-- **Preserve the Besotted Love `@font-face` block** — it's the only thing rendering "Christy & Mitchell" in script. If it's ever removed, the CSS falls back to Alex Brush (still CDN-loaded) rather than breaking, but that's a visual regression, not something to do on purpose. As of 2026-08-12, `.hero-names` (not `.hero-script`) is the selector that uses it — see the Typography section's note on the two hero lines' swapped roles before changing either.
+- **Preserve the Besotted Love `@font-face` block** — it's the only thing rendering "Christy & Mitchell" in script, both in the hero and (since 2026-08-12) the footer. If it's ever removed, the CSS falls back to Alex Brush (still CDN-loaded) rather than breaking, but that's a visual regression, not something to do on purpose. In the hero, `.hero-names` (not `.hero-script`) is the selector that uses it — see the Typography section's note on the two hero lines' swapped roles before changing either. In the footer, `.footer-script` uses it directly (switched from Liana 2026-08-12).
 - **Always preserve the design tokens** in `:root {}`. Do not introduce new colours outside the palette.
 - **Always copy the finished file** to `/mnt/user-data/outputs/wedding-invitation.html` after edits.
 - **The Peninsula watercolour image** is base64 in the Wedding Day section — do not remove it.
@@ -289,7 +291,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 | Layer | Technology |
 |-------|-----------|
 | Website | Single-file HTML/CSS/JS (no framework, no build step) |
-| Fonts | Liana (base64, RSVP success/seat-card scripts only), Besotted Love (base64, licensed, hero script only), Alex Brush (CDN, hero fallback only) + Cormorant Garamond + Raleway (Google Fonts CDN) |
+| Fonts | Liana (base64, RSVP success/seat-card scripts only), Besotted Love (base64, licensed, hero + footer script), Alex Brush (CDN, hero fallback only) + Cormorant Garamond + Raleway (Google Fonts CDN) |
 | Backend | Supabase (PostgreSQL + REST API) |
 | Hosting | Static file host (e.g. Netlify, Vercel, or direct) |
 | Seating Planner | Single-file HTML/CSS/JS (drag-and-drop, no framework) |
