@@ -77,12 +77,15 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 ### Section Status
 
 #### 🏠 Hero
-- "Our Wedding" in Alex Brush (Google Font), olive, large script
+- Photo band at the top — `photos/og-preview.jpg` (the Paris engagement photo, same file used for the social-share OG image), height capped via `clamp()` rather than full-bleed, fading into the page background at its lower edge via a `::after` gradient. Added 2026-08-12 per user request. Text sits below the photo on solid ground — it is not overlaid on the image.
+  - An earlier attempt (2026-08-08, PR #52) used a different photo as a full-bleed `#home` background behind the text and was reverted the same day. This is a different approach: capped photo band above, text clear of it below.
+- "Our Wedding" in Alex Brush (Google Font), olive, large script — sits below the photo band
 - "CHRISTY & MITCHELL" — Cormorant Garamond, weight 300, near-black
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800
 - Countdown (live, 1s interval, tick animation) — Days / Hours / Minutes / Seconds
-- Peninsula Hotel watercolour illustration as background of Wedding Day section
+- Whole text block (script through countdown) is bottom-anchored (`justify-content: flex-end` on `#home`) rather than vertically centred, so it sits lower on the page near the scroll cue.
+- Peninsula Hotel watercolour illustration as background of Wedding Day section (unrelated section, unchanged)
 
 #### 📖 Our Story
 - Left: slideshow (5 photos, referenced from `photos/our-story/` as file paths — changed from base64 on 2026-08-08 per user request, so photos can be swapped by replacing files in that folder instead of re-embedding base64). Current files: IMG_9838.jpg, IMG_7830.jpg, IMG_0274.jpg, IMG_0318.jpg, IMG_5751.jpg.
