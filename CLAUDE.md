@@ -96,7 +96,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800
 - Countdown (live, 1s interval, tick animation) — Days / Hours / Minutes / Seconds
-- Whole text block (both hero lines through countdown) is vertically centred in the space below the photo (`justify-content: center` on `#home`, changed from `flex-end` 2026-08-12 per user request — "move the whole text upwards"). `#home`'s `padding-top` still reserves exactly the photo's height either way, so centering distributes slack on both sides of the text block rather than only above it; it doesn't reopen the overlap risk.
+- **RSVP button** (`.rsvp-btn.hero-rsvp-btn`, links to `#rsvp`) — added 2026-08-12 per user request ("move the RSVP button to the first landing page"). Sits between the countdown and the "Scroll" hint. Reuses the same `.rsvp-btn` class the Wedding Day section's button used before that section was simplified (see 💒 Wedding Day below) — same look, new location, plus `.hero-rsvp-btn { margin-top: 1.6rem }` for its own spacing.
+- Whole text block (both hero lines through countdown through the RSVP button and Scroll hint) is vertically centred in the space below the photo (`justify-content: center` on `#home`, changed from `flex-end` 2026-08-12 per user request — "move the whole text upwards"). `#home`'s `padding-top` still reserves exactly the photo's height either way, so centering distributes slack on both sides of the text block rather than only above it; it doesn't reopen the overlap risk.
 - Peninsula Hotel watercolour illustration as background of Wedding Day section (unrelated section, unchanged)
 
 #### 📖 Our Story
@@ -112,11 +113,12 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Chambolle stat block removed
 
 #### 💒 Wedding Day
-- Peninsula watercolour illustration as background (`Gemini_Generated_Image_a7h4cya7h4cya7h4.png`, base64)
+- Peninsula watercolour illustration as background, base64-embedded JPEG (`.wedding-bg-wrap`'s `background-image`) — do not remove.
 - Overlay: `rgba(237,230,216,0.72)`
-- NOVEMBER 12 / HONG KONG grid, RSVP button centred below
-- Venue: "The Salisbury Room at The Peninsula Hong Kong" + "Attire: Elegant Evening Attire"
-- Timeline: 17:00–18:00 Guest Arrival / 18:30–19:30 Ceremony / 19:45–23:00 Dinner Reception
+- **2026-08-12: simplified.** The big "NOVEMBER 12 / HONG KONG" date grid and this section's own RSVP button are gone — removed per user request ("remove the current RSVP page... it is not essential anymore"), referring to this section, not the actual `#rsvp` form (which is untouched). In their place: a small eyebrow ("Thursday, 12 November 2026") + `<h2 class="section-title">Wedding <em>Day</em></h2>`, matching the heading pattern every other section uses. Still sits on the watercolour background.
+- Venue: "The Salisbury Room at The Peninsula Hong Kong" + "Attire: Elegant Evening Attire" — kept exactly as before, per explicit user request.
+- Timeline: 17:00–18:00 Guest Arrival / 18:30–19:30 Ceremony / 19:45–23:00 Dinner Reception — kept exactly as before.
+- RSVP's entry point moved to the hero (see 🏠 Hero above) rather than living here.
 
 #### ✈️ Travel
 - Google Maps embed (no API key)
@@ -165,9 +167,16 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 
 ### Mobile Responsive
 - `@media (max-width: 700px)` and `@media (max-width: 390px)`
-- Nav: horizontal scroll strip
+- **Nav (≤700px): fixed bottom tab bar, not the top hamburger.** Changed 2026-08-12 per user request ("move the drop down hamburger list to bottom," matching a reference screenshot of an app-style bottom tab bar). The top `<nav>` is `display:none` entirely below 700px — not simplified, fully hidden — so the hero photo runs full-bleed to the very top of the screen on mobile, same as the reference. Desktop nav (the horizontal bar with the two dropdowns) is completely unchanged; this only affects ≤700px.
+  - Bottom bar markup is `<div class="bottom-nav" id="bottom-nav">` — **must be a `<div>`, not a `<nav>` tag.** It was originally built as `<nav class="bottom-nav">`, which also matched the site's existing bare `nav { position:fixed; top:0; ... }` tag selector (for the TOP bar). With both `top:0` (inherited from the tag selector) and `bottom:0` (from the `.bottom-nav` class) applying to the same fixed element, it stretched to fill the entire viewport height instead of sitting as a slim bar at the bottom. Don't rename it back to `<nav>` without also giving it an explicit `top: auto` — or just leave it a `<div>`, which sidesteps the collision entirely.
+  - 5 tabs: Home, Wedding Day ("Day"), Gallery, RSVP — each a plain `<a href="#section">` — plus a 5th **More** button (`<button id="more-tab" onclick="toggleMoreModal()">`) that opens `#more-modal`, a bottom-sheet-style overlay listing the four sections that don't have their own tab: Our Story, Chambolle, Travel, Q&A. Modal pattern copied from `.fp-modal` (the floor-plan modal) for visual consistency — fixed, backdrop, centred card, close button.
+  - Active tab state piggybacks on the existing scroll-spy handler (the same `window.addEventListener('scroll', ...)` that already highlights the top nav's active link) — extended to also toggle `.active` on `.bottom-tab[data-tab]` elements matching the current section. The More button has no `data-tab`, so it's never marked active by scroll position — expected, not a bug.
+  - **The Home tab's `active` class is hardcoded in the HTML** (`class="bottom-tab active"`), not left to JS — the scroll-spy handler only runs on an actual `scroll` event, so without this, no tab shows as active until the user scrolls at least once after page load. This matches the existing pattern already used on the top nav's Home link (`class="nav-link active"` is hardcoded there too) — don't remove it thinking JS will handle it on load, it won't.
+  - The More button is a `<button>` (the other four are `<a>`) and picked up a native focus-ring outline that the `<a>` tabs don't get, making it look like a stray "active" state even when untouched. Fixed with `.bottom-tab { outline: none }` plus a proper `.bottom-tab:focus-visible` style so real keyboard navigation still shows a focus indicator — don't just strip the outline without adding that back.
+  - `body { padding-bottom: 72px }` on mobile reserves room so the fixed bar never covers the last section's content.
+  - The Chambolle easter-egg's mobile resting positions (`.chambolle-toggle` and all three `.chambolle-egg.pos-*` overrides) moved from `bottom: 14px` to `bottom: 84px` to clear the new bar — they used to sit exactly where the bottom-nav now lives. If the bar's height ever changes, re-check this clearance.
 - All grids → single column
-- Easter egg: 90px image, adjusted margins
+- Easter egg: 90px image, adjusted margins (see bottom-nav clearance note above)
 - Touch swipe on slideshows + lightbox
 - PWA meta: `theme-color`, `apple-mobile-web-app-capable`
 
