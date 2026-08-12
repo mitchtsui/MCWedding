@@ -53,14 +53,21 @@ All active files live at these paths. Always edit in-place; never create duplica
 ### Typography
 | Role | Font | Notes |
 |------|------|-------|
-| Script / Hero | `'Alex Brush'` (Google Fonts CDN) | Used on "Our Wedding" only. Replaced Liana here on 2026-08-07. |
+| Script / Hero | `'Besotted Love'` (base64 `@font-face`, licensed OTF from the couple) | Used on "Save the Date" only. Replaced Alex Brush here on 2026-08-12. Falls back to `'Alex Brush'` (still CDN-loaded) if the embedded font ever fails. |
 | Body / Headings | `'Cormorant Garamond'` | Serif, weight 300–600 |
 | Labels / Caps | `'Raleway'` | Sans-serif, spaced uppercase |
 
-Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the file and still used on `.rsvp-success .success-script` and `.seat-card-head .script` — do not remove the `@font-face` block. It was only replaced on the hero "Our Wedding" text.
+Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the file and still used on `.rsvp-success .success-script` and `.seat-card-head .script` — do not remove the `@font-face` block. It was only replaced on the hero "Save the Date" text.
+
+**`Besotted Love`** is a licensed font (Mila Garret Studio, purchased on Creative Market), not a free Google Font — it can't be linked from a CDN. It's embedded the same way Liana is: base64 `@font-face` directly in `wedding-invitation.html`. The embedded copy is subsetted to printable ASCII only (`fonttools subset`, ~253 glyphs, all OpenType layout features retained) rather than the full 377-glyph original, since the hero only ever needs "Save the Date" plus headroom for a future wording tweak. Source file lives outside the repo (received from the couple as an upload, not committed) — if it needs re-subsetting, ask them for the `.otf` again.
+
+⚠️ **Two non-obvious things this font requires that a normal script font wouldn't — do not remove either without re-measuring:**
+
+1. **`.hero-script` needs `padding-top: 0.48em`.** Besotted Love's own ascent metric is ~1.6em (vs. ~0.8em for a typical script font) — its big loops overshoot a `line-height: 1.05` line box at the top by about 0.44em, measured empirically against actual rendered glyph ink in headless Chromium (not derived from the font's stated metrics, which don't reliably predict visual overshoot). Without this padding, the loops render into the hero photo above. `#home` uses `min-height` not `height`, so a taller `.hero-script` just makes the section taller — it's safe to grow this if the copy or font ever changes again, just re-measure the overshoot first.
+2. **Mobile `.hero-script` font-size is `clamp(1.9rem, 9.6vw, 4.3rem)`, not the `16vw`/`13vw` values used before.** Besotted Love's connected swash letterforms measure ~8.75x font-size wide for "Save the Date" (Alex Brush was ~5.6x — about 1.55x narrower per character), measured via canvas `measureText`. The old mobile values were tuned for Alex Brush and overflowed the viewport horizontally below ~700px with this font. If the hero copy changes, re-measure the width ratio for the new string before reusing these clamp values — they're specific to "Save the Date" in this font, not a general-purpose formula.
 
 ### Key CSS Rules to Preserve
-- Hero "Our Wedding": `font-size: clamp(4rem,9vw,7rem)`, olive colour, **Alex Brush** font (was Liana — changed 2026-08-07 per user request)
+- Hero "Save the Date": `font-size: clamp(4rem,9vw,7rem)`, olive colour, **Besotted Love** font (was Alex Brush — changed 2026-08-12 per user request)
 - "CHRISTY & MITCHELL": near-black `#1A1A14`, Cormorant Garamond, weight 300
 - "and Chambolle": Rose Bisque `#B89AA4`, half font size, centred with line rules
 - Date line "NOVEMBER 12, 2026 · HONG KONG": black `#1A1A14`, weight 800
@@ -81,7 +88,7 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
   - `hero-paris.jpg` is a 2000×1498 web export of `photos/gallery/20260609-ChristyandMitchParisPW-320.jpg` (the full-resolution original from the shoot). `photos/og-preview.jpg` is a separate, smaller 1200×630 crop of the *same photo*, used only for the social-share meta tags (`og:image`/`twitter:image`) — the two files now serve different purposes and both should stay.
   - An earlier attempt (2026-08-08, PR #52) used a different photo as a full-bleed `#home` background behind the text and was reverted the same day. This is a different approach: capped photo band above, text clear of it below.
   - **Important:** `.hero-photo` is `position: absolute`, so it sits outside `#home`'s flex flow — nothing about the flex layout guarantees the bottom-anchored text won't ride up underneath it. `#home`'s `padding-top` is set to `var(--hero-photo-h)` (the same `clamp()` the photo's height uses) specifically to reserve that space, so the flex content area starts exactly at the photo's bottom edge and `justify-content: flex-end` can never pack text above it, regardless of how long the wording is. This is the real fix — don't decouple `padding-top` from `--hero-photo-h` again. There used to be a `::after` gradient fading the photo into the background; it incidentally hid an overlap that existed even before this fix (the gradient masked it, it didn't prevent it). Removed 2026-08-12 per user request, which is what surfaced the bug — changing "Our Wedding" to "Save the Date" in the same request just made the pre-existing overlap visible instead of causing it.
-- "Save the Date" in Alex Brush (Google Font), olive, large script — sits below the photo band. Changed from "Our Wedding" 2026-08-12 per user request.
+- "Save the Date" in Besotted Love (licensed, base64-embedded), olive, large script — sits below the photo band. Text changed from "Our Wedding" 2026-08-12; font changed from Alex Brush to Besotted Love the same day, both per user request. See the Typography section above for the two width/overshoot fixes this font specifically required.
 - "CHRISTY & MITCHELL" — Cormorant Garamond, weight 300, near-black
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800
@@ -232,7 +239,8 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 
 ### When working on the website
 - **Always edit `/home/claude/wedding-invitation.html` in place.** Never create `wedding-invitation-v2.html` or similar.
-- **Preserve the Liana `@font-face` block** — it is base64-embedded and still used on the RSVP success screen and seat-lookup card script text. Do not remove it. As of 2026-08-07, the hero "Our Wedding" text no longer uses Liana — it uses 'Alex Brush' (Google Fonts CDN) per explicit user request; don't revert that without asking.
+- **Preserve the Liana `@font-face` block** — it is base64-embedded and still used on the RSVP success screen and seat-lookup card script text. Do not remove it. As of 2026-08-07, the hero text no longer uses Liana — it uses 'Besotted Love' (base64-embedded, changed from 'Alex Brush' on 2026-08-12) per explicit user request; don't revert that without asking.
+- **Preserve the Besotted Love `@font-face` block** alongside Liana's — same reasoning, it's the only thing rendering the hero script text. If it's ever removed, the CSS falls back to Alex Brush (still CDN-loaded) rather than breaking, but that's a visual regression, not something to do on purpose.
 - **Always preserve the design tokens** in `:root {}`. Do not introduce new colours outside the palette.
 - **Always copy the finished file** to `/mnt/user-data/outputs/wedding-invitation.html` after edits.
 - **The Peninsula watercolour image** is base64 in the Wedding Day section — do not remove it.
@@ -269,7 +277,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 | Layer | Technology |
 |-------|-----------|
 | Website | Single-file HTML/CSS/JS (no framework, no build step) |
-| Fonts | Liana (base64, RSVP success/seat-card scripts only), Alex Brush + Cormorant Garamond + Raleway (Google Fonts CDN) |
+| Fonts | Liana (base64, RSVP success/seat-card scripts only), Besotted Love (base64, licensed, hero script only), Alex Brush (CDN, hero fallback only) + Cormorant Garamond + Raleway (Google Fonts CDN) |
 | Backend | Supabase (PostgreSQL + REST API) |
 | Hosting | Static file host (e.g. Netlify, Vercel, or direct) |
 | Seating Planner | Single-file HTML/CSS/JS (drag-and-drop, no framework) |
