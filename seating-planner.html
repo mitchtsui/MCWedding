@@ -223,6 +223,68 @@
   }
   .search-input:focus { border-color: var(--text-mid); }
 
+  /* ─── MULTI-SELECT ─── */
+  .select-hint {
+    font-size: 0.55rem;
+    letter-spacing: 0.06em;
+    color: var(--text-light);
+    margin-top: 0.5rem;
+  }
+  .sel-all-btn {
+    margin-top: 0.4rem;
+    width: 100%;
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    padding: 0.35rem;
+    border: 1px solid var(--divider);
+    background: transparent;
+    color: var(--text-mid);
+    cursor: pointer;
+  }
+  .sel-all-btn:hover { background: var(--bg-card); }
+
+  /* Shown only while something is selected */
+  .sel-bar { display: none; margin-top: 0.5rem; }
+  .sel-bar.open { display: block; }
+  .sel-count {
+    font-size: 0.6rem;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    font-weight: 600;
+    margin-bottom: 0.35rem;
+  }
+  .sel-actions { display: flex; flex-wrap: wrap; gap: 0.3rem; }
+  .sel-select, .sel-btn {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.55rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 0.35rem 0.4rem;
+    border: 1px solid var(--divider);
+    background: var(--bg-card);
+    color: var(--text-mid);
+    cursor: pointer;
+  }
+  .sel-select { flex: 1 1 100%; }
+  .sel-btn { flex: 1; }
+  .sel-btn:hover { background: var(--text); color: var(--bg); }
+
+  .guest-item.selected {
+    border-color: var(--accent);
+    background: var(--drag-over);
+    opacity: 1;
+  }
+  .guest-item.selected .guest-name { font-weight: 600; }
+
+  /* Whole-table drop target for a multi-guest drag */
+  .table-card.drag-over-card {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 2px var(--drag-over);
+  }
+
   .guest-list {
     flex: 1;
     overflow-y: auto;
@@ -585,6 +647,18 @@
           <button class="filter-chip" data-filter="seated" onclick="setFilter('seated')">Seated</button>
         </div>
         <input type="text" class="search-input" id="search-input" placeholder="Search by name…" oninput="renderSidebar()">
+        <div class="select-hint" id="select-hint">Click to select · Shift-click for a range</div>
+        <div class="sel-bar" id="sel-bar">
+          <div class="sel-count"><span id="sel-count-n">0</span> selected</div>
+          <div class="sel-actions">
+            <select class="sel-select" id="sel-table" onchange="seatSelectionFromPicker()">
+              <option value="">Seat at table…</option>
+            </select>
+            <button class="sel-btn" onclick="unassignSelection()">Unassign</button>
+            <button class="sel-btn" onclick="clearSelection()">Clear</button>
+          </div>
+        </div>
+        <button class="sel-all-btn" id="sel-all-btn" onclick="toggleSelectAllShown()">Select all shown</button>
       </div>
       <div class="guest-list" id="guest-list"
         ondragover="event.preventDefault()"
@@ -645,7 +719,153 @@ let sb = null;          // supabase client
 let session = null;     // auth session
 let guests = [];        // [{ id, name, group_name, side, rsvp_status, table_number, seat_number, ... }]
 let filter = 'unassigned';
-let dragData = null;    // { guestId, fromTable, fromSeat }
+let dragData = null;    // { guestIds: [...], fromTable, fromSeat }
+
+// ─── MULTI-SELECT ───
+// Selected guest ids, plus the flat order the sidebar last rendered them
+// in, which is what shift-click ranges are measured against.
+let selection      = new Set();
+let sidebarOrder   = [];
+let lastClickedGid = null;
+
+function selectedGuests() {
+  return [...selection].map(id => guests.find(g => g.id === id)).filter(Boolean);
+}
+
+function clearSelection() {
+  selection.clear();
+  lastClickedGid = null;
+  render();
+}
+
+function toggleGuestSelection(gid, shiftKey) {
+  if (shiftKey && lastClickedGid && lastClickedGid !== gid) {
+    const a = sidebarOrder.indexOf(lastClickedGid);
+    const b = sidebarOrder.indexOf(gid);
+    if (a !== -1 && b !== -1) {
+      const [from, to] = a < b ? [a, b] : [b, a];
+      for (let i = from; i <= to; i++) selection.add(sidebarOrder[i]);
+      lastClickedGid = gid;
+      render();
+      return;
+    }
+  }
+  if (selection.has(gid)) selection.delete(gid);
+  else selection.add(gid);
+  lastClickedGid = gid;
+  render();
+}
+
+function toggleSelectAllShown() {
+  const allShown = sidebarOrder.length > 0 && sidebarOrder.every(id => selection.has(id));
+  if (allShown) sidebarOrder.forEach(id => selection.delete(id));
+  else sidebarOrder.forEach(id => selection.add(id));
+  render();
+}
+
+// Seats free at a table. Guests passed in `ignore` are treated as already
+// standing up, so re-seating people who are at that table already works.
+function freeSeatsAt(t, ignore) {
+  const skip = new Set((ignore || []).map(g => g.id));
+  const taken = new Set(
+    guests.filter(g => g.table_number === t && !skip.has(g.id)).map(g => g.seat_number)
+  );
+  const free = [];
+  for (let s = 1; s <= SEATS_PER_TABLE; s++) if (!taken.has(s)) free.push(s);
+  return free;
+}
+
+function refreshSelectionUI() {
+  const bar = document.getElementById('sel-bar');
+  const n   = document.getElementById('sel-count-n');
+  const btn = document.getElementById('sel-all-btn');
+  const sel = document.getElementById('sel-table');
+  if (!bar) return;
+
+  bar.classList.toggle('open', selection.size > 0);
+  if (n) n.textContent = selection.size;
+
+  if (btn) {
+    const allShown = sidebarOrder.length > 0 && sidebarOrder.every(id => selection.has(id));
+    btn.textContent = allShown ? 'Deselect all shown' : `Select all shown (${sidebarOrder.length})`;
+  }
+
+  // Table picker, annotated with how many seats each table has free
+  if (sel) {
+    const chosen = selectedGuests();
+    const opts = ['<option value="">Seat at table…</option>'];
+    TABLE_NUMBERS.forEach(t => {
+      const free = freeSeatsAt(t, chosen).length;
+      opts.push(
+        `<option value="${t}"${free === 0 ? ' disabled' : ''}>` +
+        `Table ${t} — ${free} free</option>`
+      );
+    });
+    sel.innerHTML = opts.join('');
+    sel.value = '';
+  }
+}
+
+// Move a set of guests onto a table, filling free seats. Returns the
+// number actually seated, which can be fewer than asked if the table
+// fills up.
+async function seatGuestsAtTable(movers, t, preferredStart) {
+  if (!movers.length) return 0;
+
+  let free = freeSeatsAt(t, movers);
+  if (preferredStart) {
+    free = free.filter(s => s >= preferredStart).concat(free.filter(s => s < preferredStart));
+  }
+
+  const n = Math.min(free.length, movers.length);
+  if (n === 0) {
+    window.alert(`Table ${t} is full — nobody was moved.`);
+    return 0;
+  }
+  if (n < movers.length) {
+    const ok = window.confirm(
+      `Table ${t} only has ${n} free seat${n === 1 ? '' : 's'}, ` +
+      `but ${movers.length} guests are selected.\n\n` +
+      `Seat the first ${n} and leave the rest where they are?`
+    );
+    if (!ok) return 0;
+  }
+
+  const taking = movers.slice(0, n);
+  const plan   = taking.map((g, i) => ({ id: g.id, table: t, seat: free[i] }));
+
+  // Optimistic local update
+  taking.forEach((g, i) => { g.table_number = t; g.seat_number = free[i]; });
+  render();
+
+  // Two phases, because a mover's current seat may be the very seat
+  // another mover is heading for. Vacate everyone first, then place them.
+  const ok1 = await persistSeats(taking.map(g => g.id), null, null);
+  if (!ok1) return 0;
+  await persistAssignments(plan);
+  return n;
+}
+
+async function seatSelectionFromPicker() {
+  const sel = document.getElementById('sel-table');
+  const t = parseInt(sel?.value, 10);
+  if (!t) return;
+  const movers = selectedGuests()
+    .sort((a, b) => (a.guest_number || 0) - (b.guest_number || 0));
+  const n = await seatGuestsAtTable(movers, t, null);
+  if (n > 0) clearSelection(); else refreshSelectionUI();
+}
+
+async function unassignSelection() {
+  const movers = selectedGuests().filter(g => g.table_number != null);
+  if (!movers.length) { clearSelection(); return; }
+  movers.forEach(g => { g.table_number = null; g.seat_number = null; });
+  const ids = movers.map(g => g.id);
+  selection.clear();
+  lastClickedGid = null;
+  render();
+  await persistSeats(ids, null, null);
+}
 let saveTimer = null;
 
 const AVATAR_COLORS = [
@@ -820,6 +1040,30 @@ async function persistSeats(guestIds, tableNumber, seatNumber) {
   return true;
 }
 
+// Writes a batch of distinct (table, seat) assignments. Every target seat
+// must already be free — the callers vacate first — so these can run
+// concurrently without tripping the (table_number, seat_number) unique index.
+async function persistAssignments(list) {
+  if (!list.length) return true;
+  setSync('saving', 'Saving…');
+  const results = await Promise.all(list.map(a =>
+    sb.from('guests')
+      .update({ table_number: a.table, seat_number: a.seat })
+      .eq('id', a.id)
+  ));
+  const failed = results.find(r => r.error);
+  if (failed) {
+    console.error(failed.error);
+    setSync('error', 'Save failed');
+    await loadGuests();
+    return false;
+  }
+  setSync('saved', 'Saved');
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(() => setSync('', ''), 1200);
+  return true;
+}
+
 function setSync(state, text) {
   const el = document.getElementById('sync');
   el.className = 'sync-indicator ' + (state || '');
@@ -856,6 +1100,8 @@ function renderSidebar() {
 
   if (pool.length === 0) {
     container.innerHTML = '<div class="group-label" style="opacity:0.6;">No guests match.</div>';
+    sidebarOrder = [];
+    refreshSelectionUI();
     return;
   }
 
@@ -866,6 +1112,8 @@ function renderSidebar() {
     groups[k].push(g);
   });
 
+  sidebarOrder = [];
+
   ['女方', '男方', 'Other'].forEach(k => {
     if (groups[k].length === 0) return;
     const label = k === '女方' ? "Christy's side" : (k === '男方' ? "Mitchell's side" : 'Other');
@@ -873,8 +1121,9 @@ function renderSidebar() {
     groups[k].forEach(g => {
       const seated = g.table_number != null;
       const seatLabel = seated ? `T${g.table_number}·S${g.seat_number ?? '?'}` : '';
+      sidebarOrder.push(g.id);
       container.innerHTML += `
-        <div class="guest-item ${seated ? 'seated' : ''}"
+        <div class="guest-item ${seated ? 'seated' : ''} ${selection.has(g.id) ? 'selected' : ''}"
              data-gid="${g.id}" draggable="true">
           <div class="guest-avatar" style="background:${avatarColor(g.name)}">${initials(g.name)}</div>
           <div class="guest-name">${escHtml(g.name)}</div>
@@ -885,14 +1134,29 @@ function renderSidebar() {
 
   container.querySelectorAll('.guest-item').forEach(el => {
     const gid = el.dataset.gid;
+
+    el.addEventListener('click', e => {
+      e.preventDefault();
+      toggleGuestSelection(gid, e.shiftKey);
+    });
+
     el.addEventListener('dragstart', e => {
+      // Dragging a selected guest drags the whole selection; dragging an
+      // unselected one drags just that guest and leaves the selection be.
+      const ids = selection.has(gid) && selection.size > 1 ? [...selection] : [gid];
       const g = guests.find(x => x.id === gid);
-      dragData = { guestId: gid, fromTable: g?.table_number ?? null, fromSeat: g?.seat_number ?? null };
+      dragData = {
+        guestIds: ids,
+        fromTable: ids.length === 1 ? (g?.table_number ?? null) : null,
+        fromSeat:  ids.length === 1 ? (g?.seat_number  ?? null) : null
+      };
       setTimeout(() => el.classList.add('dragging'), 0);
       e.dataTransfer.effectAllowed = 'move';
     });
     el.addEventListener('dragend', () => el.classList.remove('dragging'));
   });
+
+  refreshSelectionUI();
 }
 
 function renderTables() {
@@ -959,7 +1223,10 @@ function renderTables() {
     }
 
     grid.innerHTML += `
-      <div class="table-card ${full ? 'full' : ''} ${pos}" id="tc-${t}">
+      <div class="table-card ${full ? 'full' : ''} ${pos}" id="tc-${t}"
+           ondragover="tableDragOver(event,${t})"
+           ondragleave="tableDragLeave(event,${t})"
+           ondrop="dropOnTable(event,${t})">
         <div class="table-header">
           <div class="table-name">Table ${t}</div>
           <div class="table-header-right">
@@ -986,7 +1253,12 @@ function renderTables() {
 
 // ─── DRAG / DROP ───
 function seatDragStart(e, gid, tableNum, seatNum) {
-  dragData = { guestId: gid, fromTable: tableNum, fromSeat: seatNum };
+  const ids = selection.has(gid) && selection.size > 1 ? [...selection] : [gid];
+  dragData = {
+    guestIds: ids,
+    fromTable: ids.length === 1 ? tableNum : null,
+    fromSeat:  ids.length === 1 ? seatNum  : null
+  };
   e.dataTransfer.effectAllowed = 'move';
   e.target.classList.add('dragging');
   e.stopPropagation();
@@ -1005,12 +1277,26 @@ function seatDragLeave(e, tableNum, seatNum) {
 
 async function dropOnSeat(e, tableNum, seatNum) {
   e.preventDefault();
+  e.stopPropagation();   // don't also fire the table card's drop handler
   document.querySelector(`.seat-slot[data-table="${tableNum}"][data-seat="${seatNum}"]`)?.classList.remove('drag-over');
   if (!dragData) return;
 
-  const { guestId, fromTable, fromSeat } = dragData;
+  const { guestIds, fromTable, fromSeat } = dragData;
   dragData = null;
 
+  // Several guests at once: fill free seats from here onwards rather than
+  // trying to swap, which only makes sense one-for-one.
+  if (guestIds.length > 1) {
+    const movers = guestIds
+      .map(id => guests.find(g => g.id === id))
+      .filter(Boolean)
+      .sort((a, b) => (a.guest_number || 0) - (b.guest_number || 0));
+    const n = await seatGuestsAtTable(movers, tableNum, seatNum);
+    if (n > 0) clearSelection();
+    return;
+  }
+
+  const guestId = guestIds[0];
   if (fromTable === tableNum && fromSeat === seatNum) return; // dropped on self
 
   const movingGuest = guests.find(g => g.id === guestId);
@@ -1048,16 +1334,44 @@ async function dropOnSeat(e, tableNum, seatNum) {
 async function dropOnSidebar(e) {
   e.preventDefault();
   if (!dragData) return;
-  const { guestId } = dragData;
+  const { guestIds } = dragData;
   dragData = null;
 
-  const g = guests.find(x => x.id === guestId);
-  if (!g || g.table_number == null) return;
+  const movers = guestIds
+    .map(id => guests.find(x => x.id === id))
+    .filter(g => g && g.table_number != null);
+  if (!movers.length) return;
 
-  g.table_number = null;
-  g.seat_number  = null;
+  movers.forEach(g => { g.table_number = null; g.seat_number = null; });
+  if (movers.length > 1) { selection.clear(); lastClickedGid = null; }
   render();
-  await persistSeat(guestId, null, null);
+  await persistSeats(movers.map(g => g.id), null, null);
+}
+
+// Whole-card drop target, so a multi-guest drag can land anywhere on a
+// table rather than needing to hit an exact seat.
+function tableDragOver(e, t) {
+  if (!dragData) return;
+  e.preventDefault();
+  document.getElementById('tc-' + t)?.classList.add('drag-over-card');
+}
+function tableDragLeave(e, t) {
+  document.getElementById('tc-' + t)?.classList.remove('drag-over-card');
+}
+async function dropOnTable(e, t) {
+  e.preventDefault();
+  document.getElementById('tc-' + t)?.classList.remove('drag-over-card');
+  if (!dragData) return;
+
+  const { guestIds } = dragData;
+  dragData = null;
+
+  const movers = guestIds
+    .map(id => guests.find(g => g.id === id))
+    .filter(Boolean)
+    .sort((a, b) => (a.guest_number || 0) - (b.guest_number || 0));
+  const n = await seatGuestsAtTable(movers, t, null);
+  if (n > 0 && guestIds.length > 1) clearSelection();
 }
 
 async function removeFromSeat(guestId) {
