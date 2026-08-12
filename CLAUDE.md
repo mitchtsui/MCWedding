@@ -77,7 +77,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 ### Section Status
 
 #### 🏠 Hero
-- Photo band at the top — `photos/og-preview.jpg` (the Paris engagement photo, same file used for the social-share OG image), height capped via `clamp()` rather than full-bleed, fading into the page background at its lower edge via a `::after` gradient. Added 2026-08-12 per user request. Text sits below the photo on solid ground — it is not overlaid on the image.
+- Photo band at the top — `photos/hero-paris.jpg`, height capped via `clamp()` rather than full-bleed, fading into the page background at its lower edge via a `::after` gradient. Added 2026-08-12 per user request. Text sits below the photo on solid ground — it is not overlaid on the image.
+  - `hero-paris.jpg` is a 2000×1498 web export of `photos/gallery/20260609-ChristyandMitchParisPW-320.jpg` (the full-resolution original from the shoot). `photos/og-preview.jpg` is a separate, smaller 1200×630 crop of the *same photo*, used only for the social-share meta tags (`og:image`/`twitter:image`) — the two files now serve different purposes and both should stay.
   - An earlier attempt (2026-08-08, PR #52) used a different photo as a full-bleed `#home` background behind the text and was reverted the same day. This is a different approach: capped photo band above, text clear of it below.
 - "Our Wedding" in Alex Brush (Google Font), olive, large script — sits below the photo band
 - "CHRISTY & MITCHELL" — Cormorant Garamond, weight 300, near-black
