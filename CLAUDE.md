@@ -77,10 +77,11 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 ### Section Status
 
 #### 🏠 Hero
-- Photo band at the top — `photos/hero-paris.jpg`, height capped via `clamp()` rather than full-bleed, fading into the page background at its lower edge via a `::after` gradient. Added 2026-08-12 per user request. Text sits below the photo on solid ground — it is not overlaid on the image.
+- Photo band at the top — `photos/hero-paris.jpg`, height capped via `clamp()` rather than full-bleed. Added 2026-08-12 per user request. Text sits below the photo on solid ground, hard edge (no fade — removed 2026-08-12 per user request).
   - `hero-paris.jpg` is a 2000×1498 web export of `photos/gallery/20260609-ChristyandMitchParisPW-320.jpg` (the full-resolution original from the shoot). `photos/og-preview.jpg` is a separate, smaller 1200×630 crop of the *same photo*, used only for the social-share meta tags (`og:image`/`twitter:image`) — the two files now serve different purposes and both should stay.
   - An earlier attempt (2026-08-08, PR #52) used a different photo as a full-bleed `#home` background behind the text and was reverted the same day. This is a different approach: capped photo band above, text clear of it below.
-- "Our Wedding" in Alex Brush (Google Font), olive, large script — sits below the photo band
+  - **Important:** `.hero-photo` is `position: absolute`, so it sits outside `#home`'s flex flow — nothing about the flex layout guarantees the bottom-anchored text won't ride up underneath it. `#home`'s `padding-top` is set to `var(--hero-photo-h)` (the same `clamp()` the photo's height uses) specifically to reserve that space, so the flex content area starts exactly at the photo's bottom edge and `justify-content: flex-end` can never pack text above it, regardless of how long the wording is. This is the real fix — don't decouple `padding-top` from `--hero-photo-h` again. There used to be a `::after` gradient fading the photo into the background; it incidentally hid an overlap that existed even before this fix (the gradient masked it, it didn't prevent it). Removed 2026-08-12 per user request, which is what surfaced the bug — changing "Our Wedding" to "Save the Date" in the same request just made the pre-existing overlap visible instead of causing it.
+- "Save the Date" in Alex Brush (Google Font), olive, large script — sits below the photo band. Changed from "Our Wedding" 2026-08-12 per user request.
 - "CHRISTY & MITCHELL" — Cormorant Garamond, weight 300, near-black
 - "and Chambolle" — Rose Bisque, half size, with line rules
 - Date / location — black, weight 800

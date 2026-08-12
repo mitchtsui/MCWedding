@@ -171,13 +171,22 @@
 
   /* ─── HERO ─── */
   #home {
+    --hero-photo-h: clamp(260px, 46vh, 520px);
     min-height: 100vh;
     display: flex;
     flex-direction: column;
     justify-content: flex-end;   /* the wording sits along the bottom edge */
     align-items: center;
     text-align: center;
-    padding-top: 80px;
+    /* Reserves exactly the photo's height, not just nav clearance, so the
+       bottom-anchored text can never be packed up underneath the image —
+       .hero-photo is position:absolute and so sits outside this flex flow;
+       without this the two are positioned independently and can collide
+       (they did: without a fade to hide it, "Save the Date" overlapped
+       the photo by ~18px on a 1440x900 viewport). The nav is fixed and
+       overlays the photo directly, so no separate nav clearance is needed
+       here. */
+    padding-top: var(--hero-photo-h);
     padding-bottom: clamp(2rem, 6vh, 4rem);
     position: relative;
     overflow: hidden;
@@ -196,7 +205,7 @@
   .hero-photo {
     position: absolute;
     top: 0; left: 0; right: 0;
-    height: clamp(260px, 46vh, 520px);
+    height: var(--hero-photo-h);
     overflow: hidden;
     z-index: 0;
   }
@@ -206,16 +215,6 @@
     object-fit: cover;
     object-position: center 30%;   /* keeps their faces in frame */
     display: block;
-  }
-  /* Fades the photo into the page background so the text below sits on
-     solid ground, not on the image. */
-  .hero-photo::after {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: linear-gradient(to bottom,
-      transparent 55%,
-      var(--bg) 96%);
   }
   /* Hero text sits above the photo layer and clear of it */
   #home > *:not(.hero-photo) { position: relative; z-index: 1; }
@@ -1078,8 +1077,7 @@
     /* Photo occupies the upper screen; the wording sits along the bottom.
        Slightly more bottom padding than desktop so the block clears the
        home-indicator area on a phone. */
-    #home { padding-top: 70px; padding-bottom: 2.6rem; }
-    .hero-photo { height: clamp(220px, 38vh, 380px); }
+    #home { --hero-photo-h: clamp(220px, 38vh, 380px); padding-top: var(--hero-photo-h); padding-bottom: 2.6rem; }
     .hero-script { font-size: clamp(3rem, 16vw, 4.5rem); margin-bottom: 0.8rem; }
     .hero-names  { font-size: clamp(1.2rem, 6vw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; }
     .hero-chambolle { font-size: 0.8rem; letter-spacing: 0.18em; margin-top: 0.5rem; }
@@ -1259,7 +1257,7 @@
   <div class="hero-photo">
     <img src="photos/hero-paris.jpg" width="2000" height="1498" alt="Christy and Mitchell laughing together on a street in Paris" fetchpriority="high">
   </div>
-  <div class="hero-script">Our Wedding</div>
+  <div class="hero-script">Save the Date</div>
   <div class="hero-names">Christy &amp; Mitchell</div>
   <div class="hero-chambolle">and Chambolle</div>
   <div class="hero-meta">
