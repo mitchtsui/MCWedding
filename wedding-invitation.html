@@ -584,8 +584,24 @@
   #wedding-day { background: var(--bg); }
   /* Wedding background wrapper */
   .wedding-bg-wrap {
-    padding-top: 3rem;
-    padding-bottom: 3rem;
+    position: relative;
+    overflow: hidden;
+    padding-top: 5rem;
+    padding-bottom: 5rem;
+    background-image: url('photos/wedding-day-garden.png');
+    background-size: cover;
+    background-position: center 85%;
+  }
+  .wedding-bg-wrap::before {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: rgba(237,230,216,0.72);
+    z-index: 0;
+  }
+  .wedding-bg-wrap > div {
+    position: relative;
+    z-index: 1;
   }
 
   .rsvp-btn {
