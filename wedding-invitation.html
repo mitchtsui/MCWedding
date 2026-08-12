@@ -182,17 +182,19 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: flex-end;   /* the wording sits along the bottom edge */
+    justify-content: center;   /* whole text block centred in the space below the photo */
     align-items: center;
     text-align: center;
     /* Reserves exactly the photo's height, not just nav clearance, so the
-       bottom-anchored text can never be packed up underneath the image —
-       .hero-photo is position:absolute and so sits outside this flex flow;
-       without this the two are positioned independently and can collide
-       (they did: without a fade to hide it, "Save the Date" overlapped
-       the photo by ~18px on a 1440x900 viewport). The nav is fixed and
-       overlays the photo directly, so no separate nav clearance is needed
-       here. */
+       text can never be packed up underneath the image — .hero-photo is
+       position:absolute and so sits outside this flex flow; without this
+       the two are positioned independently and can collide (they did:
+       without a fade to hide it, "Save the Date" overlapped the photo by
+       ~18px on a 1440x900 viewport). This guarantee holds regardless of
+       justify-content — center still measures the available space from
+       here down, it just distributes any slack on both sides instead of
+       only above. The nav is fixed and overlays the photo directly, so no
+       separate nav clearance is needed here. */
     padding-top: var(--hero-photo-h);
     padding-bottom: clamp(2rem, 6vh, 4rem);
     position: relative;
@@ -225,26 +227,11 @@
   }
   /* Hero text sits above the photo layer and clear of it */
   #home > *:not(.hero-photo) { position: relative; z-index: 1; }
+  /* Small caps label — was hero-names' treatment before "Save the Date"
+     and "Christy & Mitchell" swapped roles on 2026-08-12. Font/size/case
+     moved with the role, not the element: whichever line comes first and
+     plays the small-caps label now carries this. */
   .hero-script {
-    font-family: 'Besotted Love', 'Alex Brush', script;
-    font-size: clamp(4rem, 9vw, 7rem);
-    color: var(--olive);
-    line-height: 1.05;
-    margin-bottom: 1.1rem;
-    padding-bottom: 0.35rem;
-    /* Besotted Love's own ascent metric (1.6em) is far taller than a normal
-       script font's — its loops overshoot a line-height:1.05 box by ~0.44em
-       at the top, which without this would render into whatever sits above
-       (the hero photo). padding-top in em scales with font-size, so this
-       holds at every breakpoint's clamp() value, not just desktop. Measured
-       empirically against the actual glyph ink in headless Chromium, not
-       derived from the font's stated metrics — see PR for method. Safe to
-       grow #home rather than overlap the photo: #home uses min-height, not
-       height, so a taller hero-script just makes the section taller. */
-    padding-top: 0.48em;
-    animation: fadeUp 1s ease both;
-  }
-  .hero-names {
     font-family: 'Cormorant Garamond', serif;
     font-size: clamp(1.8rem, 4vw, 3rem);
     font-weight: 300;
@@ -252,6 +239,25 @@
     line-height: 1.35;
     text-transform: uppercase;
     color: #1A1A14;
+    margin-bottom: 1.1rem;
+    padding-bottom: 0.35rem;
+    animation: fadeUp 1s ease both;
+  }
+  /* Big focal script — was .hero-script's treatment. "Christy & Mitchell"
+     is a longer string than "Save the Date" (11.36x font-size wide vs
+     8.75x, measured via canvas measureText), so the responsive font-size
+     below is re-derived for this string, not reused from before — see
+     CLAUDE.md before changing the copy here again. */
+  .hero-names {
+    font-family: 'Besotted Love', 'Alex Brush', script;
+    font-size: clamp(3.3rem, 7.6vw, 7rem);
+    color: var(--olive);
+    line-height: 1.05;
+    /* Same ascent-overshoot fix as before (Besotted Love's ascent metric
+       is ~1.6em vs ~0.8em for a normal font) — still needed here since
+       this is still the element rendering that font at large size. See
+       CLAUDE.md for how this value was measured. */
+    padding-top: 0.48em;
     animation: fadeUp 1s 0.2s ease both;
   }
   .hero-chambolle {
@@ -1091,18 +1097,19 @@
     .section-divider { margin-bottom: 0.6rem; }
 
     /* ── HERO ── */
-    /* Photo occupies the upper screen; the wording sits along the bottom.
+    /* Photo occupies the upper screen; the wording is centred below it.
        Slightly more bottom padding than desktop so the block clears the
        home-indicator area on a phone. */
     #home { --hero-photo-h: clamp(220px, 38vh, 380px); padding-top: var(--hero-photo-h); padding-bottom: 2.6rem; }
-    /* 9.6vw, not the 16vw this used to be: Besotted Love's connected swash
-       letterforms measure ~8.75x font-size wide for "Save the Date" (vs.
-       ~5.6x for Alex Brush, ~1.55x wider per character), so 16vw overflowed
-       the viewport horizontally below ~700px — measured via canvas
-       measureText, not eyeballed. 9.6vw holds text width to ~84% of
-       viewport width at every size in this breakpoint. */
-    .hero-script { font-size: clamp(1.9rem, 9.6vw, 4.3rem); margin-bottom: 0.8rem; }
-    .hero-names  { font-size: clamp(1.2rem, 6vw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; }
+    /* hero-script: small-caps label, same treatment "Christy & Mitchell"
+       (a longer string) safely used at this size before the swap — a
+       shorter string in the same font/spacing is provably no less safe. */
+    .hero-script { font-size: clamp(1.2rem, 6vw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; margin-bottom: 0.8rem; }
+    /* hero-names: big focal script. 7.6vw, re-derived for "Christy & Mitchell"
+       in Besotted Love (11.36x font-size wide, measured via canvas
+       measureText) — do not reuse the old hero-script mobile value here,
+       it was tuned for a different, narrower string. */
+    .hero-names  { font-size: clamp(1.5rem, 7.6vw, 3.35rem); }
     .hero-chambolle { font-size: 0.8rem; letter-spacing: 0.18em; margin-top: 0.5rem; }
     .hero-meta {
       font-size: clamp(0.5rem, 2.4vw, 0.7rem);
@@ -1212,11 +1219,12 @@
 
   /* extra-small phones */
   @media (max-width: 390px) {
-    /* hero-script intentionally not overridden here — the clamp() in the
-       700px breakpoint already sizes it safely down to the smallest
-       phones; a 13vw override here previously produced ~8.75x13vw text
-       width for Besotted Love, well past the viewport. */
-    .hero-names  { font-size: 5.5vw; letter-spacing: 0.12em; }
+    /* hero-script (small-caps label): same value "Christy & Mitchell" (a
+       longer string) safely used here before the swap. */
+    .hero-script { font-size: 5.5vw; letter-spacing: 0.12em; }
+    /* hero-names (big script) intentionally not overridden here — the
+       clamp() in the 700px breakpoint already sizes it safely down to
+       the smallest phones for "Christy & Mitchell" in Besotted Love. */
     nav a { font-size: 0.52rem; }
     .countdown { gap: 0.4rem; }
     .countdown-number { font-size: 1.6rem; }
