@@ -132,10 +132,13 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - MTR/taxi tips
 
 #### 🖼 Gallery
-- 3-column grid, placeholder tiles
-- Lightbox with keyboard navigation (←→, Esc)
+- 3-column grid (2-column on mobile), 9 real pre-wedding photos from the Paris shoot.
+- **2026-08-12: wired up to real photos, replacing base64.** The grid previously held 8 base64-embedded JPEGs directly in the HTML (already real photos, not blank/gray placeholders — CLAUDE.md's older "placeholder tiles" note was stale) totalling several MB of inline data. These were replaced with 9 `<img src="photos/gallery-web/FILENAME.jpg">` file references, following the same file-reference pattern established for `hero-paris.jpg` and the Our Story slideshow. Net effect: `wedding-invitation.html` shrank from several MB to ~930KB.
+  - `photos/gallery-web/` holds web-optimized exports (longer edge resized to 1600px, JPEG quality 82, ~140–300KB each) generated from the full-resolution originals in `photos/gallery/`. `photos/gallery/` remains the raw-source folder (per the existing `hero-paris.jpg` convention); `photos/gallery-web/` is the sibling folder for site-ready derivatives — don't put full-resolution originals there.
+  - Source photos used: `20260609-ChristyandMitchParisPW-{274,50-1,148,170,164,196,182,266,115}.jpg`, in that curated order (not filename/frame-number order — chosen for visual variety: establishing shot, couple+Chambolle, romantic close-ups, solo bride shot, Chambolle-in-window charm, full family). `-320.jpg` was deliberately excluded — it's already the hero background photo, and repeating it in the gallery would be redundant.
+  - To swap/add/remove a gallery photo: add the full-res original to `photos/gallery/`, generate a web export into `photos/gallery-web/` (resize longest edge to ~1600px, JPEG quality ~82), then add/edit/remove the matching `<div class="gallery-item reveal" data-index="N"><img src="photos/gallery-web/FILENAME" alt="..." loading="lazy"></div>` in the `#gallery-grid` block. `data-index` must stay sequential (0-based, no gaps) — the lightbox JS (`galleryImages` array) is built by DOM order, not by reading `data-index`, but keeping them sequential avoids confusion. No JS changes needed — `openLightbox`/`nextImage` already read `img.src` generically from whatever `.gallery-item` elements exist.
+- Lightbox with keyboard navigation (←→, Esc), verified working against the new file-referenced images (opens correct photo, counter shows "N / 9").
 - Touch swipe support
-- **⚠️ Pending:** actual pre-wedding photos not yet uploaded
 
 #### ❓ Q&A (Accordion)
 - 5 questions, single-open accordion
@@ -245,7 +248,6 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 | 🔴 HIGH | Add Supabase URL + anon key to `wedding-invitation.html` | Replace `YOUR_SUPABASE_URL` and `YOUR_SUPABASE_ANON_KEY` |
 | 🔴 HIGH | Run `supabase_schema_seed.sql` in Supabase dashboard | Creates tables + seeds all 198 guests |
 | 🟡 MED | Add `song_request` column to Supabase `rsvp` table | Already in form payload |
-| 🟡 MED | Upload pre-wedding photos to Gallery section | Placeholder tiles currently showing |
 | 🟡 MED | Confirm/resolve Pending guests (22 outstanding) | See Guest List tab in tracker |
 | 🟡 MED | Assign Table # for confirmed guests | Use seating planner + tracker |
 | 🟢 LOW | Website design revisit (planned) | Full design pass deferred to later |
