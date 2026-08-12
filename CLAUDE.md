@@ -100,7 +100,7 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Countdown (live, 1s interval, tick animation) — Days / Hours / Minutes / Seconds
 - **RSVP button** (`.rsvp-btn.hero-rsvp-btn`, links to `#rsvp`) — added 2026-08-12 per user request ("move the RSVP button to the first landing page"). Sits between the countdown and the "Scroll" hint. Reuses the same `.rsvp-btn` class the Wedding Day section's button used before that section was simplified (see 💒 Wedding Day below) — same look, new location, plus `.hero-rsvp-btn { margin-top: 1.6rem }` for its own spacing.
 - Whole text block (both hero lines through countdown through the RSVP button and Scroll hint) is vertically centred in the space below the photo (`justify-content: center` on `#home`, changed from `flex-end` 2026-08-12 per user request — "move the whole text upwards"). `#home`'s `padding-top` still reserves exactly the photo's height either way, so centering distributes slack on both sides of the text block rather than only above it; it doesn't reopen the overlap risk.
-- Peninsula Hotel watercolour illustration as background of Wedding Day section (unrelated section, unchanged)
+- Wedding Day section background is now plain (`var(--bg)`, the gardenia page background) — the Peninsula Hotel watercolour illustration that used to sit behind it was removed 2026-08-12 per user request. See 💒 Wedding Day below.
 
 #### 📖 Our Story
 - Left: slideshow (5 photos, referenced from `photos/our-story/` as file paths — changed from base64 on 2026-08-08 per user request, so photos can be swapped by replacing files in that folder instead of re-embedding base64). Current files: IMG_9838.jpg, IMG_7830.jpg, IMG_0274.jpg, IMG_0318.jpg, IMG_5751.jpg.
@@ -115,9 +115,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Chambolle stat block removed
 
 #### 💒 Wedding Day
-- Peninsula watercolour illustration as background, base64-embedded JPEG (`.wedding-bg-wrap`'s `background-image`) — do not remove.
-- Overlay: `rgba(237,230,216,0.72)`
-- **2026-08-12: simplified.** The big "NOVEMBER 12 / HONG KONG" date grid and this section's own RSVP button are gone — removed per user request ("remove the current RSVP page... it is not essential anymore"), referring to this section, not the actual `#rsvp` form (which is untouched). In their place: a small eyebrow ("Thursday, 12 November 2026") + `<h2 class="section-title">Wedding <em>Day</em></h2>`, matching the heading pattern every other section uses. Still sits on the watercolour background.
+- **2026-08-12: background image and eyebrow date removed per user request ("remove the picture at the back, the hotel image. leave it plain. Also remove the date").** The Peninsula watercolour illustration (base64 JPEG, previously `.wedding-bg-wrap`'s `background-image`) and its `rgba(237,230,216,0.72)` overlay are gone — `.wedding-bg-wrap` is now just a plain padding wrapper with no background of its own, so the section shows `#wedding-day`'s own `background: var(--bg)` (the gardenia page background), same as it always had underneath. The `Thursday, 12 November 2026` eyebrow that used to sit above the `Wedding <em>Day</em>` heading is also gone — the heading is now the first thing in the section. Verified empirically in headless Chromium at desktop and mobile widths: plain gardenia background, no eyebrow, heading/Venue/Attire/timeline all otherwise unchanged.
+- **2026-08-12 (earlier same day): simplified.** The big "NOVEMBER 12 / HONG KONG" date grid and this section's own RSVP button were removed per user request ("remove the current RSVP page... it is not essential anymore"), referring to this section, not the actual `#rsvp` form (which is untouched). In their place: `<h2 class="section-title">Wedding <em>Day</em></h2>`, matching the heading pattern every other section uses.
 - Venue: "The Salisbury Room at The Peninsula Hong Kong" + "Attire: Elegant Evening Attire" — kept exactly as before, per explicit user request.
 - Timeline: 17:00–18:00 Guest Arrival / 18:30–19:30 Ceremony / 19:45–23:00 Dinner Reception — kept exactly as before.
 - RSVP's entry point moved to the hero (see 🏠 Hero above) rather than living here.
@@ -257,7 +256,7 @@ rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, messa
 - **Preserve the Besotted Love `@font-face` block** — it's the only thing rendering "Christy & Mitchell" in script, both in the hero and (since 2026-08-12) the footer. If it's ever removed, the CSS falls back to Alex Brush (still CDN-loaded) rather than breaking, but that's a visual regression, not something to do on purpose. In the hero, `.hero-names` (not `.hero-script`) is the selector that uses it — see the Typography section's note on the two hero lines' swapped roles before changing either. In the footer, `.footer-script` uses it directly (switched from Liana 2026-08-12).
 - **Always preserve the design tokens** in `:root {}`. Do not introduce new colours outside the palette.
 - **Always copy the finished file** to `/mnt/user-data/outputs/wedding-invitation.html` after edits.
-- **The Peninsula watercolour image** is base64 in the Wedding Day section — do not remove it.
+- **The Peninsula watercolour image was removed from the Wedding Day section 2026-08-12** per user request — the section background is now plain (`var(--bg)`). Do not re-add it without being asked.
 - **The Chambolle photos** are base64 embedded — do not remove them.
 - When adding sections, follow the existing section pattern: `<section id="x"><div class="container">...</div></section>`.
 - Scrolling reveal: add `class="reveal"` to new elements — the IntersectionObserver handles the rest.
