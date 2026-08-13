@@ -359,6 +359,8 @@ ALTER TABLE guests ADD COLUMN IF NOT EXISTS invitation_code TEXT;
 ALTER TABLE guests ADD COLUMN IF NOT EXISTS seat_number     INTEGER;
 ALTER TABLE rsvp   ADD COLUMN IF NOT EXISTS guest_id        UUID REFERENCES guests(id);
 ALTER TABLE rsvp   ADD COLUMN IF NOT EXISTS invitation_code TEXT;
+-- Contact number / WhatsApp, collected on the RSVP form alongside email.
+ALTER TABLE rsvp   ADD COLUMN IF NOT EXISTS phone           TEXT;
 
 -- One guest per (table, seat); allows multiple NULLs
 CREATE UNIQUE INDEX IF NOT EXISTS guests_table_seat_uniq
@@ -603,6 +605,7 @@ CREATE OR REPLACE FUNCTION submit_rsvp(
   p_code           TEXT,
   p_guest_id       UUID,
   p_email          TEXT,
+  p_phone          TEXT,
   p_attendance     BOOLEAN,
   p_plus_one_name  TEXT,
   p_dietary        TEXT,
@@ -631,10 +634,10 @@ BEGIN
   DELETE FROM rsvp WHERE guest_id = p_guest_id;
 
   INSERT INTO rsvp (
-    guest_id, invitation_code, name, email, attendance,
+    guest_id, invitation_code, name, email, phone, attendance,
     plus_one_name, dietary, song_request, message
   ) VALUES (
-    p_guest_id, norm, guest_name, p_email, p_attendance,
+    p_guest_id, norm, guest_name, p_email, p_phone, p_attendance,
     p_plus_one_name, p_dietary, p_song_request, p_message
   );
 
@@ -652,7 +655,7 @@ $$;
 -- 13. Grants — public RPC surface
 GRANT EXECUTE ON FUNCTION lookup_invitation(TEXT)   TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION lookup_seats(TEXT)        TO anon, authenticated;
-GRANT EXECUTE ON FUNCTION submit_rsvp(TEXT, UUID, TEXT, BOOLEAN, TEXT, TEXT, TEXT, TEXT)
+GRANT EXECUTE ON FUNCTION submit_rsvp(TEXT, UUID, TEXT, TEXT, BOOLEAN, TEXT, TEXT, TEXT, TEXT)
                                                     TO anon, authenticated;
 GRANT EXECUTE ON FUNCTION pair_invitation(TEXT, TEXT) TO authenticated;
 
@@ -713,6 +716,7 @@ SELECT
   g.group_name,
   r.attendance,
   r.email,
+  r.phone,
   r.plus_one_name,
   r.dietary,
   r.song_request,

@@ -129,11 +129,19 @@ Home, RSVP, Wedding Day, and Gallery are unchanged internally — only their pos
 #### 📬 RSVP Form
 - **2026-08-13: moved to 2nd position** (right after Hero), per the section-order reorg — was previously last in the DOM, after Q&A. Internals untouched.
 - Supabase REST API integration
-- Fields: name, email, attendance toggle, plus-one, dietary, **song request** (live band), message
+- Fields: name, email, **contact number / WhatsApp** (added 2026-08-13, `#f-phone`, `type="tel"`), attendance toggle, plus-one, dietary, **song request** (live band), message
 - `song_request` included in payload — Supabase column needed
+- `phone` included in payload as of 2026-08-13 (`p_phone` in the `submit_rsvp` RPC call) — see Supabase Schema below, schema file updated but **⚠️ Pending: still needs to be (re-)run against the live database**, same as the rest of `supabase_schema_seed.sql`.
 - **⚠️ Pending:** Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY`
 - Demo mode active (simulates success when no real URL)
 - The section's own dedicated `<style>` block (RSVP states + the floor-plan-modal CSS it triggers into) lives immediately before `<section id="rsvp">` in the file — moved together with the section during the reorg so the two stay co-located for anyone editing RSVP CSS.
+
+##### Seat Card (post-RSVP confirmation / re-lookup, `#seat-card`)
+- **2026-08-13: copy updated per user request.**
+  - Script heading "Your Seat" → **"You're All Set"** (Liana font, `.seat-card-head .script`). The longer phrase no longer fit on one line at the original `font-size: 3rem` — measured via canvas `measureText` at ~293px wide against a ~287–294px available width inside the card (card width minus its own padding), right at the edge, and it wrapped mid-phrase ("You're All" / "Set"). Shrunk to `2.75rem` (~268px), comfortably one line. **Re-measure again if this copy changes** — same string-specific sizing caveat as the hero's Besotted Love text (see Typography above), just a different font/element.
+  - Venue line forced onto two lines: `The Salisbury Room<br>The Peninsula Hong Kong` (was one line with a `·` separator, which wrapped at an arbitrary point on narrow widths). Plain `<br>`, not the conditional `.venue-break` pattern used elsewhere — no need for a desktop-only single-line variant now that the site is always mobile-width (see Site Frame).
+  - Added a second `.seat-card-note` line: *"Please check back roughly two weeks before the big day — Christy may make some final adjustments to the seating plan."* Sits below the existing "Seats are pre-arranged..." note — both share the same class, so they stack with consistent spacing automatically.
+- Verified via Playwright (seat card forced into view with fake `renderSeatCard()` data, since it normally only renders after a live Supabase round-trip): "You're All Set" renders on one line, venue renders on two, both new/existing notes display correctly, at both real mobile width (390px) and the desktop-as-frame view.
 
 #### 💒 Wedding Day
 - **2026-08-13: moved to 3rd position** (Home → RSVP → Wedding Day → Gallery → More), per the section-order reorg. Internals untouched.
@@ -261,8 +269,10 @@ Two tables in `supabase_schema_seed.sql`:
 
 ```sql
 guests (id, guest_number, name, group_name, side, invited, rsvp_status, dietary, is_kid, table_number)
-rsvp   (id, name, email, attendance, plus_one_name, dietary, song_request, message, submitted_at)
+rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request, message, submitted_at)
 ```
+
+`phone` added 2026-08-13 (contact number / WhatsApp, collected on the RSVP form). The `submit_rsvp(...)` RPC function and its `GRANT EXECUTE` signature were updated to match (`p_phone TEXT`, inserted after `p_email`) — also added to the `admin_rsvps` view so the couple can actually see submitted numbers.
 
 - RLS enabled on both tables
 - Public can read `guests`, insert to `rsvp`
