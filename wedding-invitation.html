@@ -87,6 +87,18 @@
     font-size: 18px;
     line-height: 1.7;
     overflow-x: hidden;
+    /* Reserve room at the bottom of the page so the fixed bottom-nav
+       never covers the last section's content. This used to live inside
+       the mobile @media block; moved out unconditionally 2026-08-13 when
+       that block became @container-scoped to #site-frame — body is
+       #site-frame's PARENT, not a descendant, so a container query can
+       never match it (container queries only ever style descendants of
+       the query container). Left inside the @container block, this rule
+       silently stopped applying at all, on every screen size including
+       real mobile, and the footer ended up partly hidden behind the
+       bottom-nav. Since the site is always in "mobile" layout now, this
+       no longer needs to be conditional anyway. */
+    padding-bottom: 72px;
   }
 
   /* ─── SITE FRAME ───
@@ -1114,10 +1126,6 @@
     .bottom-tab svg { width: 19px; height: 19px; }
     .bottom-tab.active { color: var(--olive); }
     .bottom-tab.active .tab-icon-wrap { background: var(--golden); color: var(--olive); }
-
-    /* Reserve room at the bottom of the page so the fixed bar never
-       covers the last section's content (RSVP submit button, Q&A). */
-    body { padding-bottom: 72px; }
 
     .nav-list {
       display: none;
@@ -3442,8 +3450,10 @@ document.getElementById('chambolle-toggle')?.addEventListener('click', () => {
 });
 applyShushUI();
 
+let footerBlocksEgg = false;
+
 function showEgg(eggId) {
-  if (isChambolleShushed()) return;
+  if (isChambolleShushed() || footerBlocksEgg) return;
   // Hide any current egg
   if (activeEgg) {
     document.getElementById(activeEgg)?.classList.remove('visible');
@@ -3523,6 +3533,25 @@ Object.keys(eggSectionMap).forEach(id => {
   const el = document.getElementById(id);
   if (el) eggObserver.observe(el);
 });
+
+// All three egg resting positions land bottom-right on mobile, right above
+// the bottom-nav (see the pos-br/pos-bl/pos-r @container override CSS) —
+// deliberately chosen so the egg "never floats over reading content." The
+// footer sits in that same corner once scrolled to the very end of the
+// page, so it's the one piece of reading content the egg CAN still cover.
+// This is more reliable than tuning EGG_SCHEDULE's per-trigger delay/threshold
+// timing (which section is "intersecting" doesn't tell you whether the
+// footer has ALSO come into view) — instead, treat the footer as an
+// exclusion zone directly: block any new egg from showing while it's in
+// view, and dismiss whichever egg is currently up the moment it appears.
+const footerObserver = new IntersectionObserver((entries) => {
+  entries.forEach(e => {
+    footerBlocksEgg = e.isIntersecting;
+    if (e.isIntersecting && activeEgg) hideEgg(activeEgg);
+  });
+}, { threshold: 0.1 });
+const footerEl = document.querySelector('footer');
+if (footerEl) footerObserver.observe(footerEl);
 </script>
 
 </div><!-- end #site-frame -->
