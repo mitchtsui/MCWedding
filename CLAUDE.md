@@ -83,7 +83,11 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 ## 4. Website (`wedding-invitation.html`)
 
 ### Section Order
-`Home → Our Story → Chambolle → Wedding Day → Travel → Gallery → Q&A → RSVP`
+**2026-08-13: reorganized per user request** ("Order - Home -> RSVP -> Day-> Gallery. And the rest i.e. Our Story, Chambolle, Travel, Q&A are a new page that collapse together"). Was `Home → Our Story → Chambolle → Wedding Day → Travel → Gallery → Q&A → RSVP` (and even before that, the live DOM order had already drifted from this documented order — Wedding Day actually preceded Our Story/Chambolle, and RSVP/Travel/Q&A came after Gallery; this doc had gone stale). Now:
+
+`Home → RSVP → Wedding Day → Gallery → More (Our Story / Chambolle / Travel / Q&A, collapsed into one accordion)`
+
+Home, RSVP, Wedding Day, and Gallery are unchanged internally — only their position in the page moved. Our Story, Chambolle, Travel, and Q&A no longer exist as standalone top-level sections; their exact original markup (unchanged) is nested inside `<section id="more">` as four accordion panels, single-open (opening one closes the others), matching the interaction pattern the Q&A section already used internally. See #more below for the accordion mechanism, and Nav below for how the top nav / bottom tab bar changed to match.
 
 ### Section Status
 
@@ -102,19 +106,17 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Whole text block (both hero lines through countdown through the RSVP button and Scroll hint) is vertically centred in the space below the photo (`justify-content: center` on `#home`, changed from `flex-end` 2026-08-12 per user request — "move the whole text upwards"). `#home`'s `padding-top` still reserves exactly the photo's height either way, so centering distributes slack on both sides of the text block rather than only above it; it doesn't reopen the overlap risk.
 - Wedding Day section background: plain gardenia (`var(--bg)`) for a few hours on 2026-08-12 after the Peninsula Hotel watercolour was removed, then given a new background the same day — a garden/floral illustration with Chambolle in it (`photos/wedding-day-garden.png`). See 💒 Wedding Day below.
 
-#### 📖 Our Story
-- Left: slideshow (5 photos, referenced from `photos/our-story/` as file paths — changed from base64 on 2026-08-08 per user request, so photos can be swapped by replacing files in that folder instead of re-embedding base64). Current files: IMG_9838.jpg, IMG_7830.jpg, IMG_0274.jpg, IMG_0318.jpg, IMG_5751.jpg.
-  - To swap/add/remove a photo: drop the file into `photos/our-story/`, then add/edit/remove the matching `<div class="story-slide" style="background-image:url('photos/our-story/FILENAME')"></div>` + matching `<span class="dot">` in the `#story-slideshow` / `#story-dots` blocks in `wedding-invitation.html`. The JS (`goStorySlide`) already queries the DOM generically, so slide count isn't hardcoded elsewhere.
-- Right: title, pull quote, body text
-- Auto-advances every 4s, offset 2s from Chambolle slideshow
-- Dot indicators
-
-#### 🐕 Meet Chambolle
-- Card layout: info left, slideshow right
-- 4 photos (IMG_6864, IMG_8351, IMG_7152, IMG_5928) — base64 embedded
-- Chambolle stat block removed
+#### 📬 RSVP Form
+- **2026-08-13: moved to 2nd position** (right after Hero), per the section-order reorg — was previously last in the DOM, after Q&A. Internals untouched.
+- Supabase REST API integration
+- Fields: name, email, attendance toggle, plus-one, dietary, **song request** (live band), message
+- `song_request` included in payload — Supabase column needed
+- **⚠️ Pending:** Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY`
+- Demo mode active (simulates success when no real URL)
+- The section's own dedicated `<style>` block (RSVP states + the floor-plan-modal CSS it triggers into) lives immediately before `<section id="rsvp">` in the file — moved together with the section during the reorg so the two stay co-located for anyone editing RSVP CSS.
 
 #### 💒 Wedding Day
+- **2026-08-13: moved to 3rd position** (Home → RSVP → Wedding Day → Gallery → More), per the section-order reorg. Internals untouched.
 - **2026-08-12 (latest): new background — `photos/wedding-day-garden.png`.** A commissioned/generated garden illustration (watercolour trees, floral border, and Chambolle tucked into the bottom-left corner) supplied by the user, referenced as an external file (not base64 — follows the file-reference pattern established for `hero-paris.jpg` and the Our Story slideshow, rather than the base64 pattern the old Peninsula image used). Lives only in `.wedding-bg-wrap` (heading + Venue/Attire), not the timeline below it — same footprint as the old Peninsula image.
   - `background-size: cover; background-position: center 85%;` — the image is nearly square (1092×960) but `.wedding-bg-wrap` is a short, wide box, so `cover` crops heavily top/bottom. `center 85%` was chosen specifically to keep Chambolle in frame at the bottom-left (he sits low in the source image, around row 750–870 of 960); the default `center` cropped him out entirely. If the source image is ever replaced, re-check whether Chambolle (or whatever the new focal point is) survives this crop at both desktop and mobile widths — don't assume `center 85%` still applies to different artwork.
   - The `rgba(237,230,216,0.72)` gardenia tint overlay (`.wedding-bg-wrap::before`) and the `.wedding-bg-wrap > div { z-index: 1 }` rule (to lift content above it) are back too — same mechanism the old Peninsula image used, restored rather than reinvented.
@@ -126,12 +128,8 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Timeline: 17:00–18:00 Guest Arrival / 18:30–19:30 Ceremony / 19:45–23:00 Dinner Reception — kept exactly as before.
 - RSVP's entry point moved to the hero (see 🏠 Hero above) rather than living here.
 
-#### ✈️ Travel
-- Google Maps embed (no API key)
-- Apple Maps + Get Directions buttons
-- MTR/taxi tips
-
 #### 🖼 Gallery
+- **2026-08-13: moved to 4th position** (Home → RSVP → Wedding Day → Gallery → More), per the section-order reorg. Internals untouched.
 - 3-column grid (2-column on mobile), 8 real pre-wedding photos from the Paris shoot.
 - **2026-08-12: wired up to real photos, replacing base64.** The grid previously held 8 base64-embedded JPEGs directly in the HTML (already real photos, not blank/gray placeholders — CLAUDE.md's older "placeholder tiles" note was stale) totalling several MB of inline data. These were replaced with `<img src="photos/gallery-web/FILENAME.jpg">` file references, following the same file-reference pattern established for `hero-paris.jpg` and the Our Story slideshow. Net effect: `wedding-invitation.html` shrank from several MB to ~930KB.
   - `photos/gallery-web/` holds web-optimized exports (longer edge resized to 1600px, JPEG quality 82, ~140–300KB each) generated from the full-resolution originals in `photos/gallery/`. `photos/gallery/` remains the raw-source folder (per the existing `hero-paris.jpg` convention); `photos/gallery-web/` is the sibling folder for site-ready derivatives — don't put full-resolution originals there.
@@ -140,17 +138,20 @@ Note: `liana` (base64 `@font-face` from `liana.ttf`) is still embedded in the fi
 - Lightbox with keyboard navigation (←→, Esc), verified working against the file-referenced images (opens correct photo, counter shows "N / 8").
 - Touch swipe support
 
-#### ❓ Q&A (Accordion)
-- 5 questions, single-open accordion
-- RSVP deadline: September 12, 2026
-- Chambolle answer: "he", "his little castle in 2 Merino Gardens", **"stinky treats"** (confirmed)
+#### 🗂 More (Our Story / Chambolle / Travel / Q&A, collapsed together)
+**Added 2026-08-13**, per user request. `<section id="more">` is the 5th and last page section — everything that isn't Home/RSVP/Wedding Day/Gallery now lives here as four accordion panels, single-open (`.more-panel-header` / `.more-panel-body`, toggled by `toggleMorePanel()` in the JS — a separate function from `toggleQA()`, same single-open pattern). Eyebrow "Totally Optional", heading "Feel Free *to Scroll Past*" (reused verbatim from the old nav dropdown label of the same name, now retired — see Nav below).
 
-#### 📬 RSVP Form
-- Supabase REST API integration
-- Fields: name, email, attendance toggle, plus-one, dietary, **song request** (live band), message
-- `song_request` included in payload — Supabase column needed
-- **⚠️ Pending:** Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY`
-- Demo mode active (simulates success when no real URL)
+- **The four original sections are nested completely unchanged** — same ids (`#story`, `#chambolle`, `#travel`, `#qa`), same internal markup, CSS, and JS (slideshows, the Google Maps embed, Q&A's own internal accordion). Only their position in the DOM changed, from standalone top-level sections to the body of a `.more-panel-body`. This was a deliberate "wrap, don't rewrite" choice to minimize risk — do not "clean up" by inlining/flattening these into `#more` directly, the nesting is what makes the collapse mechanism work without touching their internals.
+- **Panel labels** (the always-visible accordion headers) are short and plain — "Our Story", "Meet Chambolle", "Travel", "Q&A" — deliberately different wording from each section's own `eyebrow`/`h2.section-title` inside (e.g. Our Story's own heading is "A Timeline *Nobody Requested*"), to avoid showing the same phrase twice when a panel opens.
+- **Max-height accordion, not the QA pattern's fixed 300px cap.** `toggleMorePanel()` sets `body.style.maxHeight = body.scrollHeight + 'px'` on open (an accurate, content-aware value) rather than reusing `.qa-answer`'s fixed `max-height: 300px`. These panels can hold a slideshow, a full Google Maps iframe, or the entire nested Q&A accordion — all far taller than a one-line QA answer — so a fixed cap would either clip tall panels or animate short ones at the wrong apparent speed.
+- **`.more-panel-body > section` padding is tightened** (`0.5rem 0 3rem`, `0.3rem 0 2rem` on mobile) versus the global `section { padding: 6rem 2rem }` the nested `<section>` would otherwise inherit — that padding was calibrated for a full-page section with independent breathing room above and below; inside an accordion panel (which already has its own header spacing) it read as an oversized gap. The nested sections' `.container`/`.container-wide` wrappers and everything below them are untouched.
+- **`.reveal` elements are force-shown on open**, not left to the `IntersectionObserver`. A collapsed `.more-panel-body` has `max-height: 0; overflow: hidden`, so its `.reveal` children never intersect the viewport and the observer never fires for them — in practice this self-corrects once the panel expands and its content actually enters the viewport (the browser recomputes intersection on any layout change, not just scroll), but `toggleMorePanel()` also does `body.querySelectorAll('.reveal').forEach(el => el.classList.add('visible'))` as a belt-and-suspenders fallback so content is never invisible after a click, without depending on that browser behaviour.
+- **Nav / scroll-spy fix required for `#more` specifically**: since `#more` is the last section before the footer, the page can run out of room to scroll — the browser hits its max scroll position before `#more`'s top ever reaches the scroll-spy's normal `<= 80px` activation threshold, so the "More" nav link/tab would otherwise never highlight. Fixed by also treating "scrolled to the bottom of the page" (`scrollY + innerHeight >= document.body.scrollHeight - 2`) as `#more` being active. If `#more` ever stops being the last section, re-check whether this special case is still needed.
+- Sub-sections, unchanged internally:
+  - **Our Story** — left: slideshow (5 photos, referenced from `photos/our-story/` as file paths — changed from base64 on 2026-08-08 per user request, so photos can be swapped by replacing files in that folder instead of re-embedding base64). Current files: IMG_9838.jpg, IMG_7830.jpg, IMG_0274.jpg, IMG_0318.jpg, IMG_5751.jpg. To swap/add/remove a photo: drop the file into `photos/our-story/`, then add/edit/remove the matching `<div class="story-slide" style="background-image:url('photos/our-story/FILENAME')"></div>` + matching `<span class="dot">` in the `#story-slideshow` / `#story-dots` blocks. The JS (`goStorySlide`) already queries the DOM generically, so slide count isn't hardcoded elsewhere. Right: title, pull quote, body text. Auto-advances every 4s, offset 2s from Chambolle slideshow. Dot indicators.
+  - **Meet Chambolle** — card layout: info left, slideshow right. 4 photos (IMG_6864, IMG_8351, IMG_7152, IMG_5928) — base64 embedded. Chambolle stat block removed.
+  - **Travel** — Google Maps embed (no API key). Apple Maps + Get Directions buttons. MTR/taxi tips.
+  - **Q&A** — 5 questions, single-open accordion (its own, independent of the outer `.more-panel` accordion — see `toggleQA()` vs `toggleMorePanel()` above). RSVP deadline: September 12, 2026. Chambolle answer: "he", "his little castle in 2 Merino Gardens", **"stinky treats"** (confirmed).
 
 ### Chambolle Easter Egg
 Three fixed-position pop-up instances triggered by IntersectionObserver:
@@ -173,15 +174,23 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
   ['qa',           'egg-br', 800],
   ['gallery',      'egg-r',  1000],
   ```
+- **2026-08-13: `chambolle` and `qa` are now nested inside `#more`'s accordion**, not standalone top-level sections (see 🗂 More above) — left unchanged here on purpose. `document.getElementById('chambolle'/'qa')` still resolves fine regardless of nesting depth, so the `IntersectionObserver` targeting is unaffected. The practical difference: while that accordion panel is collapsed (`max-height: 0`), the element has no visible area, so the observer won't fire — the egg just won't trigger from scrolling past it anymore, only once the user opens that specific panel and it's actually on screen. Not worth engineering around; a minor, expected behaviour change from the reorg, not a bug.
+
+### Nav
+**2026-08-13: flattened, no dropdowns**, per the section-order reorg. With only 5 top-level sections left (Home, RSVP, Wedding Day, Gallery, More) and nothing left to group into a submenu — Our Story/Chambolle/Travel/Q&A collapsed into the single `#more` destination — the old two-dropdown desktop nav and the mobile "More" overflow modal both lost their reason to exist.
+- **Desktop `.nav-list`**: 5 flat `<a>` links, no `.nav-dropdown`/`.nav-menu`/`.nav-trigger`/`.caret` markup or CSS left (all removed — grep clean, nothing else referenced them). Labels reuse the old dropdown items' playful copy where it existed: Home, RSVP, "Show Up or Explain Yourself" (Wedding Day), "Photos We Paid Too Much For" (Gallery), "Feel Free to Scroll Past" (More) — same jokes, just promoted from submenu items to top-level links.
+- **`toggleDropdown()` removed** from the JS, along with the document-level click-outside handler that only existed to close open dropdowns. `toggleNav()`/`closeNav()` (mobile hamburger, itself dead on ≤700px since `nav { display:none }` there — pre-existing, not touched by this reorg) no longer reference `.nav-dropdown` either.
+- **Mobile bottom tab bar**: still 5 tabs, but now a straight 1:1 map to the 5 sections in page order — Home, RSVP, Day, Gallery, More — each a plain `<a href="#section">`. The old 5th tab was a `<button>` that opened `#more-modal` (a bottom-sheet listing Our Story/Chambolle/Travel/Q&A); that modal, its CSS (`.more-modal`/`.more-card`/`.more-close`), and its JS (`toggleMoreModal()`/`closeMoreModal()`) are all gone — `#more` **is** the destination now, not a menu of other destinations, so a plain anchor link is all it needs. (`closeMoreModal()` was also called from the `Escape`-key handler alongside `closeLightbox()`/`closeFloorPlan()`; removed from there too.)
+- **Scroll-spy simplified**: the tracked `sections` array is now `['home','rsvp','wedding-day','gallery','more']` (was 8 ids, including the now-nested `story`/`chambolle`/`travel`/`qa`). The submenu-link and dropdown-trigger highlighting logic is gone along with the dropdowns themselves — just a flat `.nav-link`/`.bottom-tab[data-tab]` active-class toggle by matching `href`/`data-tab` against the computed `active` id.
+  - ⚠️ **`#more` needed a scroll-spy special case.** It's the last section before the footer, so on a short page (e.g. `#more` collapsed) the browser hits its max scroll position before `#more`'s top ever reaches the normal `<= 80px` activation threshold — the "More" link/tab would otherwise never highlight, stuck showing whichever section qualified last (Gallery). Fixed by also treating "scrolled to the bottom of the page" (`window.scrollY + window.innerHeight >= document.body.scrollHeight - 2`) as `#more` being active. Found by actually testing the click-through, not by inspection — re-test this specifically if `#more` ever stops being the last section, or if a new one is added after it.
+- Reference the 🗂 More section above for the accordion-panel mechanism inside `#more` itself — that's a separate, new interaction pattern, not part of this nav simplification.
 
 ### Mobile Responsive
 - `@media (max-width: 700px)` and `@media (max-width: 390px)`
-- **Nav (≤700px): fixed bottom tab bar, not the top hamburger.** Changed 2026-08-12 per user request ("move the drop down hamburger list to bottom," matching a reference screenshot of an app-style bottom tab bar). The top `<nav>` is `display:none` entirely below 700px — not simplified, fully hidden — so the hero photo runs full-bleed to the very top of the screen on mobile, same as the reference. Desktop nav (the horizontal bar with the two dropdowns) is completely unchanged; this only affects ≤700px.
+- **Bottom tab bar (≤700px), not the top hamburger.** Changed 2026-08-12 per user request ("move the drop down hamburger list to bottom," matching a reference screenshot of an app-style bottom tab bar). The top `<nav>` is `display:none` entirely below 700px — not simplified, fully hidden — so the hero photo runs full-bleed to the very top of the screen on mobile, same as the reference. See Nav above for the 2026-08-13 flattening (same bar, tabs now point straight at sections instead of one opening a modal).
   - Bottom bar markup is `<div class="bottom-nav" id="bottom-nav">` — **must be a `<div>`, not a `<nav>` tag.** It was originally built as `<nav class="bottom-nav">`, which also matched the site's existing bare `nav { position:fixed; top:0; ... }` tag selector (for the TOP bar). With both `top:0` (inherited from the tag selector) and `bottom:0` (from the `.bottom-nav` class) applying to the same fixed element, it stretched to fill the entire viewport height instead of sitting as a slim bar at the bottom. Don't rename it back to `<nav>` without also giving it an explicit `top: auto` — or just leave it a `<div>`, which sidesteps the collision entirely.
-  - 5 tabs: Home, Wedding Day ("Day"), Gallery, RSVP — each a plain `<a href="#section">` — plus a 5th **More** button (`<button id="more-tab" onclick="toggleMoreModal()">`) that opens `#more-modal`, a bottom-sheet-style overlay listing the four sections that don't have their own tab: Our Story, Chambolle, Travel, Q&A. Modal pattern copied from `.fp-modal` (the floor-plan modal) for visual consistency — fixed, backdrop, centred card, close button.
-  - Active tab state piggybacks on the existing scroll-spy handler (the same `window.addEventListener('scroll', ...)` that already highlights the top nav's active link) — extended to also toggle `.active` on `.bottom-tab[data-tab]` elements matching the current section. The More button has no `data-tab`, so it's never marked active by scroll position — expected, not a bug.
   - **The Home tab's `active` class is hardcoded in the HTML** (`class="bottom-tab active"`), not left to JS — the scroll-spy handler only runs on an actual `scroll` event, so without this, no tab shows as active until the user scrolls at least once after page load. This matches the existing pattern already used on the top nav's Home link (`class="nav-link active"` is hardcoded there too) — don't remove it thinking JS will handle it on load, it won't.
-  - The More button is a `<button>` (the other four are `<a>`) and picked up a native focus-ring outline that the `<a>` tabs don't get, making it look like a stray "active" state even when untouched. Fixed with `.bottom-tab { outline: none }` plus a proper `.bottom-tab:focus-visible` style so real keyboard navigation still shows a focus indicator — don't just strip the outline without adding that back.
+  - All 5 bottom tabs are now `<a>` tags (2026-08-13 — the old More `<button>` picked up a native focus-ring outline the `<a>` tabs didn't get, making it look like a stray "active" state even when untouched; fixed at the time with `.bottom-tab { outline: none }` plus a proper `.bottom-tab:focus-visible` style, which stays in place and is now moot for the More tab specifically since it's an `<a>` too, but still relevant if a `<button>` tab is ever added again — don't strip the outline without keeping that fallback).
   - `body { padding-bottom: 72px }` on mobile reserves room so the fixed bar never covers the last section's content.
   - The Chambolle easter-egg's mobile resting positions (`.chambolle-toggle` and all three `.chambolle-egg.pos-*` overrides) moved from `bottom: 14px` to `bottom: 84px` to clear the new bar — they used to sit exactly where the bottom-nav now lives. If the bar's height ever changes, re-check this clearance.
 - All grids → single column
