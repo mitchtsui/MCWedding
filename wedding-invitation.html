@@ -254,7 +254,7 @@
      plays the small-caps label now carries this. */
   .hero-script {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(1.4rem, 2.6vw, 2rem);
+    font-size: clamp(1.4rem, 2.6cqw, 2rem);
     font-weight: 300;
     letter-spacing: 0.25em;
     line-height: 1.35;
@@ -271,7 +271,7 @@
      CLAUDE.md before changing the copy here again. */
   .hero-names {
     font-family: 'Besotted Love', 'Alex Brush', script;
-    font-size: clamp(2.4rem, 5vw, 4.5rem);
+    font-size: clamp(2.4rem, 5cqw, 4.5rem);
     color: var(--olive);
     line-height: 1.05;
     /* Same ascent-overshoot fix as before (Besotted Love's ascent metric
@@ -283,7 +283,7 @@
   }
   .hero-chambolle {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(0.85rem, 1.4vw, 1.2rem);
+    font-size: clamp(0.85rem, 1.4cqw, 1.2rem);
     font-weight: 300;
     letter-spacing: 0.25em;
     text-transform: uppercase;
@@ -427,7 +427,7 @@
     margin-bottom: 0.8rem;
   }
   h2.section-title {
-    font-size: clamp(2rem, 4vw, 2.8rem);
+    font-size: clamp(2rem, 4cqw, 2.8rem);
     font-weight: 300;
     line-height: 1.2;
     margin-bottom: 1.5rem;
@@ -481,7 +481,7 @@
   }
   .story-quote {
     font-style: italic;
-    font-size: clamp(1.1rem, 1.8vw, 1.35rem);
+    font-size: clamp(1.1rem, 1.8cqw, 1.35rem);
     font-weight: 300;
     line-height: 1.6;
     color: var(--text);
@@ -490,7 +490,7 @@
   .story-body p { margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.85; color: var(--text-mid); }
   .story-body .eyebrow {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(1.8rem, 3vw, 2.4rem);
+    font-size: clamp(1.8rem, 3cqw, 2.4rem);
     font-weight: 400;
     letter-spacing: 0.08em;
     text-transform: none;
@@ -658,7 +658,7 @@
   }
   .venue-title {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(2.2rem, 4vw, 3.2rem);
+    font-size: clamp(2.2rem, 4cqw, 3.2rem);
     font-weight: 300;
     letter-spacing: 0.12em;
     text-transform: uppercase;
@@ -1154,15 +1154,15 @@
     /* hero-script: small-caps label, same treatment "Christy & Mitchell"
        (a longer string) safely used at this size before the swap — a
        shorter string in the same font/spacing is provably no less safe. */
-    .hero-script { font-size: clamp(1.2rem, 6vw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; margin-bottom: 0.8rem; }
-    /* hero-names: big focal script. 7.6vw, re-derived for "Christy & Mitchell"
+    .hero-script { font-size: clamp(1.2rem, 6cqw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; margin-bottom: 0.8rem; }
+    /* hero-names: big focal script. 7.6cqw, re-derived for "Christy & Mitchell"
        in Besotted Love (11.36x font-size wide, measured via canvas
        measureText) — do not reuse the old hero-script mobile value here,
        it was tuned for a different, narrower string. */
-    .hero-names  { font-size: clamp(1.5rem, 7.6vw, 3.35rem); }
+    .hero-names  { font-size: clamp(1.5rem, 7.6cqw, 3.35rem); }
     .hero-chambolle { font-size: 0.8rem; letter-spacing: 0.18em; margin-top: 0.5rem; }
     .hero-meta {
-      font-size: clamp(0.5rem, 2.4vw, 0.7rem);
+      font-size: clamp(0.5rem, 2.4cqw, 0.7rem);
       letter-spacing: 0.12em;
       white-space: nowrap;
       margin-top: 0.9rem;
@@ -1244,7 +1244,7 @@
     .form-submit { font-size: 0.65rem; padding: 1rem; }
 
     /* ── SECTION TITLES ── */
-    h2.section-title { font-size: clamp(1.5rem, 7vw, 2rem); }
+    h2.section-title { font-size: clamp(1.5rem, 7cqw, 2rem); }
     .eyebrow { font-size: 0.58rem; }
 
     /* ── FOOTER ── */
@@ -1267,7 +1267,7 @@
   @container (max-width: 390px) {
     /* hero-script (small-caps label): same value "Christy & Mitchell" (a
        longer string) safely used here before the swap. */
-    .hero-script { font-size: 5.5vw; letter-spacing: 0.12em; }
+    .hero-script { font-size: 5.5cqw; letter-spacing: 0.12em; }
     /* hero-names (big script) intentionally not overridden here — the
        clamp() in the 700px breakpoint already sizes it safely down to
        the smallest phones for "Christy & Mitchell" in Besotted Love. */
