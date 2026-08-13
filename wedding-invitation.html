@@ -64,6 +64,16 @@
     --accent-peach: var(--pale-peach);
     --divider:   #D8CEBC;
     --white:     #FAF7F0;
+
+    /* 2026-08-13: the site frame (#site-frame) caps the page to this width,
+       centred. --frame-gap is the horizontal distance from the TRUE
+       viewport edge to the frame's edge — 0 on an actual narrow phone
+       (frame shrinks to fit, no gap), positive once the browser is wider
+       than the cap. position:fixed elements that need to hug the frame's
+       edge (rather than the real viewport's edge) add this to their
+       left/right offset — see the Chambolle egg/bubble/toggle rules. */
+    --frame-max: 430px;
+    --frame-gap: max(0px, calc((100vw - var(--frame-max)) / 2));
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -79,10 +89,55 @@
     overflow-x: hidden;
   }
 
+  /* ─── SITE FRAME ───
+     2026-08-13: caps the whole site to a phone-width column, centred, at
+     any browser width. Real mobile visitors (viewport already <= this
+     max-width) see zero change — the div just shrinks to fit, same as
+     always. Wider (desktop) visitors now see the exact same layout inside
+     a framed column instead of a separate wide layout.
+     - container-type: inline-size turns this into the reference container
+       for every @container query below (converted from @media 2026-08-13)
+       — so the "mobile" breakpoints now key off THIS element's width, not
+       the actual browser viewport, and therefore always match once it's
+       capped below 700px.
+     - Deliberately NOT using a `transform` on this element to try to
+       contain its `position:fixed` descendants (nav, bottom-nav,
+       lightbox, floor-plan modal, Chambolle egg/bubble/toggle) — that's
+       a real CSS technique (any transformed ancestor becomes the
+       containing block for fixed descendants), but it turns "fixed"
+       into "stuck to the bottom of this whole (very tall) element"
+       rather than "stuck to the visible viewport while scrolling",
+       which breaks the bottom tab bar's entire reason for existing.
+       Tried it, watched the bottom nav land 4000px down the page
+       instead of staying on screen, reverted. Each fixed element that
+       used to span left:0;right:0 (the real viewport edges) is instead
+       given an explicit `left: 50%; transform: translateX(-50%); width:
+       min(var(--frame-max), 100vw);` directly, so it stays genuinely
+       viewport-fixed (follows scroll correctly) while just being
+       width-capped and centered to match the frame. Small fixed elements
+       positioned by edge offset instead (the Chambolle egg/bubble/toggle)
+       use --frame-gap the same way — see those rules further down. See
+       each rule below.
+     - vw/vh units elsewhere in the stylesheet (clamp() preferred values,
+       --hero-photo-h, etc.) still measure the real browser viewport, not
+       this frame — harmless here since those are all clamp()s whose caps
+       were already tuned for mobile; on a wide desktop viewport they just
+       resolve to their (mobile-appropriate) max bound instead of scaling
+       further, which is what we want. */
+  #site-frame {
+    max-width: var(--frame-max);
+    margin: 0 auto;
+    position: relative;
+    background: var(--bg);
+    min-height: 100vh;
+    overflow-x: hidden;
+    container-type: inline-size;
+  }
+
   /* ─── NAV ─── */
   nav {
     position: fixed;
-    top: 0; left: 0; right: 0;
+    top: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--divider);
@@ -761,7 +816,7 @@
   .lightbox {
     display: none;
     position: fixed;
-    inset: 0;
+    top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
     background: rgba(26,26,20,0.95);
     z-index: 500;
     align-items: center;
@@ -771,7 +826,7 @@
   }
   .lightbox.open { display: flex; }
   .lb-img-wrap {
-    max-width: 90vw;
+    max-width: 90%;
     max-height: 82vh;
     display: flex;
     align-items: center;
@@ -820,7 +875,7 @@
     text-transform: uppercase;
   }
 
-  @media (max-width: 700px) {
+  @container (max-width: 700px) {
     .gallery-grid { grid-template-columns: repeat(2, 1fr); }
     .gallery-item.wide { grid-column: span 2; }
   }
@@ -1003,7 +1058,7 @@
   /* ═══════════════════════════════════════
      MOBILE — comprehensive ≤ 700px styles
      ═══════════════════════════════════════ */
-  @media (max-width: 700px) {
+  @container (max-width: 700px) {
 
     /* ── NAV — replaced by the fixed bottom tab bar on mobile (see
        .bottom-nav below); the top bar and its hamburger/accordion no
@@ -1015,7 +1070,7 @@
     .bottom-nav {
       display: flex;
       position: fixed;
-      left: 0; right: 0; bottom: 0;
+      left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw); bottom: 0;
       z-index: 150;
       background: var(--bg);
       border-top: 1px solid var(--divider);
@@ -1209,7 +1264,7 @@
   }
 
   /* extra-small phones */
-  @media (max-width: 390px) {
+  @container (max-width: 390px) {
     /* hero-script (small-caps label): same value "Christy & Mitchell" (a
        longer string) safely used here before the swap. */
     .hero-script { font-size: 5.5vw; letter-spacing: 0.12em; }
@@ -1243,6 +1298,15 @@
 </style>
 </head>
 <body>
+<!-- ─── SITE FRAME ───
+     2026-08-13: the whole site now renders inside a phone-width column,
+     centred on the page, at ANY browser width — desktop included. Per user
+     request: most guests open the link on their phone, so rather than
+     maintain a separate (and, per feedback, worse-looking) desktop layout,
+     desktop visitors now just see the same already-approved mobile
+     experience inside a framed column. See CLAUDE.md for the full
+     reasoning and how the @container conversion below makes this work. -->
+<div id="site-frame">
 
 <!-- ─── NAV ───
      Flat links, no dropdowns. Home/RSVP/Wedding Day/Gallery are the primary
@@ -1539,7 +1603,7 @@
   .fp-modal {
     display: none;
     position: fixed;
-    inset: 0;
+    top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
     z-index: 250;
     background: rgba(26,26,20,0.78);
     padding: 1.5rem;
@@ -1726,12 +1790,12 @@
   .fp-pill .swatch { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--olive); background: transparent; }
   .fp-pill.you .swatch { background: var(--olive); }
 
-  @media (max-width: 900px) {
+  @container (max-width: 900px) {
     .fp-body { flex-direction: column; }
     .fp-panel { width: 100%; }
     .fp-panel-list { max-height: 220px; }
   }
-  @media (max-width: 700px) {
+  @container (max-width: 700px) {
     .fp-card { padding: 1.6rem 1rem 1.2rem; }
     .fp-card .fp-title { font-size: 1.3rem; }
   }
@@ -1969,7 +2033,7 @@
     transition: max-height 0.4s ease;
   }
   .more-panel-body > section { padding: 0.5rem 0 3rem; }
-  @media (max-width: 700px) {
+  @container (max-width: 700px) {
     .more-panel-header { font-size: 1.2rem; padding: 1.2rem 0.1rem; }
     .more-panel-body > section { padding: 0.3rem 0 2rem; }
   }
@@ -3276,25 +3340,28 @@
     border-radius: 1px;
     pointer-events: none;
   }
-  @media (max-width: 700px) {
+  @container (max-width: 700px) {
     /* bottom raised to clear the fixed bottom-nav tab bar added
        2026-08-12 (~70px tall incl. safe-area padding) — both this
        toggle and the egg positions below used to sit at 14px, which
        is now underneath the tab bar. */
-    .chambolle-toggle { width: 34px; height: 34px; font-size: 13px; bottom: 84px; left: 14px; }
+    .chambolle-toggle { width: 34px; height: 34px; font-size: 13px; bottom: 84px; left: calc(14px + var(--frame-gap)); }
 
     /* All three popup positions land in the bottom-right corner on
        phones so the egg never floats over reading content. Each
        keeps a slight rotation for variety. These rules live here
-       (rather than in the main mobile @media block earlier in the
-       file) so the cascade resolves AFTER the desktop pos-* rules. */
+       (rather than in the main mobile @container block earlier in
+       the file) so the cascade resolves AFTER the desktop pos-* rules.
+       right uses --frame-gap (2026-08-13) so "14px from the edge" means
+       14px from the site-frame's edge, not the true browser viewport's
+       edge — see the --frame-gap definition in :root. */
     .chambolle-egg.pos-br,
     .chambolle-egg.pos-bl,
     .chambolle-egg.pos-r {
       top: auto !important;
       left: auto !important;
       bottom: 84px !important;
-      right: 14px !important;
+      right: calc(14px + var(--frame-gap)) !important;
     }
     .chambolle-egg.pos-bl {
       transform: translateY(calc(100% + 40px)) rotate(4deg);
@@ -3458,5 +3525,6 @@ Object.keys(eggSectionMap).forEach(id => {
 });
 </script>
 
+</div><!-- end #site-frame -->
 </body>
 </html>
