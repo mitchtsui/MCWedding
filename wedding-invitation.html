@@ -57,7 +57,11 @@
     --bg-card:   #F5EEE4;
     --text:      #2E2E1C;
     --text-mid:  var(--olive);
-    --text-light: var(--sea-spray);
+    /* 2026-08-17: was var(--sea-spray) #6A7A5A -> 3.72:1 on --gardenia, which
+       fails WCAG AA (4.5:1) and was carrying the page's smallest text. Deepened
+       to its own value: 4.95:1. --sea-spray itself is unchanged — it is still a
+       brand Pantone and is used as a button BACKGROUND, where it is fine. */
+    --text-light: #58664A;
     --accent:    var(--olive);
     --accent-warm: var(--golden);
     --accent-blush: var(--rose-bisque);
@@ -65,15 +69,15 @@
     --divider:   #D8CEBC;
     --white:     #FAF7F0;
 
-    /* 2026-08-13: the site frame (#site-frame) caps the page to this width,
-       centred. --frame-gap is the horizontal distance from the TRUE
-       viewport edge to the frame's edge — 0 on an actual narrow phone
-       (frame shrinks to fit, no gap), positive once the browser is wider
-       than the cap. position:fixed elements that need to hug the frame's
-       edge (rather than the real viewport's edge) add this to their
-       left/right offset — see the Chambolle egg/bubble/toggle rules. */
-    --frame-max: 430px;
-    --frame-gap: max(0px, calc((100vw - var(--frame-max)) / 2));
+    /* 2026-08-17: the 2026-08-13 phone-width "site frame" was removed and the
+       site is a normal responsive layout again — real desktop above 700px,
+       mobile below. Every breakpoint is @media (real viewport) once more, not
+       @container. These two vars are kept, neutralised, only so any stray
+       reference left in the file resolves harmlessly instead of breaking a
+       calc(). Do not reintroduce a width cap here — see §Responsive in
+       CLAUDE.md. */
+    --frame-max: none;
+    --frame-gap: 0px;
   }
 
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -101,55 +105,41 @@
     padding-bottom: 72px;
   }
 
-  /* ─── SITE FRAME ───
-     2026-08-13: caps the whole site to a phone-width column, centred, at
-     any browser width. Real mobile visitors (viewport already <= this
-     max-width) see zero change — the div just shrinks to fit, same as
-     always. Wider (desktop) visitors now see the exact same layout inside
-     a framed column instead of a separate wide layout.
-     - container-type: inline-size turns this into the reference container
-       for every @container query below (converted from @media 2026-08-13)
-       — so the "mobile" breakpoints now key off THIS element's width, not
-       the actual browser viewport, and therefore always match once it's
-       capped below 700px.
-     - Deliberately NOT using a `transform` on this element to try to
-       contain its `position:fixed` descendants (nav, bottom-nav,
-       lightbox, floor-plan modal, Chambolle egg/bubble/toggle) — that's
-       a real CSS technique (any transformed ancestor becomes the
-       containing block for fixed descendants), but it turns "fixed"
-       into "stuck to the bottom of this whole (very tall) element"
-       rather than "stuck to the visible viewport while scrolling",
-       which breaks the bottom tab bar's entire reason for existing.
-       Tried it, watched the bottom nav land 4000px down the page
-       instead of staying on screen, reverted. Each fixed element that
-       used to span left:0;right:0 (the real viewport edges) is instead
-       given an explicit `left: 50%; transform: translateX(-50%); width:
-       min(var(--frame-max), 100vw);` directly, so it stays genuinely
-       viewport-fixed (follows scroll correctly) while just being
-       width-capped and centered to match the frame. Small fixed elements
-       positioned by edge offset instead (the Chambolle egg/bubble/toggle)
-       use --frame-gap the same way — see those rules further down. See
-       each rule below.
-     - vw/vh units elsewhere in the stylesheet (clamp() preferred values,
-       --hero-photo-h, etc.) still measure the real browser viewport, not
-       this frame — harmless here since those are all clamp()s whose caps
-       were already tuned for mobile; on a wide desktop viewport they just
-       resolve to their (mobile-appropriate) max bound instead of scaling
-       further, which is what we want. */
+  /* ─── SITE FRAME (now a pass-through) ───
+     2026-08-17: the phone-width column added on 2026-08-13 was removed. The
+     site is a normal responsive layout again: real desktop above 700px,
+     mobile below, driven by @media on the actual viewport.
+
+     #site-frame is deliberately KEPT in the DOM as a transparent full-width
+     wrapper rather than deleted, because a lot of JS and CSS still assumes
+     the nesting (and `body` relies on being its parent for the
+     padding-bottom rule below). It sets no width cap and no container-type,
+     so it has no layout effect of its own.
+
+     Two things that must NOT come back:
+     - `container-type` here. It made every "mobile" breakpoint key off this
+       element instead of the viewport, so desktop could never match them.
+     - A `transform` on this element. Any transformed ancestor becomes the
+       containing block for its position:fixed descendants, which would strand
+       the bottom tab bar thousands of px down the page instead of pinning it
+       to the viewport. (Tried in Aug 2026, reverted.)
+
+     Fixed descendants (nav, bottom-nav, lightbox, floor-plan modal, Chambolle
+     egg/bubble/toggle) are back to plain viewport positioning — inset:0 or
+     left:0;right:0 — not the centred width-capped variants. */
   #site-frame {
-    max-width: var(--frame-max);
-    margin: 0 auto;
+    width: 100%;
+    margin: 0;
     position: relative;
     background: var(--bg);
     min-height: 100vh;
     overflow-x: hidden;
-    container-type: inline-size;
   }
 
   /* ─── NAV ─── */
   nav {
     position: fixed;
-    top: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
+    top: 0; left: 0; right: 0;
     z-index: 100;
     background: var(--bg);
     border-bottom: 1px solid var(--divider);
@@ -185,7 +175,7 @@
   }
   .nav-link {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     font-weight: 500;
     letter-spacing: 0.18em;
     text-transform: uppercase;
@@ -215,7 +205,14 @@
     min-height: 100vh;
     display: flex;
     flex-direction: column;
-    justify-content: center;   /* whole text block centred in the space below the photo */
+    /* 2026-08-17: was `center`, which split ALL leftover vertical space evenly
+       above and below the text block. Because padding-top already reserves the
+       photo's full height, that slack is measured from under the photo — so
+       the taller the window, the further the wording floated away from it
+       (measured 329px of dead background at a 1464px-tall viewport; fine on a
+       phone, awful on a desktop monitor). flex-start pins the text a fixed,
+       deliberate distance below the photo at every window height instead. */
+    justify-content: flex-start;
     align-items: center;
     text-align: center;
     /* Reserves exactly the photo's height, not just nav clearance, so the
@@ -223,12 +220,11 @@
        position:absolute and so sits outside this flex flow; without this
        the two are positioned independently and can collide (they did:
        without a fade to hide it, "Save the Date" overlapped the photo by
-       ~18px on a 1440x900 viewport). This guarantee holds regardless of
-       justify-content — center still measures the available space from
-       here down, it just distributes any slack on both sides instead of
-       only above. The nav is fixed and overlays the photo directly, so no
-       separate nav clearance is needed here. */
-    padding-top: var(--hero-photo-h);
+       ~18px on a 1440x900 viewport). The nav is fixed and overlays the photo
+       directly, so no separate nav clearance is needed here. The added gap is
+       the breathing room between photo and wording — change THIS, not
+       justify-content, if the spacing needs tuning. */
+    padding-top: calc(var(--hero-photo-h) + clamp(1.75rem, 4vh, 3.25rem));
     padding-bottom: clamp(2rem, 6vh, 4rem);
     position: relative;
     overflow: hidden;
@@ -266,7 +262,7 @@
      plays the small-caps label now carries this. */
   .hero-script {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(1.4rem, 2.6cqw, 2rem);
+    font-size: clamp(1.4rem, 2.6vw, 2rem);
     font-weight: 300;
     letter-spacing: 0.25em;
     line-height: 1.35;
@@ -283,7 +279,7 @@
      CLAUDE.md before changing the copy here again. */
   .hero-names {
     font-family: 'Besotted Love', 'Alex Brush', script;
-    font-size: clamp(2.4rem, 5cqw, 4.5rem);
+    font-size: clamp(2.4rem, 5vw, 4.5rem);
     color: var(--olive);
     line-height: 1.05;
     /* Same ascent-overshoot fix as before (Besotted Love's ascent metric
@@ -295,11 +291,15 @@
   }
   .hero-chambolle {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(0.85rem, 1.4cqw, 1.2rem);
+    font-size: clamp(0.85rem, 1.4vw, 1.2rem);
     font-weight: 300;
     letter-spacing: 0.25em;
     text-transform: uppercase;
-    color: #B89AA4; /* Rose Bisque deepened for legibility on Gardenia */
+    /* 2026-08-17: #B89AA4 measured only 2.06:1 on --gardenia — the lowest
+       contrast on the site, at 12.8px. No size/weight exemption can apply
+       below 18.66px bold, so the colour itself had to move. #7A5A66 keeps the
+       rose-bisque identity a full step deeper and measures 4.86:1. */
+    color: #7A5A66;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -319,7 +319,7 @@
     margin-top: 0.9rem;
     line-height: 1.9;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.68rem;
+    font-size: 0.80rem;
     font-weight: 800;
     letter-spacing: 0.22em;
     text-transform: uppercase;
@@ -353,7 +353,7 @@
   }
   .countdown-label {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -367,7 +367,7 @@
     gap: 0.55rem;
     margin-top: 1.3rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.55rem;
+    font-size: 0.72rem;
     letter-spacing: 0.28em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -400,7 +400,7 @@
     position: absolute;
     bottom: 2.5rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.58rem;
+    font-size: 0.74rem;
     font-weight: 800;
     letter-spacing: 0.2em;
     text-transform: uppercase;
@@ -432,14 +432,14 @@
   /* ─── LABEL / TITLE PATTERN ─── */
   .eyebrow {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     color: var(--text-light);
     margin-bottom: 0.8rem;
   }
   h2.section-title {
-    font-size: clamp(2rem, 4cqw, 2.8rem);
+    font-size: clamp(2rem, 4vw, 2.8rem);
     font-weight: 300;
     line-height: 1.2;
     margin-bottom: 1.5rem;
@@ -477,15 +477,28 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 6px;
+    gap: 14px;
     z-index: 10;
   }
+  /* 2026-08-17: the dot itself stays 6px visually, but an invisible ::after
+     pad grows the actual touch target to 44x44 — these were 6x6 hit areas,
+     about a fifth of the minimum comfortable tap size, sitting over a photo
+     where a mis-tap does nothing visible. Container gap widened to keep the
+     enlarged targets from overlapping each other. */
   .story-dots .dot {
+    position: relative;
     width: 6px; height: 6px;
     border-radius: 50%;
     background: rgba(255,255,255,0.5);
     cursor: pointer;
     transition: background 0.3s, transform 0.3s;
+  }
+  .story-dots .dot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 44px; height: 44px;
+    transform: translate(-50%, -50%);
   }
   .story-dots .dot.active {
     background: white;
@@ -493,7 +506,7 @@
   }
   .story-quote {
     font-style: italic;
-    font-size: clamp(1.1rem, 1.8cqw, 1.35rem);
+    font-size: clamp(1.1rem, 1.8vw, 1.35rem);
     font-weight: 300;
     line-height: 1.6;
     color: var(--text);
@@ -502,7 +515,7 @@
   .story-body p { margin-bottom: 1rem; font-size: 0.9rem; line-height: 1.85; color: var(--text-mid); }
   .story-body .eyebrow {
     font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(1.8rem, 3cqw, 2.4rem);
+    font-size: clamp(1.8rem, 3vw, 2.4rem);
     font-weight: 400;
     letter-spacing: 0.08em;
     text-transform: none;
@@ -576,15 +589,28 @@
     left: 50%;
     transform: translateX(-50%);
     display: flex;
-    gap: 6px;
+    gap: 14px;
     z-index: 10;
   }
+  /* 2026-08-17: the dot itself stays 6px visually, but an invisible ::after
+     pad grows the actual touch target to 44x44 — these were 6x6 hit areas,
+     about a fifth of the minimum comfortable tap size, sitting over a photo
+     where a mis-tap does nothing visible. Container gap widened to keep the
+     enlarged targets from overlapping each other. */
   .chambolle-dots .dot {
+    position: relative;
     width: 6px; height: 6px;
     border-radius: 50%;
     background: rgba(255,255,255,0.5);
     cursor: pointer;
     transition: background 0.3s, transform 0.3s;
+  }
+  .chambolle-dots .dot::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 50%;
+    width: 44px; height: 44px;
+    transform: translate(-50%, -50%);
   }
   .chambolle-dots .dot.active {
     background: white;
@@ -605,36 +631,12 @@
   }
   .stat-label {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.58rem;
+    font-size: 0.74rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-light);
     display: block;
     margin-top: 0.3rem;
-  }
-
-  /* ─── WEDDING DAY ─── */
-  #wedding-day { background: var(--bg); }
-  /* Wedding background wrapper */
-  .wedding-bg-wrap {
-    position: relative;
-    overflow: hidden;
-    padding-top: 5rem;
-    padding-bottom: 5rem;
-    background-image: url('photos/wedding-day-garden.png');
-    background-size: cover;
-    background-position: center 85%;
-  }
-  .wedding-bg-wrap::before {
-    content: '';
-    position: absolute;
-    inset: 0;
-    background: rgba(237,230,216,0.72);
-    z-index: 0;
-  }
-  .wedding-bg-wrap > div {
-    position: relative;
-    z-index: 1;
   }
 
   .rsvp-btn {
@@ -643,7 +645,7 @@
     background: var(--olive);
     color: var(--gardenia);
     font-family: 'Raleway', sans-serif;
-    font-size: 0.68rem;
+    font-size: 0.80rem;
     letter-spacing: 0.2em;
     text-transform: uppercase;
     text-decoration: none;
@@ -662,52 +664,6 @@
   /* ─── BOTTOM TAB BAR — mobile only, hidden here so desktop never shows
      it; the visible flex layout lives in the ≤700px media query. ─── */
   .bottom-nav { display: none; }
-
-  .venue-header {
-    text-align: center;
-    padding: 1.5rem 0 0;
-    margin-bottom: 0;
-  }
-  .venue-title {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: clamp(2.2rem, 4cqw, 3.2rem);
-    font-weight: 300;
-    letter-spacing: 0.12em;
-    text-transform: uppercase;
-    color: var(--text);
-    margin-bottom: 0.8rem;
-  }
-  .venue-address { font-size: 1rem; color: var(--text-mid); margin-bottom: 0.3rem; }
-  .venue-attire { font-style: italic; font-size: 1.25rem; color: var(--text-mid); }
-  .venue-attire strong { font-style: normal; font-family: 'Raleway', sans-serif; font-size: 0.72rem; letter-spacing: 0.14em; text-transform: uppercase; margin-right: 0.5rem; color: var(--text); }
-  /* Forced line break in the venue name — hidden on desktop, shown on mobile */
-  .venue-break { display: none; }
-
-  .timeline { margin-top: 0; }
-  .timeline-item {
-    display: grid;
-    grid-template-columns: 200px 1fr;
-    gap: 3rem;
-    padding: 2.5rem 0;
-    border-bottom: 1px solid var(--divider);
-  }
-  .timeline-item:first-child { border-top: 1px solid var(--divider); }
-  .timeline-time {
-    font-family: 'Raleway', sans-serif;
-    font-size: 0.7rem;
-    letter-spacing: 0.12em;
-    color: var(--text-mid);
-    padding-top: 0.2rem;
-  }
-  .timeline-title {
-    font-family: 'Raleway', sans-serif;
-    font-size: 0.7rem;
-    letter-spacing: 0.2em;
-    text-transform: uppercase;
-    font-weight: 600;
-    margin-bottom: 0.7rem;
-  }
-  .timeline-desc { font-size: 0.95rem; color: var(--text-mid); max-width: 480px; }
 
   /* ─── MAP ─── */
   #travel { background: var(--bg); }
@@ -741,7 +697,7 @@
   .map-address strong {
     display: block;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -755,7 +711,7 @@
     gap: 0.5rem;
     padding: 0.6rem 1.2rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     text-decoration: none;
@@ -784,7 +740,7 @@
   }
   .gallery-hint.show { display: block; }
   .gallery-hint code {
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     background: rgba(0,0,0,0.05);
     padding: 0.1em 0.3em;
   }
@@ -828,7 +784,7 @@
   .lightbox {
     display: none;
     position: fixed;
-    top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
+    inset: 0;
     background: rgba(26,26,20,0.95);
     z-index: 500;
     align-items: center;
@@ -881,13 +837,13 @@
     position: absolute;
     bottom: 1.2rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.16em;
     color: rgba(255,255,255,0.4);
     text-transform: uppercase;
   }
 
-  @container (max-width: 700px) {
+  @media (max-width: 700px) {
     .gallery-grid { grid-template-columns: repeat(2, 1fr); }
     .gallery-item.wide { grid-column: span 2; }
   }
@@ -926,15 +882,25 @@
     line-height: 1;
   }
   .qa-question.open .qa-icon { transform: rotate(45deg); }
+  /* 2026-08-17: was `max-height: 0 -> 300px`. A fixed px cap silently clipped
+     any answer that grew past it, with no visual cue that text was missing.
+     The 0fr -> 1fr grid-row technique animates to the content's OWN height, so
+     an answer can never be cut off no matter how long the copy gets.
+     Expects exactly ONE element child (the <p>); grid-auto-rows keeps any
+     extra child collapsed too rather than leaking out while closed. */
   .qa-answer {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease, padding 0.3s ease;
+    display: grid;
+    grid-template-columns: 100%;
+    grid-template-rows: 0fr;
+    grid-auto-rows: 0fr;
+    transition: grid-template-rows 0.4s ease;
   }
+  .qa-answer > * { overflow: hidden; min-height: 0; }
   .qa-answer.open {
-    max-height: 300px;
-    padding-bottom: 1.4rem;
+    grid-template-rows: 1fr;
+    grid-auto-rows: auto;
   }
+  .qa-answer.open > *:last-child { padding-bottom: 1.4rem; }
   .qa-answer p {
     font-size: 0.95rem;
     line-height: 1.8;
@@ -949,7 +915,7 @@
   .form-label {
     display: block;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-mid);
@@ -986,7 +952,7 @@
     background: transparent;
     border: none;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-mid);
@@ -1003,7 +969,7 @@
     color: var(--gardenia);
     border: none;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     letter-spacing: 0.22em;
     text-transform: uppercase;
     cursor: pointer;
@@ -1048,7 +1014,7 @@
   }
   footer p {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.58rem;
+    font-size: 0.74rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1066,11 +1032,38 @@
   }
   .reveal.visible { opacity: 1; transform: none; }
 
+  /* ─── ANCHOR OFFSET ───
+     Every nav link is an in-page anchor and the top nav is position:fixed, so
+     without this the target section's heading lands underneath the bar. The
+     hero is exempt (it has its own large top padding). On mobile the fixed bar
+     is at the BOTTOM, so no top offset is needed there — see the media query. */
+  section[id] { scroll-margin-top: 84px; }
+  #home { scroll-margin-top: 0; }
+
+  /* ─── REDUCED MOTION ───
+     2026-08-17: there was previously no prefers-reduced-motion support at all,
+     while the page ran an infinite scroll-hint pulse, a countdown that
+     re-animates every second, two auto-advancing slideshows and slide-in
+     popups. For a guest who has asked their OS for less motion, that is a
+     genuinely unpleasant page. Content stays fully visible — .reveal is
+     forced to its end state rather than left at opacity 0. */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+    html { scroll-behavior: auto; }
+    .reveal { opacity: 1 !important; transform: none !important; }
+    .hero-scroll-hint .scroll-line { animation: none !important; }
+  }
+
   /* ─── RESPONSIVE ─── */
   /* ═══════════════════════════════════════
      MOBILE — comprehensive ≤ 700px styles
      ═══════════════════════════════════════ */
-  @container (max-width: 700px) {
+  @media (max-width: 700px) {
 
     /* ── NAV — replaced by the fixed bottom tab bar on mobile (see
        .bottom-nav below); the top bar and its hamburger/accordion no
@@ -1082,7 +1075,7 @@
     .bottom-nav {
       display: flex;
       position: fixed;
-      left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw); bottom: 0;
+      left: 0; right: 0; bottom: 0;
       z-index: 150;
       background: var(--bg);
       border-top: 1px solid var(--divider);
@@ -1102,17 +1095,25 @@
       text-decoration: none;
       color: var(--text-light);
       font-family: 'Raleway', sans-serif;
-      font-size: 0.56rem;
-      letter-spacing: 0.06em;
+      /* Six tabs now instead of five, so the label has to survive a narrower
+         cell. Worst realistic case is a 360px Galaxy S24: 360/6 = 60px per
+         tab, and the longest label ("Photos") sets ~44px at 0.7rem — fits with
+         14px to spare even on a 344px Z Fold cover screen (57px per tab). Flat
+         rather than a clamp so the label never drops under the 11px floor the
+         rest of the page now respects. */
+      font-size: 0.7rem;
+      letter-spacing: 0.04em;
       text-transform: uppercase;
-      padding: 0.2rem 0.2rem;
+      text-align: center;
+      line-height: 1.2;
+      white-space: nowrap;
+      padding: 0.2rem 0.1rem;
       cursor: pointer;
       min-height: 44px;
       outline: none;
     }
-    /* The More button is a <button>, unlike the other four <a> tabs — reset
-       its native focus ring but keep one for real keyboard navigation
-       (:focus-visible), rather than silently dropping it for everyone. */
+    /* Keep a visible ring for real keyboard navigation (:focus-visible)
+       rather than silently dropping it for everyone. */
     .bottom-tab:focus-visible { outline: 2px solid var(--olive); outline-offset: 2px; }
     .tab-icon-wrap {
       width: 34px;
@@ -1142,7 +1143,7 @@
       width: 100%;
       justify-content: space-between;
       text-align: left;
-      font-size: 0.62rem;
+      font-size: 0.76rem;
       min-height: 44px;
     }
     .nav-link:hover, .nav-link.active {
@@ -1151,35 +1152,45 @@
     .nav-link.active { color: var(--olive); }
 
     /* ── SECTIONS ── */
-    section { padding: 1.2rem 1.2rem; }
-    .section-divider { margin-bottom: 0.6rem; }
+    section { padding: 2.4rem 1.2rem; }
+    .section-divider { margin-bottom: 1.4rem; }
+    /* The fixed bar is at the BOTTOM on mobile, so anchors need almost no top
+       offset here — the 84px desktop value would leave a visible gap. */
+    section[id] { scroll-margin-top: 12px; }
 
     /* ── HERO ── */
     /* Photo occupies the upper screen; the wording is centred below it.
        Slightly more bottom padding than desktop so the block clears the
        home-indicator area on a phone. */
-    #home { --hero-photo-h: clamp(220px, 38vh, 380px); padding-top: var(--hero-photo-h); padding-bottom: 2.6rem; }
+    /* Same photo-height + gap formula as desktop, just a shorter photo band
+       and a tighter gap so the wording and countdown still clear the fold. */
+    #home { --hero-photo-h: clamp(220px, 38vh, 380px); padding-top: calc(var(--hero-photo-h) + 1.4rem); padding-bottom: 2.6rem; }
     /* hero-script: small-caps label, same treatment "Christy & Mitchell"
        (a longer string) safely used at this size before the swap — a
        shorter string in the same font/spacing is provably no less safe. */
-    .hero-script { font-size: clamp(1.2rem, 6cqw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; margin-bottom: 0.8rem; }
-    /* hero-names: big focal script. 7.6cqw, re-derived for "Christy & Mitchell"
+    .hero-script { font-size: clamp(1.2rem, 6vw, 1.8rem); letter-spacing: 0.18em; line-height: 1.4; margin-bottom: 0.8rem; }
+    /* hero-names: big focal script. 7.6vw, re-derived for "Christy & Mitchell"
        in Besotted Love (11.36x font-size wide, measured via canvas
        measureText) — do not reuse the old hero-script mobile value here,
        it was tuned for a different, narrower string. */
-    .hero-names  { font-size: clamp(1.5rem, 7.6cqw, 3.35rem); }
+    .hero-names  { font-size: clamp(1.5rem, 7.6vw, 3.35rem); }
     .hero-chambolle { font-size: 0.8rem; letter-spacing: 0.18em; margin-top: 0.5rem; }
+    /* 2026-08-17: was clamp(0.5rem, 2.4vw, 0.7rem) + white-space: nowrap.
+       Forcing "THURSDAY • NOVEMBER 12, 2026 • HONG KONG" onto one line on a
+       360px phone drove this down to ~8.6px. Letting it wrap instead buys the
+       size back — the date is one of the two facts on the hero, so it should
+       not be the smallest thing on the screen. */
     .hero-meta {
-      font-size: clamp(0.5rem, 2.4cqw, 0.7rem);
+      font-size: clamp(0.72rem, 3vw, 0.8rem);
       letter-spacing: 0.12em;
-      white-space: nowrap;
+      white-space: normal;
       margin-top: 0.9rem;
       line-height: 1.8;
     }
     .hero-meta span { margin: 0 0.35rem; }
     .countdown { gap: 1rem; margin-top: 1.5rem; }
     .countdown-number { font-size: 2rem; }
-    .countdown-label  { font-size: 0.52rem; }
+    .countdown-label  { font-size: 0.70rem; }
     .countdown-sep    { font-size: 1.4rem; }
 
     /* ── STORY ── */
@@ -1205,23 +1216,12 @@
     /* ── CHAMBOLLE ── */
     #chambolle .chambolle-card { grid-template-columns: 1fr; }
     .chambolle-info { padding: 2rem 1.5rem; }
-    .chambolle-info .eyebrow { font-size: 0.6rem; }
+    .chambolle-info .eyebrow { font-size: 0.75rem; }
     .chambolle-info h2.section-title { font-size: 1.8rem; }
     .chambolle-slideshow { height: 280px; }
     .chambolle-photo { max-height: 280px; }
 
     /* ── WEDDING DAY ── */
-    .venue-header { padding: 1.5rem 0; }
-    .venue-attire { font-size: 1rem; }
-    .venue-break { display: inline; }
-    .timeline-item {
-      grid-template-columns: 1fr;
-      gap: 0.5rem;
-      padding: 1.9rem 0;
-    }
-    .timeline-time  { font-size: 0.65rem; }
-    .timeline-title { font-size: 0.65rem; margin-bottom: 0.4rem; }
-    .timeline-desc  { font-size: 0.88rem; max-width: 100%; }
 
     /* ── TRAVEL / MAP ── */
     .map-embed { height: 300px; }
@@ -1232,7 +1232,7 @@
       gap: 1rem;
     }
     .map-actions { width: 100%; }
-    .map-btn { flex: 1; justify-content: center; padding: 0.7rem 0.5rem; font-size: 0.58rem; }
+    .map-btn { flex: 1; justify-content: center; padding: 0.7rem 0.5rem; font-size: 0.74rem; }
 
     /* ── GALLERY ── */
     .gallery-grid { grid-template-columns: repeat(2, 1fr); gap: 0.4rem; }
@@ -1247,24 +1247,24 @@
     #rsvp { padding: 3rem 1.2rem; }
     .rsvp-container { max-width: 100%; }
     .form-input, .form-select, .form-textarea { font-size: 1rem; }
-    .form-label { font-size: 0.58rem; }
-    .att-btn { font-size: 0.58rem; padding: 0.8rem 0.5rem; }
-    .form-submit { font-size: 0.65rem; padding: 1rem; }
+    .form-label { font-size: 0.74rem; }
+    .att-btn { font-size: 0.74rem; padding: 0.8rem 0.5rem; }
+    .form-submit { font-size: 0.78rem; padding: 1rem; }
 
     /* ── SECTION TITLES ── */
-    h2.section-title { font-size: clamp(1.5rem, 7cqw, 2rem); }
-    .eyebrow { font-size: 0.58rem; }
+    h2.section-title { font-size: clamp(1.5rem, 7vw, 2rem); }
+    .eyebrow { font-size: 0.74rem; }
 
     /* ── FOOTER ── */
     footer { padding: 2rem 1.2rem; }
     .footer-script { font-size: 1.6rem; }
-    footer p { font-size: 0.54rem; }
+    footer p { font-size: 0.72rem; }
 
     /* ── CHAMBOLLE EGG (smaller on mobile; positions overridden in
        the dedicated egg style block at the end of the file so the
        cascade resolves the right way) ── */
     .chambolle-egg img { width: 90px !important; height: auto !important; }
-    .chambolle-bubble { font-size: 0.75rem; max-width: 130px; }
+    .chambolle-bubble { font-size: 0.85rem; max-width: 130px; }
 
     /* ── LIGHTBOX ── */
     .lb-prev { left: 0.2rem; font-size: 2rem; }
@@ -1272,17 +1272,17 @@
   }
 
   /* extra-small phones */
-  @container (max-width: 390px) {
+  @media (max-width: 390px) {
     /* hero-script (small-caps label): same value "Christy & Mitchell" (a
        longer string) safely used here before the swap. */
-    .hero-script { font-size: 5.5cqw; letter-spacing: 0.12em; }
+    .hero-script { font-size: 5.5vw; letter-spacing: 0.12em; }
     /* hero-names (big script) intentionally not overridden here — the
        clamp() in the 700px breakpoint already sizes it safely down to
        the smallest phones for "Christy & Mitchell" in Besotted Love. */
-    nav a { font-size: 0.52rem; }
+    nav a { font-size: 0.70rem; }
     .countdown { gap: 0.4rem; }
     .countdown-number { font-size: 1.6rem; }
-    .countdown-label  { font-size: 0.48rem; letter-spacing: 0.14em; }
+    .countdown-label  { font-size: 0.70rem; letter-spacing: 0.14em; }
     .countdown-sep    { font-size: 1.2rem; padding-bottom: 0.85rem; }
   }
 
@@ -1293,7 +1293,7 @@
     padding: 1rem 1.5rem;
     margin-bottom: 2rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.75rem;
+    font-size: 0.85rem;
     color: #6B5500;
     line-height: 1.5;
   }
@@ -1306,60 +1306,66 @@
 </style>
 </head>
 <body>
-<!-- ─── SITE FRAME ───
-     2026-08-13: the whole site now renders inside a phone-width column,
-     centred on the page, at ANY browser width — desktop included. Per user
-     request: most guests open the link on their phone, so rather than
-     maintain a separate (and, per feedback, worse-looking) desktop layout,
-     desktop visitors now just see the same already-approved mobile
-     experience inside a framed column. See CLAUDE.md for the full
-     reasoning and how the @container conversion below makes this work. -->
+<!-- ─── SITE FRAME (pass-through wrapper) ───
+     2026-08-17: the phone-width column is gone; this div is now full-width
+     and has no layout effect. Kept only so existing CSS/JS nesting stays
+     valid. The site is responsive again — desktop above 700px, mobile below.
+     See the #site-frame rule in the stylesheet for what must not come back. -->
 <div id="site-frame">
 
-<!-- ─── NAV ───
-     Flat links, no dropdowns. Home/RSVP/Wedding Day/Gallery are the primary
-     flow; Story/Chambolle/Travel/Q&A collapsed into the single #more page
-     (see below), so there's nothing left to group into a submenu — each
-     top-level item now points straight at its section. -->
+<!-- ─── NAV (desktop > 700px) ───
+     2026-08-17: labels are plain nouns again. The joke labels ("Show Up or
+     Explain Yourself" = the venue and timings, "Feel Free to Scroll Past" =
+     where Travel and Q&A were hiding) read well in prose but made the nav
+     unscannable — a guest hunting for directions had no word to aim at. The
+     wit now lives in the section bodies, where it costs nothing; the nav
+     itself just says where things are. Order matches DOM order exactly, which
+     is also what the scroll-spy assumes. -->
 <nav id="nav">
   <button class="nav-burger" id="nav-burger" aria-label="Menu" aria-expanded="false" onclick="toggleNav()">
     <span></span><span></span><span></span>
   </button>
   <div class="nav-list" id="nav-list">
     <a href="#home"        class="nav-link active" onclick="closeNav()">Home</a>
-    <a href="#rsvp"        class="nav-link" onclick="closeNav()">RSVP</a>
-    <a href="#wedding-day" class="nav-link" onclick="closeNav()">Show Up or Explain Yourself</a>
-    <a href="#gallery"     class="nav-link" onclick="closeNav()">Photos We Paid Too Much For</a>
-    <a href="#more"        class="nav-link" onclick="closeNav()">Feel Free to Scroll Past</a>
+    <a href="#wedding-day" class="nav-link" onclick="closeNav()">Wedding Day</a>
+    <a href="#travel"      class="nav-link" onclick="closeNav()">Travel</a>
+    <a href="#qa"          class="nav-link" onclick="closeNav()">Q&amp;A</a>
+    <a href="#rsvp"        class="nav-link nav-cta" onclick="closeNav()">RSVP</a>
+    <a href="#gallery"     class="nav-link" onclick="closeNav()">Gallery</a>
+    <a href="#more"        class="nav-link" onclick="closeNav()">More</a>
   </div>
 </nav>
 
-<!-- ─── BOTTOM TAB BAR (mobile only) ───
-     Replaces the top hamburger + accordion on small screens. Desktop is
-     untouched — .bottom-nav only renders inside the ≤700px media query.
-     5 tabs now map 1:1 to the page's 5 sections in order — the old "More"
-     overflow modal is gone since #more IS the destination now, not a menu
-     of other destinations. -->
+<!-- ─── BOTTOM TAB BAR (mobile only, ≤700px) ───
+     2026-08-17: six tabs, in DOM order, covering everything a guest actually
+     needs — Travel and Q&A now have their own tabs instead of being buried in
+     "More". Icons match their destination (the old "More" tab used a clock,
+     which described nothing in it). Six tabs still clear the 44px touch
+     minimum on the narrowest phone we support: 320 / 6 = 53px. -->
 <div class="bottom-nav" id="bottom-nav" role="navigation" aria-label="Section navigation">
   <a href="#home" class="bottom-tab active" data-tab="home">
     <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M4 11.5 12 4l8 7.5"/><path d="M6 10v9a1 1 0 0 0 1 1h3v-6h4v6h3a1 1 0 0 0 1-1v-9"/></svg></span>
     <span>Home</span>
   </a>
-  <a href="#rsvp" class="bottom-tab" data-tab="rsvp">
-    <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 6.5 8 6.5 8-6.5"/></svg></span>
-    <span>RSVP</span>
-  </a>
   <a href="#wedding-day" class="bottom-tab" data-tab="wedding-day">
     <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="5.5" width="16" height="15" rx="1.5"/><path d="M4 10h16"/><path d="M8 3.5v3.5M16 3.5v3.5"/></svg></span>
     <span>Day</span>
   </a>
+  <a href="#travel" class="bottom-tab" data-tab="travel">
+    <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><path d="M12 21s7-5.6 7-11a7 7 0 1 0-14 0c0 5.4 7 11 7 11Z"/><circle cx="12" cy="10" r="2.6"/></svg></span>
+    <span>Travel</span>
+  </a>
+  <a href="#qa" class="bottom-tab" data-tab="qa">
+    <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M9.4 9.3a2.7 2.7 0 1 1 3.4 3.1c-.6.2-.9.7-.9 1.3v.4"/><path d="M12 17.2h.01"/></svg></span>
+    <span>Q&amp;A</span>
+  </a>
+  <a href="#rsvp" class="bottom-tab" data-tab="rsvp">
+    <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5.5" width="17" height="13" rx="1.5"/><path d="m4 6.5 8 6.5 8-6.5"/></svg></span>
+    <span>RSVP</span>
+  </a>
   <a href="#gallery" class="bottom-tab" data-tab="gallery">
     <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3L17 11l3.5 4"/></svg></span>
-    <span>Gallery</span>
-  </a>
-  <a href="#more" class="bottom-tab" data-tab="more">
-    <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4l2.8 2.8"/></svg></span>
-    <span>More</span>
+    <span>Photos</span>
   </a>
 </div>
 
@@ -1369,7 +1375,13 @@
     <img src="photos/hero-paris.jpg" width="2000" height="1498" alt="Christy and Mitchell laughing together on a street in Paris" fetchpriority="high">
   </div>
   <div class="hero-script">Save the Date</div>
-  <div class="hero-names">Christy &amp; Mitchell</div>
+  <!-- 2026-08-17: promoted from <div> to <h1>. The page had no h1 at all, so
+       assistive tech and search previews had no document title to anchor to,
+       and the first heading encountered was an <h3> further down. Class is
+       unchanged — all the Besotted Love sizing/overshoot rules still apply
+       (see CLAUDE.md); `* { margin: 0 }` already neutralises the UA h1 margin
+       and .hero-names sets its own font-size, so nothing shifts visually. -->
+  <h1 class="hero-names">Christy &amp; Mitchell</h1>
   <div class="hero-chambolle">and Chambolle</div>
   <div class="hero-meta">
     Thursday <span>•</span> November 12, 2026 <span>•</span> Hong Kong
@@ -1403,6 +1415,443 @@
     <span class="scroll-line"></span>
   </a>
 
+</section>
+
+<!-- ─── WEDDING DAY ───
+     2026-08-17 rebuild. What was here: a 2.1MB PNG of the pop-up card's garden
+     art used as a full-bleed background, with "Wedding Day", the venue and the
+     attire set on top of it in a treatment that matched nothing else on the
+     site — and that restated venue/date information the RSVP seat card had
+     already given. Three problems in one: duplicated facts, a second competing
+     type system, and 40% of the page's bytes spent on a decorative background.
+
+     What replaced it: the invitation itself, rebuilt in HTML/CSS/SVG from the
+     printed card's own vocabulary — ivory panel on sage, gold double rule with
+     corner flourishes, the MC monogram, the formal wording, the 囍 seal, and the
+     card's line-art icon timeline. Same design language, but it is now real
+     text (selectable, translatable, screen-readable, responsive) in the site's
+     own fonts, and it is the ONE place venue/date/attire are stated.
+
+     The garden art is kept — it is genuinely lovely and it has Chambolle in it
+     — but as a decorative band at the foot of the section where nothing is set
+     on top of it, and as WebP (139KB, down from 2135KB). -->
+<style>
+  /* ── Card palette. Sampled from the printed invitation, scoped to this
+     section so it cannot leak into the site's Pantone tokens. Gold is used
+     for RULES AND ORNAMENT ONLY — it measures 2.98:1 on ivory, which is fine
+     for a decorative line and not fine for text, exactly as on the real card
+     where the ornament is gold and the words are near-black. */
+  #wedding-day {
+    --card-ivory:     #FBF6EC;
+    --card-sage:      #DCE3D5;
+    --card-gold:      #C2A56A;
+    --card-gold-soft: #DFCDA2;
+    --card-seal:      #A63A2E;
+    background: var(--card-sage);
+    padding-bottom: 0;
+    overflow: hidden;
+  }
+
+  .invite-card {
+    position: relative;
+    max-width: 620px;
+    margin: 0 auto;
+    background: var(--card-ivory);
+    padding: clamp(2.2rem, 5vw, 3.4rem) clamp(1.3rem, 4vw, 3rem);
+    text-align: center;
+    box-shadow: 0 10px 34px rgba(60, 66, 48, 0.13);
+  }
+  /* Double rule, drawn with the element's own border + an inset pseudo —
+     cheaper and sharper than a border-image, and it scales cleanly. */
+  .invite-card::before,
+  .invite-card::after {
+    content: '';
+    position: absolute;
+    pointer-events: none;
+  }
+  .invite-card::before { inset: 0;      border: 1px solid var(--card-gold); }
+  .invite-card::after  { inset: 6px;    border: 1px solid var(--card-gold-soft); }
+
+  .invite-corner {
+    position: absolute;
+    width: 46px; height: 46px;
+    color: var(--card-gold);
+    pointer-events: none;
+  }
+  .invite-corner.tl { top: 10px;    left: 10px;  }
+  .invite-corner.tr { top: 10px;    right: 10px; transform: scaleX(-1); }
+  .invite-corner.bl { bottom: 10px; left: 10px;  transform: scaleY(-1); }
+  .invite-corner.br { bottom: 10px; right: 10px; transform: scale(-1); }
+
+  .invite-inner { position: relative; z-index: 1; }
+
+  /* ── Monogram ── */
+  .invite-monogram { color: var(--card-gold); margin-bottom: 1.4rem; }
+  .invite-monogram svg { width: clamp(96px, 20vw, 124px); height: auto; display: block; margin: 0 auto; }
+  .invite-monogram .mono-letter {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: 40px;
+    font-weight: 500;
+    fill: var(--card-gold);
+  }
+
+  /* ── Wording ── */
+  .invite-pre,
+  .invite-request {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(0.95rem, 1.7vw, 1.05rem);
+    font-style: italic;
+    color: var(--text-mid);
+    line-height: 1.7;
+  }
+  .invite-names {
+    font-family: 'Besotted Love', 'Alex Brush', script;
+    /* Sized from the measured string width, NOT copied from the hero.
+       "Christy & Mitchell" in Besotted Love renders 11.36x font-size wide
+       (canvas measureText — see CLAUDE.md). Narrowest inner width is the
+       mobile card: 360px viewport - 2*1.2rem section padding - 2*1.1rem card
+       padding = 286px, so the floor must be <= 286/11.36 = 25.2px (1.57rem).
+       Widest is the 620px card at desktop padding 3rem: 524px inner, so the
+       cap must be <= 524/11.36 = 46.1px (2.88rem). 1.5rem/2.7rem sits inside
+       both with margin. Re-measure if this copy ever changes. */
+    font-size: clamp(1.4rem, 6.2vw, 2.7rem);
+    line-height: 1.05;
+    /* Same ascent-overshoot allowance the hero needs — Besotted Love's loops
+       overshoot a tight line box by ~0.44em. See CLAUDE.md. */
+    padding-top: 0.42em;
+    color: var(--olive);
+    margin: 0.5rem 0 0.7rem;
+  }
+  .invite-rule {
+    width: 100%;
+    height: 1px;
+    background: linear-gradient(to right, transparent, var(--card-gold), transparent);
+    margin: 1.5rem 0;
+  }
+  .invite-when {
+    font-family: 'Raleway', sans-serif;
+    font-size: clamp(0.78rem, 1.5vw, 0.86rem);
+    font-weight: 600;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text);
+  }
+  .invite-where {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(1.15rem, 2.4vw, 1.5rem);
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--text);
+    margin-top: 0.6rem;
+  }
+  .invite-addr {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(0.95rem, 1.7vw, 1.05rem);
+    color: var(--text-mid);
+    margin-top: 0.3rem;
+  }
+  .invite-attire {
+    font-family: 'Cormorant Garamond', serif;
+    font-style: italic;
+    font-size: clamp(1rem, 1.9vw, 1.15rem);
+    color: var(--text-mid);
+  }
+  .invite-attire span {
+    display: block;
+    font-family: 'Raleway', sans-serif;
+    font-style: normal;
+    font-size: 0.74rem;
+    font-weight: 500;
+    letter-spacing: 0.2em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    margin-bottom: 0.35rem;
+  }
+  /* ── 囍 seal, as on the printed card ── */
+  .invite-seal {
+    width: 42px; height: 42px;
+    margin: 1.6rem auto 0;
+    border: 1px solid var(--card-seal);
+    border-radius: 50%;
+    color: var(--card-seal);
+    font-size: 21px;
+    line-height: 40px;
+    opacity: 0.85;
+  }
+
+  /* ── Timeline, in the card's icon style ── */
+  .day-timeline {
+    max-width: 620px;
+    margin: clamp(2.5rem, 6vw, 3.5rem) auto 0;
+    list-style: none;
+    counter-reset: none;
+  }
+  .day-item {
+    display: grid;
+    grid-template-columns: 54px 1fr;
+    gap: 1.4rem;
+    padding: 1.6rem 0;
+    border-top: 1px solid rgba(194, 165, 106, 0.42);
+    text-align: left;
+  }
+  .day-item:last-child { border-bottom: 1px solid rgba(194, 165, 106, 0.42); }
+  .day-icon {
+    width: 54px; height: 54px;
+    border: 1px solid var(--card-gold);
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--card-gold);
+    background: var(--card-ivory);
+    flex-shrink: 0;
+  }
+  .day-icon svg { width: 26px; height: 26px; }
+  .day-time {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.78rem;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    color: var(--text);
+  }
+  .day-title {
+    font-family: 'Cormorant Garamond', serif;
+    font-size: clamp(1.25rem, 2.6vw, 1.5rem);
+    font-weight: 400;
+    color: var(--olive);
+    margin: 0.15rem 0 0.5rem;
+  }
+  .day-desc { font-size: 0.95rem; line-height: 1.75; color: var(--text-mid); }
+  .day-ps {
+    margin-top: 0.7rem;
+    font-style: italic;
+    font-size: 0.92rem;
+    color: var(--text-light);
+  }
+
+  /* ── Garden band ──
+     The pop-up card's artwork, kept as pure decoration at the foot of the
+     section. Nothing is ever set on top of it, which was the original
+     complaint. object-position keeps Chambolle and the front border of
+     flowers in frame as the band gets shorter on narrow screens. */
+  .garden-band {
+    margin-top: clamp(2.5rem, 6vw, 3.5rem);
+    height: clamp(130px, 22vw, 210px);
+    overflow: hidden;
+    line-height: 0;
+  }
+  .garden-band img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 88%;
+    display: block;
+  }
+
+  @media (max-width: 700px) {
+    .invite-card { padding: 2rem 1.1rem; }
+    .invite-corner { width: 34px; height: 34px; }
+    .day-item { grid-template-columns: 44px 1fr; gap: 1rem; padding: 1.4rem 0; }
+    .day-icon { width: 44px; height: 44px; }
+    .day-icon svg { width: 22px; height: 22px; }
+    .day-desc { font-size: 0.92rem; }
+  }
+</style>
+<section id="wedding-day">
+  <div class="container">
+
+    <div class="invite-card reveal">
+      <!-- Corner flourish, drawn once and mirrored into all four corners -->
+      <svg class="invite-corner tl" viewBox="0 0 46 46" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M2 16c0-8 6-14 14-14"/><path d="M2 24c0-12 10-22 22-22"/><path d="M8 8c3.6 0 6.4-1.4 8.4-4"/><circle cx="7.2" cy="7.2" r="1.4" fill="currentColor" stroke="none"/></svg>
+      <svg class="invite-corner tr" viewBox="0 0 46 46" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M2 16c0-8 6-14 14-14"/><path d="M2 24c0-12 10-22 22-22"/><path d="M8 8c3.6 0 6.4-1.4 8.4-4"/><circle cx="7.2" cy="7.2" r="1.4" fill="currentColor" stroke="none"/></svg>
+      <svg class="invite-corner bl" viewBox="0 0 46 46" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M2 16c0-8 6-14 14-14"/><path d="M2 24c0-12 10-22 22-22"/><path d="M8 8c3.6 0 6.4-1.4 8.4-4"/><circle cx="7.2" cy="7.2" r="1.4" fill="currentColor" stroke="none"/></svg>
+      <svg class="invite-corner br" viewBox="0 0 46 46" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M2 16c0-8 6-14 14-14"/><path d="M2 24c0-12 10-22 22-22"/><path d="M8 8c3.6 0 6.4-1.4 8.4-4"/><circle cx="7.2" cy="7.2" r="1.4" fill="currentColor" stroke="none"/></svg>
+
+      <div class="invite-inner">
+        <!-- MC monogram: the card's gold oval + sprigs, with the letters set
+             in Cormorant rather than tracing the printed ligature. -->
+        <div class="invite-monogram" aria-hidden="true">
+          <svg viewBox="0 0 124 84" fill="none" stroke="currentColor" stroke-width="1">
+            <ellipse cx="62" cy="42" rx="55" ry="34"/>
+            <ellipse cx="62" cy="42" rx="51" ry="30" opacity="0.5"/>
+            <text class="mono-letter" x="46" y="55" text-anchor="middle" stroke="none">M</text>
+            <text class="mono-letter" x="78" y="55" text-anchor="middle" stroke="none">C</text>
+            <path d="M62 8c-4 0-7 2-8 5M62 8c4 0 7 2 8 5" opacity="0.75"/>
+            <path d="M54 11c-2.6-1.4-5-1.2-6.6.4M70 11c2.6-1.4 5-1.2 6.6.4" opacity="0.55"/>
+            <path d="M62 76c-3 0-5.6-1.6-6.6-4M62 76c3 0 5.6-1.6 6.6-4" opacity="0.75"/>
+          </svg>
+        </div>
+
+        <p class="invite-pre">Together with their families</p>
+        <p class="invite-names">Christy &amp; Mitchell</p>
+        <p class="invite-request">request the pleasure of your company<br>at the ceremony of their wedding</p>
+
+        <div class="invite-rule"></div>
+
+        <p class="invite-when">Thursday, 12 November 2026</p>
+        <p class="invite-where">The Salisbury Room<br>The Peninsula Hong Kong</p>
+        <p class="invite-addr">Salisbury Road, Tsim Sha Tsui, Kowloon</p>
+
+        <div class="invite-rule"></div>
+
+        <p class="invite-attire"><span>Attire</span>Elegant Evening Attire</p>
+
+        <div class="invite-seal" aria-hidden="true">囍</div>
+      </div>
+    </div>
+
+    <ol class="day-timeline">
+      <li class="day-item reveal">
+        <div class="day-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5v4"/><path d="M10 4.5h4"/><path d="M6 21v-9.5L12 7l6 4.5V21"/><path d="M3 21h18"/><path d="M10.4 21v-4.2a1.6 1.6 0 0 1 3.2 0V21"/></svg>
+        </div>
+        <div>
+          <div class="day-time">17:00 – 18:00</div>
+          <h3 class="day-title">Show Up &amp; Play Mahjong</h3>
+          <p class="day-desc">Arrive early. There will be food. There will be drinks. There will be Mahjong — and yes, it is complimentary, so please do not ask. This is your window to mingle, settle in, and mentally prepare for what is about to happen. We recommend arriving on time. We know you won't. The Mahjong will be waiting.</p>
+        </div>
+      </li>
+      <li class="day-item reveal">
+        <div class="day-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="14" r="5.4"/><circle cx="15" cy="14" r="5.4"/><path d="M12 5.4 10 8h4l-2-2.6Z"/></svg>
+        </div>
+        <div>
+          <div class="day-time">18:30 – 19:30</div>
+          <h3 class="day-title">The Point of No Return</h3>
+          <p class="day-desc">This is it. Ten years, one corgi, and a considerable amount of convincing later — we are doing this. Together with our families, we invite you to witness the moment it becomes official, permanent, and legally complicated to undo. Please be seated. Please don't cry before we do.</p>
+          <p class="day-ps">P.S. Take pictures of Christy. Take many. She has dressed up, she is wearing makeup, and there is no historical precedent suggesting this will ever happen again.</p>
+        </div>
+      </li>
+      <li class="day-item reveal">
+        <div class="day-icon" aria-hidden="true">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h10"/><path d="M8.2 3.5 9 9.4a3 3 0 0 0 6 0l.8-5.9"/><path d="M12 12.4V19"/><path d="M8.6 19h6.8"/></svg>
+        </div>
+        <div>
+          <div class="day-time">19:45 – 23:00</div>
+          <h3 class="day-title">The Part You Actually Came For</h3>
+          <p class="day-desc">A traditional Chinese wedding banquet, because some things should never be compromised. The wine list has been personally curated by Mitchell, who spent an unreasonable amount of time on this and would like you to notice. There will be warmth, gratitude, joy, and multiple courses. Pace yourself. It's a long night and the wine is very good.</p>
+        </div>
+      </li>
+    </ol>
+  </div>
+
+  <div class="garden-band" aria-hidden="true">
+    <picture>
+      <source srcset="photos/wedding-day-garden.webp" type="image/webp">
+      <img src="photos/wedding-day-garden.jpg" width="1092" height="960" alt="" loading="lazy" decoding="async">
+    </picture>
+  </div>
+</section>
+
+<!-- ─── TRAVEL — top-level section (moved out of #more 2026-08-17) ─── -->
+<section id="travel">
+  <div class="container">
+    <div class="section-divider reveal"></div>
+    <div style="text-align:center;margin-bottom:2rem;" class="reveal">
+      <div class="eyebrow">Getting There</div>
+      <h2 class="section-title">The Peninsula <em>Hong Kong</em></h2>
+    </div>
+    <div style="text-align:center;max-width:640px;margin:0 auto 2.5rem;color:var(--text-mid);font-size:1rem;line-height:1.7;" class="reveal">
+      <p>The venue is The Salisbury Room at The Peninsula Hong Kong, Salisbury Road, Tsim Sha Tsui, Kowloon. It is one of Hong Kong's most iconic hotels and has been standing since 1928, so it should not be difficult to find. We believe in you.</p>
+    </div>
+    <div class="map-wrapper reveal">
+      <iframe
+        class="map-embed"
+        src="https://maps.google.com/maps?q=The+Peninsula+Hong+Kong,+Salisbury+Road,+Tsim+Sha+Tsui,+Kowloon&t=&z=17&ie=UTF8&iwloc=&output=embed"
+        allowfullscreen=""
+        loading="lazy"
+        referrerpolicy="no-referrer-when-downgrade"
+        title="The Peninsula Hong Kong — Google Maps">
+      </iframe>
+      <div class="map-footer">
+        <div class="map-address">
+          <strong>Venue</strong>
+          The Salisbury Room at The Peninsula Hong Kong<br>
+          Salisbury Road, Tsim Sha Tsui, Kowloon
+        </div>
+        <div class="map-actions">
+          <a class="map-btn"
+             href="https://maps.apple.com/?q=The+Peninsula+Hong+Kong&address=Salisbury+Road,+Tsim+Sha+Tsui,+Kowloon"
+             target="_blank" rel="noopener">
+            Apple Maps
+          </a>
+          <a class="map-btn map-btn-primary"
+             href="https://www.google.com/maps/dir/?api=1&destination=The+Peninsula+Hong+Kong&destination_place_id=ChIJ2YnQBn0ABDQRo8ChrqTkHFQ"
+             target="_blank" rel="noopener">
+            Get Directions
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top:2rem;text-align:center;color:var(--text-mid);font-size:0.95rem;line-height:1.65;" class="reveal">
+      <p><strong>MTR:</strong> Tsim Sha Tsui Station (East Tsim Sha Tsui exit J) — 3 min walk. This is the easiest option. Use it.</p>
+      <p style="margin-top:0.6rem;"><strong>Taxi:</strong> Tell the driver <strong>半島酒店</strong>, Tsim Sha Tsui. If you attempt to pronounce it in English, results may vary.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ─── Q & A — top-level section (moved out of #more 2026-08-17) ─── -->
+<section id="qa">
+  <div class="container">
+    <div class="section-divider reveal"></div>
+    <div style="text-align:center;margin-bottom:3.5rem;" class="reveal">
+      <div class="eyebrow">Questions & Answers</div>
+    </div>
+    <div class="qa-list">
+
+      <div class="qa-item reveal">
+        <button class="qa-question" aria-expanded="false" onclick="toggleQA(this)">
+          <span>What time should I arrive?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>Doors open at <strong>17:00</strong>. We recommend arriving between 17:00 and 18:00 — there are drinks, there is Mahjong, and frankly it's a better use of your time than circling the lobby looking confused. The ceremony begins at <strong>18:30</strong> sharp. The Salisbury Room is inside The Peninsula Hotel. Follow the signs. You'll be fine. Probably.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" aria-expanded="false" onclick="toggleQA(this)">
+          <span>When should I RSVP by?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p><strong>12 September 2026.</strong> That is two months before the wedding, which we consider more than reasonable. This deadline exists because Christy is personally managing the seating plan, the catering, and approximately one thousand other things simultaneously — and she would very much like to know if you're coming before she loses her mind entirely. Please do not make her chase you. RSVP directly on this page.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" aria-expanded="false" onclick="toggleQA(this)">
+          <span>What's the wine situation?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>Glad you asked. Mitchell has been waiting for this question. For red, he secured an auction lot from the <strong>Hospices de Beaune 2024</strong> — one of Burgundy's most prestigious annual sales — so yes, it will be special, and yes, he will probably mention it. For white, the selection is from his favourite label, <strong>00 Wine</strong> — a place close to his heart, he went for the harvest there himself. If you have a preference or allergy, note it in your RSVP. If you have opinions about his choices, keep them to yourself.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" aria-expanded="false" onclick="toggleQA(this)">
+          <span>Will Chambolle be there?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>He will not. The Peninsula operates a strict no-Corgi policy, a decision we find deeply questionable but have chosen not to litigate. Chambolle has been informed. He has opinions. He will be at home in his little castle, deeply unimpressed, waiting for stinky treats upon our return. He sends his love, conditionally.</p>
+        </div>
+      </div>
+
+      <div class="qa-item reveal">
+        <button class="qa-question" aria-expanded="false" onclick="toggleQA(this)">
+          <span>Can I bring a plus-one?</span>
+          <span class="qa-icon">+</span>
+        </button>
+        <div class="qa-answer">
+          <p>Short answer: only if you're named on the invitation. The venue has a capacity, Christy has a seating plan, Mitchell has a wine order, and none of these things have room for surprise guests. If your invitation includes a plus-one, you'll be able to add their name when you RSVP. If you're unsure, ask us directly.</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
 </section>
 
 <!-- ─── RSVP ─── -->
@@ -1465,14 +1914,14 @@
   .member-option.selected { border-color: var(--olive); background: var(--bg-card); }
   .member-option .meta {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-light);
   }
   .member-option .badge {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--olive);
@@ -1507,7 +1956,7 @@
     display: block;
     margin-top: 0.2rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.7rem;
+    font-size: 0.82rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1530,7 +1979,7 @@
     display: inline-block;
     margin-left: 0.5rem;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.55rem;
+    font-size: 0.72rem;
     letter-spacing: 0.14em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1540,7 +1989,7 @@
     font-family: 'Raleway', sans-serif;
   }
   .seat-loc .table {
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-mid);
@@ -1561,7 +2010,7 @@
   }
   .seat-card-note {
     margin-top: 1.2rem;
-    font-size: 0.78rem;
+    font-size: 0.86rem;
     color: var(--text-light);
     text-align: center;
     font-style: italic;
@@ -1573,7 +2022,7 @@
   .seat-card-actions > * { margin: 0.3rem; }
   .seat-edit-link {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.65rem;
+    font-size: 0.78rem;
     letter-spacing: 0.16em;
     text-transform: uppercase;
     color: var(--text-mid);
@@ -1601,7 +2050,7 @@
   .calendar-choices.open { display: block; }
   .calendar-choices .label {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1618,7 +2067,7 @@
   .fp-modal {
     display: none;
     position: fixed;
-    top: 0; bottom: 0; left: 50%; transform: translateX(-50%); width: min(var(--frame-max), 100vw);
+    inset: 0;
     z-index: 250;
     background: rgba(26,26,20,0.78);
     padding: 1.5rem;
@@ -1659,7 +2108,7 @@
   .fp-card .fp-sub {
     text-align: center;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.62rem;
+    font-size: 0.76rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1734,7 +2183,7 @@
   }
   .fp-panel-eyebrow {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.55rem;
+    font-size: 0.72rem;
     letter-spacing: 0.18em;
     text-transform: uppercase;
     color: var(--text-light);
@@ -1771,7 +2220,7 @@
   .fp-occupant.you { color: var(--olive); font-weight: 500; }
   .fp-occupant .seat {
     font-family: 'Raleway', sans-serif;
-    font-size: 0.6rem;
+    font-size: 0.75rem;
     letter-spacing: 0.14em;
     color: var(--text-light);
     flex-shrink: 0;
@@ -1789,7 +2238,7 @@
     margin-top: 1rem;
     text-align: center;
     font-family: 'Raleway', sans-serif;
-    font-size: 0.66rem;
+    font-size: 0.79rem;
     letter-spacing: 0.06em;
     color: var(--text-mid);
   }
@@ -1805,12 +2254,12 @@
   .fp-pill .swatch { width: 10px; height: 10px; border-radius: 50%; border: 1px solid var(--olive); background: transparent; }
   .fp-pill.you .swatch { background: var(--olive); }
 
-  @container (max-width: 900px) {
+  @media (max-width: 900px) {
     .fp-body { flex-direction: column; }
     .fp-panel { width: 100%; }
     .fp-panel-list { max-height: 220px; }
   }
-  @container (max-width: 700px) {
+  @media (max-width: 700px) {
     .fp-card { padding: 1.6rem 1rem 1.2rem; }
     .fp-card .fp-title { font-size: 1.3rem; }
   }
@@ -1853,36 +2302,36 @@
       <!-- State 4: Form (code valid) -->
       <div id="rsvp-form-wrap" class="rsvp-state reveal">
         <div id="member-picker-wrap" style="display:none;">
-          <label class="form-label">Who is replying?</label>
-          <div class="member-picker" id="member-picker"></div>
+          <span class="form-label" id="member-picker-label">Who is replying?</span>
+          <div class="member-picker" id="member-picker" role="radiogroup" aria-labelledby="member-picker-label"></div>
         </div>
 
         <div class="form-group" id="name-display-group">
-          <label class="form-label">Name</label>
-          <div class="form-input" style="background:var(--bg-card);cursor:default;" id="f-name-display"></div>
+          <span class="form-label" id="f-name-label">Name</span>
+          <div class="form-input" style="background:var(--bg-card);cursor:default;" id="f-name-display" role="textbox" aria-readonly="true" aria-labelledby="f-name-label"></div>
         </div>
 
         <div class="form-group">
-          <label class="form-label">Email Address</label>
+          <label class="form-label" for="f-email">Email Address</label>
           <input type="email" class="form-input" id="f-email" placeholder="your@email.com">
         </div>
         <div class="form-group">
-          <label class="form-label">Contact Number / WhatsApp</label>
+          <label class="form-label" for="f-phone">Contact Number / WhatsApp</label>
           <input type="tel" class="form-input" id="f-phone" placeholder="+852 1234 5678">
         </div>
         <div class="form-group">
-          <label class="form-label">Will you be attending? *</label>
-          <div class="attendance-toggle">
-            <button class="att-btn active" data-val="yes" onclick="setAttendance('yes')">Joyfully Accepts</button>
-            <button class="att-btn" data-val="no" onclick="setAttendance('no')">Regretfully Declines</button>
+          <span class="form-label" id="attendance-label">Will you be attending? *</span>
+          <div class="attendance-toggle" role="radiogroup" aria-labelledby="attendance-label">
+            <button type="button" class="att-btn active" role="radio" aria-checked="true" data-val="yes" onclick="setAttendance('yes')">Joyfully Accepts</button>
+            <button type="button" class="att-btn" role="radio" aria-checked="false" data-val="no" onclick="setAttendance('no')">Regretfully Declines</button>
           </div>
         </div>
         <div class="form-group" id="plusone-group">
-          <label class="form-label">Plus One Name (if applicable)</label>
+          <label class="form-label" for="f-plusone">Plus One Name (if applicable)</label>
           <input type="text" class="form-input" id="f-plusone" placeholder="Partner / Guest name">
         </div>
         <div class="form-group" id="dietary-group">
-          <label class="form-label">Dietary Requirements</label>
+          <label class="form-label" for="f-dietary">Dietary Requirements</label>
           <select class="form-select" id="f-dietary">
             <option value="">No special requirements</option>
             <option value="vegetarian">Vegetarian</option>
@@ -1895,15 +2344,15 @@
           </select>
         </div>
         <div class="form-group">
-          <label class="form-label">Song Request <span style="font-weight:300;text-transform:none;letter-spacing:0;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:0.75rem;color:var(--text-light);">— We'll have a live band that evening</span></label>
+          <label class="form-label" for="f-song">Song Request <span style="font-weight:300;text-transform:none;letter-spacing:0;font-family:'Cormorant Garamond',serif;font-style:italic;font-size:0.85rem;color:var(--text-light);">— We'll have a live band that evening</span></label>
           <input type="text" class="form-input" id="f-song" placeholder="Any song you'd love to hear — Cantonese, Mandarin or English">
         </div>
         <div class="form-group">
-          <label class="form-label">Message to the Couple</label>
+          <label class="form-label" for="f-message">Message to the Couple</label>
           <textarea class="form-textarea" id="f-message" rows="3" placeholder="Warm wishes or just a note…"></textarea>
         </div>
         <button class="form-submit" id="rsvp-submit" onclick="submitRSVP()">SEND RSVP</button>
-        <div id="form-error" style="margin-top:1rem;color:#8B3A3A;font-family:'Raleway',sans-serif;font-size:0.7rem;letter-spacing:0.12em;display:none;"></div>
+        <div id="form-error" style="margin-top:1rem;color:#8B3A3A;font-family:'Raleway',sans-serif;font-size:0.82rem;letter-spacing:0.12em;display:none;"></div>
       </div>
 
       <!-- State 5: Seat card (post-RSVP confirmation / re-lookup) -->
@@ -1932,50 +2381,6 @@
         </div>
       </div>
 
-    </div>
-  </div>
-</section>
-
-<!-- ─── WEDDING DAY ─── -->
-<section id="wedding-day">
-  <div class="container-wide">
-    <div class="wedding-bg-wrap">
-      <div style="text-align:center;padding-top:1rem;" class="reveal">
-        <h2 class="section-title">Wedding <em>Day</em></h2>
-      </div>
-      <div class="container">
-        <div class="venue-header reveal">
-          <div class="venue-attire"><strong>Venue:</strong> The Salisbury Room <br class="venue-break">at The Peninsula Hong Kong</div>
-          <div class="venue-attire" style="margin-top:0.5rem;"><strong>Attire:</strong> Elegant Evening Attire</div>
-        </div>
-      </div>
-    </div><!-- end wedding-bg-wrap -->
-
-    <div class="container">
-      <div class="timeline">
-        <div class="timeline-item reveal">
-          <div class="timeline-time">17:00 – 18:00</div>
-          <div>
-            <div class="timeline-title">Show Up &amp; Play Mahjong</div>
-            <div class="timeline-desc">Arrive early. There will be food. There will be drinks. There will be Mahjong — and yes, it is complimentary, so please do not ask. This is your window to mingle, settle in, and mentally prepare for what is about to happen. We recommend arriving on time. We know you won't. The Mahjong will be waiting.</div>
-          </div>
-        </div>
-        <div class="timeline-item reveal">
-          <div class="timeline-time">18:30 – 19:30</div>
-          <div>
-            <div class="timeline-title">The Point of No Return</div>
-            <div class="timeline-desc">This is it. Ten years, one corgi, and a considerable amount of convincing later — we are doing this. Together with our families, we invite you to witness the moment it becomes official, permanent, and legally complicated to undo. The Salisbury Room, The Peninsula Hong Kong. Please be seated. Please don't cry before we do.</div>
-            <div class="timeline-desc" style="margin-top:0.8rem;font-style:italic;font-size:0.95rem;color:var(--text-light);">P.S. Take pictures of Christy. Take many. She has dressed up, she is wearing makeup, and there is no historical precedent suggesting this will ever happen again.</div>
-          </div>
-        </div>
-        <div class="timeline-item reveal">
-          <div class="timeline-time">19:45 – 23:00</div>
-          <div>
-            <div class="timeline-title">The Part You Actually Came For</div>
-            <div class="timeline-desc">A traditional Chinese wedding banquet, because some things should never be compromised. The wine list has been personally curated by Mitchell, who spent an unreasonable amount of time on this and would like you to notice. There will be warmth, gratitude, joy, and multiple courses. Pace yourself. It's a long night and the wine is very good.</div>
-          </div>
-        </div>
-      </div>
     </div>
   </div>
 </section>
@@ -2014,7 +2419,13 @@
   </div>
 </section>
 
-<!-- ─── MORE (Our Story / Chambolle / Travel / Q&A, collapsed together) ─── -->
+<!-- ─── MORE (Our Story / Chambolle) ───
+     2026-08-17: Travel and Q&A were lifted OUT of here to top-level sections.
+     They held the venue directions, the RSVP deadline and the plus-one policy
+     — essential logistics that were sitting three interactions deep behind a
+     heading that literally told guests to skip it. What is left here really is
+     optional reading, so the "Totally Optional" framing now fits. Do not move
+     anything a guest needs in order to attend back into this section. -->
 <style>
   .more-panel { border-bottom: 1px solid var(--divider); }
   .more-panel:first-child { border-top: 1px solid var(--divider); }
@@ -2047,13 +2458,27 @@
     line-height: 1;
   }
   .more-panel-header.open .more-panel-icon { transform: rotate(45deg); }
+  /* 2026-08-17: was a JS-set `max-height: <scrollHeight>px` frozen at the
+     moment the panel opened. Anything that grew the panel AFTER opening —
+     most obviously a nested accordion inside it — overflowed that frozen cap
+     and was clipped with no scrollbar and no visual cue. (Measured: opening
+     one Q&A answer hid 149px, making the last two questions unreachable.)
+     The 0fr -> 1fr grid-row technique tracks the content's live height, so
+     nesting is safe and no JS measurement is involved at all. */
   .more-panel-body {
-    max-height: 0;
-    overflow: hidden;
-    transition: max-height 0.4s ease;
+    display: grid;
+    grid-template-columns: 100%;
+    grid-template-rows: 0fr;
+    grid-auto-rows: 0fr;
+    transition: grid-template-rows 0.4s ease;
+  }
+  .more-panel-body > * { overflow: hidden; min-height: 0; }
+  .more-panel-header.open + .more-panel-body {
+    grid-template-rows: 1fr;
+    grid-auto-rows: auto;
   }
   .more-panel-body > section { padding: 0.5rem 0 3rem; }
-  @container (max-width: 700px) {
+  @media (max-width: 700px) {
     .more-panel-header { font-size: 1.2rem; padding: 1.2rem 0.1rem; }
     .more-panel-body > section { padding: 0.3rem 0 2rem; }
   }
@@ -2067,7 +2492,7 @@
     </div>
     <div class="more-accordion">
       <div class="more-panel">
-        <button class="more-panel-header" onclick="toggleMorePanel(this)">
+        <button class="more-panel-header" aria-expanded="false" onclick="toggleMorePanel(this)">
           <span>Our Story</span>
           <span class="more-panel-icon">+</span>
         </button>
@@ -2098,7 +2523,7 @@
       </div>
 
       <div class="more-panel">
-        <button class="more-panel-header" onclick="toggleMorePanel(this)">
+        <button class="more-panel-header" aria-expanded="false" onclick="toggleMorePanel(this)">
           <span>Meet Chambolle</span>
           <span class="more-panel-icon">+</span>
         </button>
@@ -2129,133 +2554,6 @@
                     </div>
                   </div>
                 </div>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div class="more-panel">
-        <button class="more-panel-header" onclick="toggleMorePanel(this)">
-          <span>Travel</span>
-          <span class="more-panel-icon">+</span>
-        </button>
-        <div class="more-panel-body">
-          <!-- ─── MAP / TRAVEL ─── -->
-          <section id="travel">
-            <div class="container">
-              <div class="section-divider reveal"></div>
-              <div style="text-align:center;margin-bottom:2rem;" class="reveal">
-                <div class="eyebrow">Getting There</div>
-                <h2 class="section-title">The Peninsula <em>Hong Kong</em></h2>
-              </div>
-              <div style="text-align:center;max-width:640px;margin:0 auto 2.5rem;color:var(--text-mid);font-size:1rem;line-height:1.7;" class="reveal">
-                <p>The venue is The Salisbury Room at The Peninsula Hong Kong, Salisbury Road, Tsim Sha Tsui, Kowloon. It is one of Hong Kong's most iconic hotels and has been standing since 1928, so it should not be difficult to find. We believe in you.</p>
-              </div>
-              <div class="map-wrapper reveal">
-                <iframe
-                  class="map-embed"
-                  src="https://maps.google.com/maps?q=The+Peninsula+Hong+Kong,+Salisbury+Road,+Tsim+Sha+Tsui,+Kowloon&t=&z=17&ie=UTF8&iwloc=&output=embed"
-                  allowfullscreen=""
-                  loading="lazy"
-                  referrerpolicy="no-referrer-when-downgrade"
-                  title="The Peninsula Hong Kong — Google Maps">
-                </iframe>
-                <div class="map-footer">
-                  <div class="map-address">
-                    <strong>Venue</strong>
-                    The Salisbury Room at The Peninsula Hong Kong<br>
-                    Salisbury Road, Tsim Sha Tsui, Kowloon
-                  </div>
-                  <div class="map-actions">
-                    <a class="map-btn"
-                       href="https://maps.apple.com/?q=The+Peninsula+Hong+Kong&address=Salisbury+Road,+Tsim+Sha+Tsui,+Kowloon"
-                       target="_blank" rel="noopener">
-                      Apple Maps
-                    </a>
-                    <a class="map-btn map-btn-primary"
-                       href="https://www.google.com/maps/dir/?api=1&destination=The+Peninsula+Hong+Kong&destination_place_id=ChIJ2YnQBn0ABDQRo8ChrqTkHFQ"
-                       target="_blank" rel="noopener">
-                      Get Directions
-                    </a>
-                  </div>
-                </div>
-              </div>
-
-              <div style="margin-top:2rem;text-align:center;color:var(--text-mid);font-size:0.95rem;line-height:1.65;" class="reveal">
-                <p><strong>MTR:</strong> Tsim Sha Tsui Station (East Tsim Sha Tsui exit J) — 3 min walk. This is the easiest option. Use it.</p>
-                <p style="margin-top:0.6rem;"><strong>Taxi:</strong> Tell the driver <strong>半島酒店</strong>, Tsim Sha Tsui. If you attempt to pronounce it in English, results may vary.</p>
-              </div>
-            </div>
-          </section>
-        </div>
-      </div>
-
-      <div class="more-panel">
-        <button class="more-panel-header" onclick="toggleMorePanel(this)">
-          <span>Q&amp;A</span>
-          <span class="more-panel-icon">+</span>
-        </button>
-        <div class="more-panel-body">
-          <!-- ─── Q & A ─── -->
-          <section id="qa">
-            <div class="container">
-              <div class="section-divider reveal"></div>
-              <div style="text-align:center;margin-bottom:3.5rem;" class="reveal">
-                <div class="eyebrow">Questions & Answers</div>
-              </div>
-              <div class="qa-list">
-
-                <div class="qa-item reveal">
-                  <button class="qa-question" onclick="toggleQA(this)">
-                    <span>What time should I arrive?</span>
-                    <span class="qa-icon">+</span>
-                  </button>
-                  <div class="qa-answer">
-                    <p>Doors open at <strong>17:00</strong>. We recommend arriving between 17:00 and 18:00 — there are drinks, there is Mahjong, and frankly it's a better use of your time than circling the lobby looking confused. The ceremony begins at <strong>18:30</strong> sharp. The Salisbury Room is inside The Peninsula Hotel. Follow the signs. You'll be fine. Probably.</p>
-                  </div>
-                </div>
-
-                <div class="qa-item reveal">
-                  <button class="qa-question" onclick="toggleQA(this)">
-                    <span>When should I RSVP by?</span>
-                    <span class="qa-icon">+</span>
-                  </button>
-                  <div class="qa-answer">
-                    <p><strong>12 September 2026.</strong> That is two months before the wedding, which we consider more than reasonable. This deadline exists because Christy is personally managing the seating plan, the catering, and approximately one thousand other things simultaneously — and she would very much like to know if you're coming before she loses her mind entirely. Please do not make her chase you. RSVP directly on this page.</p>
-                  </div>
-                </div>
-
-                <div class="qa-item reveal">
-                  <button class="qa-question" onclick="toggleQA(this)">
-                    <span>What's the wine situation?</span>
-                    <span class="qa-icon">+</span>
-                  </button>
-                  <div class="qa-answer">
-                    <p>Glad you asked. Mitchell has been waiting for this question. For red, he secured an auction lot from the <strong>Hospices de Beaune 2024</strong> — one of Burgundy's most prestigious annual sales — so yes, it will be special, and yes, he will probably mention it. For white, the selection is from his favourite label, <strong>00 Wine</strong> — a place close to his heart, he went for the harvest there himself. If you have a preference or allergy, note it in your RSVP. If you have opinions about his choices, keep them to yourself.</p>
-                  </div>
-                </div>
-
-                <div class="qa-item reveal">
-                  <button class="qa-question" onclick="toggleQA(this)">
-                    <span>Will Chambolle be there?</span>
-                    <span class="qa-icon">+</span>
-                  </button>
-                  <div class="qa-answer">
-                    <p>He will not. The Peninsula operates a strict no-Corgi policy, a decision we find deeply questionable but have chosen not to litigate. Chambolle has been informed. He has opinions. He will be at home in his little castle, deeply unimpressed, waiting for stinky treats upon our return. He sends his love, conditionally.</p>
-                  </div>
-                </div>
-
-                <div class="qa-item reveal">
-                  <button class="qa-question" onclick="toggleQA(this)">
-                    <span>Can I bring a plus-one?</span>
-                    <span class="qa-icon">+</span>
-                  </button>
-                  <div class="qa-answer">
-                    <p>Short answer: only if you're named on the invitation. The venue has a capacity, Christy has a seating plan, Mitchell has a wine order, and none of these things have room for surprise guests. If your invitation includes a plus-one, you'll be able to add their name when you RSVP. If you're unsure, ask us directly.</p>
-                  </div>
-                </div>
-
               </div>
             </div>
           </section>
@@ -2942,7 +3240,7 @@
     const now = new Date();
     const diff = target - now;
     if (diff <= 0) {
-      document.getElementById('countdown').innerHTML = '<div style="font-family:\'Raleway\',sans-serif;font-size:0.75rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mid);">Today is the day! ♡</div>';
+      document.getElementById('countdown').innerHTML = '<div style="font-family:\'Raleway\',sans-serif;font-size:0.85rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mid);">Today is the day! ♡</div>';
       return;
     }
     const days  = Math.floor(diff / (1000*60*60*24));
@@ -2988,7 +3286,7 @@
   // same treatment for whichever accordion panel happens to be open.
   window.addEventListener('scroll', () => {
     document.getElementById('nav').classList.toggle('scrolled', scrollY > 50);
-    const sections = ['home','rsvp','wedding-day','gallery','more'];
+    const sections = ['home','wedding-day','travel','qa','rsvp','gallery','more'];
     let active = 'home';
     for (const id of sections) {
       const el = document.getElementById(id);
@@ -3030,7 +3328,9 @@
   function setAttendance(val) {
     attendance = val;
     document.querySelectorAll('.att-btn').forEach(b => {
-      b.classList.toggle('active', b.dataset.val === val);
+      const on = b.dataset.val === val;
+      b.classList.toggle('active', on);
+      b.setAttribute('aria-checked', on ? 'true' : 'false');
     });
     const show = val === 'yes';
     document.getElementById('plusone-group').style.display = show ? '' : 'none';
@@ -3174,43 +3474,50 @@
 
   document.addEventListener('keydown', e => {
     if (e.key === 'Escape') { closeLightbox(); closeFloorPlan(); }
-    if (e.key === 'ArrowLeft')  moveLight(-1);
-    if (e.key === 'ArrowRight') moveLight(1);
+    // Only steer the lightbox while it is actually open — otherwise arrow
+    // keys pressed anywhere (including inside the RSVP text fields) were
+    // silently advancing it and swapping in a new full-size image.
+    if (!document.getElementById('lightbox')?.classList.contains('open')) return;
+    if (e.key === 'ArrowLeft')  { e.preventDefault(); moveLight(-1); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); moveLight(1); }
   });
 
   initGallery();
 
   // ─── Q&A ACCORDION ───
+  // Height is handled entirely in CSS now (0fr -> 1fr grid row), so this only
+  // flips classes + aria-expanded. Nothing here measures or caps a height.
   function toggleQA(btn) {
     const answer = btn.nextElementSibling;
     const isOpen = btn.classList.contains('open');
-    // Close all
     document.querySelectorAll('.qa-question').forEach(b => {
       b.classList.remove('open');
+      b.setAttribute('aria-expanded', 'false');
       b.nextElementSibling.classList.remove('open');
     });
-    // Open clicked if it was closed
     if (!isOpen) {
       btn.classList.add('open');
+      btn.setAttribute('aria-expanded', 'true');
       answer.classList.add('open');
     }
   }
 
-  // ─── MORE (Our Story / Chambolle / Travel / Q&A accordion) ───
-  // Single-open, like toggleQA above, but max-height is computed from the
-  // panel's actual content height (scrollHeight) rather than a fixed CSS
-  // cap — these panels hold full sections (slideshows, a map iframe, the
-  // nested Q&A accordion), which vary far more in height than a one-line
-  // QA answer, so a fixed max-height would either clip tall panels or make
-  // short ones animate at the wrong speed.
+  // ─── MORE (Our Story / Chambolle accordion) ───
+  // 2026-08-17: no longer sets an inline max-height. It used to freeze
+  // `max-height: <scrollHeight>px` at open time, which clipped anything that
+  // grew the panel afterwards (the nested Q&A accordion was hiding 149px and
+  // two whole questions). CSS now animates 0fr -> 1fr against the content's
+  // live height, so nesting is safe and there is nothing to keep in sync.
   function toggleMorePanel(header) {
     const body = header.nextElementSibling;
     const isOpen = header.classList.contains('open');
-    document.querySelectorAll('.more-panel-header').forEach(h => h.classList.remove('open'));
-    document.querySelectorAll('.more-panel-body').forEach(b => { b.style.maxHeight = ''; });
+    document.querySelectorAll('.more-panel-header').forEach(h => {
+      h.classList.remove('open');
+      h.setAttribute('aria-expanded', 'false');
+    });
     if (!isOpen) {
       header.classList.add('open');
-      body.style.maxHeight = body.scrollHeight + 'px';
+      header.setAttribute('aria-expanded', 'true');
       // .reveal children may never have intersected while the panel was
       // collapsed (zero rendered height), so force them visible on open
       // rather than depending on the IntersectionObserver catching up.
@@ -3362,28 +3669,27 @@
     border-radius: 1px;
     pointer-events: none;
   }
-  @container (max-width: 700px) {
+  @media (max-width: 700px) {
     /* bottom raised to clear the fixed bottom-nav tab bar added
        2026-08-12 (~70px tall incl. safe-area padding) — both this
        toggle and the egg positions below used to sit at 14px, which
        is now underneath the tab bar. */
-    .chambolle-toggle { width: 34px; height: 34px; font-size: 13px; bottom: 84px; left: calc(14px + var(--frame-gap)); }
+    .chambolle-toggle { width: 34px; height: 34px; font-size: 13px; bottom: 84px; left: 14px; }
 
     /* All three popup positions land in the bottom-right corner on
        phones so the egg never floats over reading content. Each
        keeps a slight rotation for variety. These rules live here
        (rather than in the main mobile @container block earlier in
        the file) so the cascade resolves AFTER the desktop pos-* rules.
-       right uses --frame-gap (2026-08-13) so "14px from the edge" means
-       14px from the site-frame's edge, not the true browser viewport's
-       edge — see the --frame-gap definition in :root. */
+       2026-08-17: back to a plain 14px from the real viewport edge now that
+       the phone-width frame is gone. */
     .chambolle-egg.pos-br,
     .chambolle-egg.pos-bl,
     .chambolle-egg.pos-r {
       top: auto !important;
       left: auto !important;
       bottom: 84px !important;
-      right: calc(14px + var(--frame-gap)) !important;
+      right: 14px !important;
     }
     .chambolle-egg.pos-bl {
       transform: translateY(calc(100% + 40px)) rotate(4deg);
