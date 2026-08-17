@@ -215,6 +215,8 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 - **Desktop (>700px), `nav` + `.nav-list`:** 7 flat links in DOM order — Home · Wedding Day · Travel · Q&A · RSVP · Gallery · More. Verified single-row (no wrap) down to 744px.
 - **Labels are nouns again.** The joke labels were retired from the nav only: "Show Up or Explain Yourself" (= venue and timings), "Photos We Paid Too Much For" (= gallery), "Feel Free to Scroll Past" (= where Travel and Q&A were hiding). They read well in prose but made the bar unscannable — a guest hunting for directions had no word to aim at. **The wit is untouched everywhere else**; it just no longer sits in the one place that has to function as signage.
 - **Mobile (≤700px), `.bottom-nav`:** 6 tabs — Home · Day · Travel · Q&A · RSVP · Photos. Travel and Q&A got their own tabs; the old 5th "More" tab (which used a **clock** icon for a section containing none of those things) is gone. Each icon now depicts its destination.
+  - **2026-08-18: restyled as a floating frosted pill** (was a full-width opaque bar with a hard `border-top`). `border-radius: 999px`, floats at `bottom: calc(10px + env(safe-area-inset-bottom))`, `width: min(430px, 100vw - 20px)`, centred with `left:50%; translateX(-50%)` (a transform on the element ITSELF is safe — only ancestor transforms break `position:fixed`). Frosted glass via `backdrop-filter: blur(16px) saturate(1.5)` gated behind `@supports`, with a 94%-opaque solid fallback so labels never sit on unblurred photos. Active tab's icon circle widens 34px → 52px into a golden stadium (transition covered by the global reduced-motion block).
+  - ⚠️ **Three clearances are keyed to the pill's geometry** (top edge ≈ 10px + ~66px + safe-area above the viewport bottom): mobile `body { padding-bottom: calc(96px + env(safe-area-inset-bottom)) }` (overrides the base 72px), and the Chambolle egg + shush toggle at `bottom: calc(90px + env(safe-area-inset-bottom))`. If the pill's height or offset changes, re-derive all three.
   - Six tabs still clear the 44px touch minimum on the narrowest device supported: measured **53×58px** at a 344px Z Fold cover screen, 61×58 at 393px.
   - Label size is a flat `0.7rem` (11.2px), not a clamp, so it never drops under the page's 11px floor.
   - The Home tab's `active` class is still hardcoded in HTML — the scroll-spy only runs on a real `scroll` event, so without it no tab appears active until the guest scrolls.
@@ -224,7 +226,7 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 ### Mobile Responsive
 - `@media (max-width: 700px)` and `@media (max-width: 390px)` — real viewport again (see Responsive above).
 - Top `nav` is `display:none` below 700px; `.bottom-nav` is `display:none` above it.
-- `body { padding-bottom: 72px }` lives in the **base** rule, not a breakpoint — it reserves room so the fixed bottom bar never covers the footer.
+- `body { padding-bottom: 72px }` in the base rule, overridden to `calc(96px + env(safe-area-inset-bottom))` inside the ≤700px block — the floating pill needs more clearance than the old flush bar did.
 - Section vertical rhythm on mobile is `2.4rem` (was `1.2rem`, which ran sections into each other).
 - All grids collapse to one column; gallery goes 3 → 2 columns.
 - Chambolle egg/toggle sit at `bottom: 84px` to clear the tab bar.
