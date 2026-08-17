@@ -209,8 +209,22 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 - **2026-08-13: `chambolle` and `qa` are now nested inside `#more`'s accordion**, not standalone top-level sections (see 🗂 More above) — left unchanged here on purpose. `document.getElementById('chambolle'/'qa')` still resolves fine regardless of nesting depth, so the `IntersectionObserver` targeting is unaffected. The practical difference: while that accordion panel is collapsed (`max-height: 0`), the element has no visible area, so the observer won't fire — the egg just won't trigger from scrolling past it anymore, only once the user opens that specific panel and it's actually on screen. Not worth engineering around; a minor, expected behaviour change from the reorg, not a bug.
 - **2026-08-13 (later same day): footer exclusion zone added.** With Q&A nested inside `#more` and the footer following shortly after, the `qa` trigger's egg (bottom-right corner) started overlapping the footer's "Christy & Mitchell" text once scrolled to the very end of the page — the opposite of this feature's explicit "never floats over reading content" goal. Fixed with a dedicated `footerObserver` that blocks `showEgg()` and force-dismisses whichever egg is active the moment the footer scrolls into view, regardless of which section triggered it. See the Site Frame section's fix notes above for the full story (same investigation that found the `body` padding-bottom regression).
 
+### Liquid Glass (interface layer)
+**2026-08-18, per user request** ("make it more like apple's liquid glass design for the whole site"), building on the floating-pill bottom nav. One shared material — tokens in `:root` (`--glass-blur`, `--glass-bg`, `--glass-bg-solid`, `--glass-edge`, `--glass-inset`, `--glass-shadow`) — applied to the **interface layer only**:
+
+- **Top desktop nav**: floating glass capsule (`top: 14px`, centred via self-transform, `border-radius: 999px`, `width: max-content` capped at `100vw - 28px`). A `≤900px` media tightens `.nav-list` gap to 1.3rem so 7 links stay one row down to the iPad-mini boundary (verified 707px capsule at 744px viewport).
+- **Bottom mobile pill**: same material via the shared tokens.
+- **Lightbox**: scrim lightens to `rgba(26,26,20,0.62)` + `blur(22px)` when backdrop-filter works (solid 0.95 fallback otherwise); prev/next/close are 48px glass capsules (44px mobile); counter is a glass chip at 0.85 white (was 0.4 — near invisible).
+- **Floor-plan modal scrim**: `0.45` + `blur(18px)` under `@supports`, solid fallback.
+- **Chambolle shush toggle + speech bubble**: glass.
+- **Interactive controls get capsule radii** (`999px`): `.rsvp-btn`, `.map-btn`, `.seat-edit-link`, `.form-submit`, `.attendance-toggle` (container rounds, `overflow: hidden` clips the active fill).
+
+⚠️ **The paper/glass split is the rule**: glass is for chrome and overlays (things that float above content); the invitation card, forms, and all reading surfaces stay square-edged paper. Do not put glass on content — over a static background it just reads as a grey box, and glazing the invitation would break the site's whole metaphor.
+
+⚠️ **Every glass use sits behind `@supports (backdrop-filter …)`** with a near-opaque solid fallback (labels must never sit on unblurred photos), and a `prefers-reduced-transparency: reduce` block turns everything solid again (mirrors the reduced-motion block).
+
 ### Nav
-**2026-08-17: plain-noun labels, and the desktop bar is back.**
+**2026-08-17: plain-noun labels, and the desktop bar is back.** (2026-08-18: bar became the glass capsule above — links/labels/scroll-spy unchanged. `section[id] { scroll-margin-top: 84px }` still clears it: capsule bottom edge ≈ 14 + 55 = 69px.)
 
 - **Desktop (>700px), `nav` + `.nav-list`:** 7 flat links in DOM order — Home · Wedding Day · Travel · Q&A · RSVP · Gallery · More. Verified single-row (no wrap) down to 744px.
 - **Labels are nouns again.** The joke labels were retired from the nav only: "Show Up or Explain Yourself" (= venue and timings), "Photos We Paid Too Much For" (= gallery), "Feel Free to Scroll Past" (= where Travel and Q&A were hiding). They read well in prose but made the bar unscannable — a guest hunting for directions had no word to aim at. **The wit is untouched everywhere else**; it just no longer sits in the one place that has to function as signage.
