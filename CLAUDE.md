@@ -240,6 +240,18 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 - **Scroll-spy `sections` array must match DOM order** — now `['home','wedding-day','travel','qa','rsvp','gallery','more']`. The `#more`-is-last special case (treating "scrolled to the bottom of the page" as `#more` active) is still required, since the page can run out of scroll before `#more`'s top reaches the 80px threshold.
 - **Anchor offset:** `section[id] { scroll-margin-top: 84px }` on desktop so the fixed top bar doesn't cover the heading a guest just jumped to; `12px` on mobile, where the fixed bar is at the *bottom* instead.
 
+### Languages (EN / 繁中 / 日本語)
+**2026-08-17, per user request.** The site ships three languages in the single HTML file. **English lives in the DOM as the source of truth**; an i18n `<script>` (inserted immediately BEFORE the main script) swaps copy at load for the other two.
+
+- **Detection:** saved choice (`localStorage['mc-lang']`) wins; otherwise `navigator.language`: any `zh*` (Simplified **or** Traditional) → **Traditional Chinese**, `ja*` → Japanese, everything else → English. `<html lang>` becomes `zh-Hant` / `ja`.
+- **Switcher:** `.lang-btn` buttons (`data-set-lang`) — a `.nav-lang` group inside the desktop nav capsule, and a floating glass `.lang-chip` top-right on mobile (`display:flex` only ≤700px, where the top nav is hidden). A click persists to localStorage and reloads.
+- **Static copy** swaps via a **selector→HTML dictionary** (`I18N.zh.dom` / `I18N.ja.dom`); multi-element selectors map to arrays **in DOM order** (nav links, tabs, countdown labels, day titles/descs, QA questions/answers, story/chambolle paragraphs, dietary options, seat-card notes). ⚠️ **If you add/remove/reorder any of those elements, update BOTH language arrays in the same commit** — a missing selector logs `[i18n] no match:` to the console (checked at verification: zero warnings).
+- **Dynamic JS strings** route through `tt(key, enDefault)` / `tf(key, enDefault, n)` (defined by the i18n script; safe in English because the pack is null and the default returns). Covers seat card (第 {n} 桌 / {n}番席 formats — **word order differs by language, hence format strings, never concatenation**), floor-plan panel, form errors, send/sending, countdown "today", Chambolle quips (`window.MC_QUIPS` consumed by the egg script) and shush-toggle titles.
+- **Deliberately still English:** the Besotted Love / Liana script lines ("Christy & Mitchell", "You're All Set", footer names) — they are calligraphy, and neither font has CJK glyphs; the floor-plan map labels (SALISBURY ROOM / STAGE etc.) — map proper nouns; email/phone placeholders; calendar export text (ICS interop).
+- **CJK type:** no CJK webfont is shipped (weight). `html[lang="zh-Hant"]`/`[lang="ja"]` body rules add system fallbacks (Songti/PingFang TC; Hiragino Mincho/Yu Mincho). Latin names and numerals still render in the embedded faces.
+- **Names in Chinese:** Christy = 芷晴, Mitchell = 文俊 (from the couple's printed invitation). Used in zh prose; Latin elsewhere.
+- **Script order matters:** i18n block → main script → egg script. The i18n block must stay BEFORE the main script (so `tt`/`tf` exist when the RSVP flow first renders) and all content markup must stay above it.
+
 ### Mobile Responsive
 - `@media (max-width: 700px)` and `@media (max-width: 390px)` — real viewport again (see Responsive above).
 - Top `nav` is `display:none` below 700px; `.bottom-nav` is `display:none` above it.
