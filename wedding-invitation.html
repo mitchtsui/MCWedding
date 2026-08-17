@@ -1071,17 +1071,32 @@
        look this was changed to on 2026-08-12. */
     nav { display: none; }
 
-    /* ── BOTTOM TAB BAR ── */
+    /* ── BOTTOM TAB BAR — frost-in-place (2026-08-18 restyle, variant C) ──
+       Same full-width, flush-to-bottom geometry as before — so every
+       clearance (body padding, Chambolle egg) is untouched — but the
+       hard border-top and opaque background are gone: frosted glass with
+       a soft upward shadow and a light inner hairline instead. The
+       alternative "floating pill" variant lives on claude/bottom-nav-pill. */
     .bottom-nav {
       display: flex;
       position: fixed;
       left: 0; right: 0; bottom: 0;
       z-index: 150;
-      background: var(--bg);
-      border-top: 1px solid var(--divider);
+      /* Solid-ish fallback first; @supports below goes translucent only
+         when backdrop-filter works, so labels never sit on raw photos. */
+      background: rgba(237, 230, 216, 0.94);
+      border-top: 1px solid rgba(255, 253, 248, 0.6);
+      box-shadow: 0 -6px 24px rgba(44, 40, 32, 0.10);
       justify-content: space-around;
       align-items: flex-start;
       padding: 0.4rem 0.3rem calc(0.4rem + env(safe-area-inset-bottom));
+    }
+    @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+      .bottom-nav {
+        background: rgba(237, 230, 216, 0.72);
+        -webkit-backdrop-filter: blur(16px) saturate(1.5);
+        backdrop-filter: blur(16px) saturate(1.5);
+      }
     }
     .bottom-tab {
       display: flex;
@@ -1118,15 +1133,19 @@
     .tab-icon-wrap {
       width: 34px;
       height: 34px;
-      border-radius: 50%;
+      border-radius: 999px;
       display: flex;
       align-items: center;
       justify-content: center;
-      transition: background 0.2s, color 0.2s;
+      transition: background 0.25s ease, color 0.25s ease, width 0.25s ease;
     }
-    .bottom-tab svg { width: 19px; height: 19px; }
+    .bottom-tab svg { width: 19px; height: 19px; flex-shrink: 0; }
     .bottom-tab.active { color: var(--olive); }
-    .bottom-tab.active .tab-icon-wrap { background: var(--golden); color: var(--olive); }
+    /* Active pill: the circle widens into a golden stadium — same active
+       treatment as the floating-pill variant, so the two branches differ
+       only in the bar's geometry. (Global reduced-motion block covers
+       the transition.) */
+    .bottom-tab.active .tab-icon-wrap { background: var(--golden); color: var(--olive); width: 52px; }
 
     .nav-list {
       display: none;
