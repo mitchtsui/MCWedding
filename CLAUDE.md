@@ -209,12 +209,28 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 - **2026-08-13: `chambolle` and `qa` are now nested inside `#more`'s accordion**, not standalone top-level sections (see 🗂 More above) — left unchanged here on purpose. `document.getElementById('chambolle'/'qa')` still resolves fine regardless of nesting depth, so the `IntersectionObserver` targeting is unaffected. The practical difference: while that accordion panel is collapsed (`max-height: 0`), the element has no visible area, so the observer won't fire — the egg just won't trigger from scrolling past it anymore, only once the user opens that specific panel and it's actually on screen. Not worth engineering around; a minor, expected behaviour change from the reorg, not a bug.
 - **2026-08-13 (later same day): footer exclusion zone added.** With Q&A nested inside `#more` and the footer following shortly after, the `qa` trigger's egg (bottom-right corner) started overlapping the footer's "Christy & Mitchell" text once scrolled to the very end of the page — the opposite of this feature's explicit "never floats over reading content" goal. Fixed with a dedicated `footerObserver` that blocks `showEgg()` and force-dismisses whichever egg is active the moment the footer scrolls into view, regardless of which section triggered it. See the Site Frame section's fix notes above for the full story (same investigation that found the `body` padding-bottom regression).
 
+### Liquid Glass (interface layer)
+**2026-08-18, per user request** ("make it more like apple's liquid glass design for the whole site"), building on the floating-pill bottom nav. One shared material — tokens in `:root` (`--glass-blur`, `--glass-bg`, `--glass-bg-solid`, `--glass-edge`, `--glass-inset`, `--glass-shadow`) — applied to the **interface layer only**:
+
+- **Top desktop nav**: floating glass capsule (`top: 14px`, centred via self-transform, `border-radius: 999px`, `width: max-content` capped at `100vw - 28px`). A `≤900px` media tightens `.nav-list` gap to 1.3rem so 7 links stay one row down to the iPad-mini boundary (verified 707px capsule at 744px viewport).
+- **Bottom mobile pill**: same material via the shared tokens.
+- **Lightbox**: scrim lightens to `rgba(26,26,20,0.62)` + `blur(22px)` when backdrop-filter works (solid 0.95 fallback otherwise); prev/next/close are 48px glass capsules (44px mobile); counter is a glass chip at 0.85 white (was 0.4 — near invisible).
+- **Floor-plan modal scrim**: `0.45` + `blur(18px)` under `@supports`, solid fallback.
+- **Chambolle shush toggle + speech bubble**: glass.
+- **Interactive controls get capsule radii** (`999px`): `.rsvp-btn`, `.map-btn`, `.seat-edit-link`, `.form-submit`, `.attendance-toggle` (container rounds, `overflow: hidden` clips the active fill).
+
+⚠️ **The paper/glass split is the rule**: glass is for chrome and overlays (things that float above content); the invitation card, forms, and all reading surfaces stay square-edged paper. Do not put glass on content — over a static background it just reads as a grey box, and glazing the invitation would break the site's whole metaphor.
+
+⚠️ **Every glass use sits behind `@supports (backdrop-filter …)`** with a near-opaque solid fallback (labels must never sit on unblurred photos), and a `prefers-reduced-transparency: reduce` block turns everything solid again (mirrors the reduced-motion block).
+
 ### Nav
-**2026-08-17: plain-noun labels, and the desktop bar is back.**
+**2026-08-17: plain-noun labels, and the desktop bar is back.** (2026-08-18: bar became the glass capsule above — links/labels/scroll-spy unchanged. `section[id] { scroll-margin-top: 84px }` still clears it: capsule bottom edge ≈ 14 + 55 = 69px.)
 
 - **Desktop (>700px), `nav` + `.nav-list`:** 7 flat links in DOM order — Home · Wedding Day · Travel · Q&A · RSVP · Gallery · More. Verified single-row (no wrap) down to 744px.
 - **Labels are nouns again.** The joke labels were retired from the nav only: "Show Up or Explain Yourself" (= venue and timings), "Photos We Paid Too Much For" (= gallery), "Feel Free to Scroll Past" (= where Travel and Q&A were hiding). They read well in prose but made the bar unscannable — a guest hunting for directions had no word to aim at. **The wit is untouched everywhere else**; it just no longer sits in the one place that has to function as signage.
 - **Mobile (≤700px), `.bottom-nav`:** 6 tabs — Home · Day · Travel · Q&A · RSVP · Photos. Travel and Q&A got their own tabs; the old 5th "More" tab (which used a **clock** icon for a section containing none of those things) is gone. Each icon now depicts its destination.
+  - **2026-08-18: restyled as a floating frosted pill** (was a full-width opaque bar with a hard `border-top`). `border-radius: 999px`, floats at `bottom: calc(10px + env(safe-area-inset-bottom))`, `width: min(430px, 100vw - 20px)`, centred with `left:50%; translateX(-50%)` (a transform on the element ITSELF is safe — only ancestor transforms break `position:fixed`). Frosted glass via `backdrop-filter: blur(16px) saturate(1.5)` gated behind `@supports`, with a 94%-opaque solid fallback so labels never sit on unblurred photos. Active tab's icon circle widens 34px → 52px into a golden stadium (transition covered by the global reduced-motion block).
+  - ⚠️ **Three clearances are keyed to the pill's geometry** (top edge ≈ 10px + ~66px + safe-area above the viewport bottom): mobile `body { padding-bottom: calc(96px + env(safe-area-inset-bottom)) }` (overrides the base 72px), and the Chambolle egg + shush toggle at `bottom: calc(90px + env(safe-area-inset-bottom))`. If the pill's height or offset changes, re-derive all three.
   - Six tabs still clear the 44px touch minimum on the narrowest device supported: measured **53×58px** at a 344px Z Fold cover screen, 61×58 at 393px.
   - Label size is a flat `0.7rem` (11.2px), not a clamp, so it never drops under the page's 11px floor.
   - The Home tab's `active` class is still hardcoded in HTML — the scroll-spy only runs on a real `scroll` event, so without it no tab appears active until the guest scrolls.
@@ -224,7 +240,7 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 ### Mobile Responsive
 - `@media (max-width: 700px)` and `@media (max-width: 390px)` — real viewport again (see Responsive above).
 - Top `nav` is `display:none` below 700px; `.bottom-nav` is `display:none` above it.
-- `body { padding-bottom: 72px }` lives in the **base** rule, not a breakpoint — it reserves room so the fixed bottom bar never covers the footer.
+- `body { padding-bottom: 72px }` in the base rule, overridden to `calc(96px + env(safe-area-inset-bottom))` inside the ≤700px block — the floating pill needs more clearance than the old flush bar did.
 - Section vertical rhythm on mobile is `2.4rem` (was `1.2rem`, which ran sections into each other).
 - All grids collapse to one column; gallery goes 3 → 2 columns.
 - Chambolle egg/toggle sit at `bottom: 84px` to clear the tab bar.
