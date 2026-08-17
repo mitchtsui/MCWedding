@@ -1145,30 +1145,36 @@
     padding-left: 1.1rem;
     border-left: 1px solid var(--divider);
   }
+  /* 2026-08-17: shrunk + made near-transparent per the couple — it's a
+     once-per-guest control and shouldn't compete with the hero photo.
+     The no-blur fallback keeps a higher alpha so the labels never sit on
+     raw photo; tap targets are deliberately below the 44px floor here,
+     a trade-off the couple chose for this rarely-used control. */
   .lang-chip {
     position: fixed;
-    top: 14px;
-    right: 14px;
+    top: 12px;
+    right: 12px;
     z-index: 95;
     display: none;
-    gap: 0.1rem;
-    padding: 0.22rem;
-    background: var(--glass-bg-solid);
-    border: 1px solid var(--glass-edge);
+    gap: 0;
+    padding: 0.12rem;
+    background: rgba(237, 230, 216, 0.75);
+    border: 1px solid rgba(255, 253, 248, 0.35);
     border-radius: 999px;
-    box-shadow: var(--glass-inset), var(--glass-shadow);
+    box-shadow: 0 3px 12px rgba(44, 40, 32, 0.10);
   }
   @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
     .lang-chip {
-      background: var(--glass-bg);
-      -webkit-backdrop-filter: var(--glass-blur);
-      backdrop-filter: var(--glass-blur);
+      background: rgba(237, 230, 216, 0.38);
+      -webkit-backdrop-filter: blur(14px) saturate(1.4);
+      backdrop-filter: blur(14px) saturate(1.4);
     }
   }
   .lang-chip .lang-btn {
-    width: 42px;
-    min-height: 42px;
+    width: 34px;
+    min-height: 30px;
     padding: 0;
+    font-size: 0.68rem;
     display: flex;
     align-items: center;
     justify-content: center;
