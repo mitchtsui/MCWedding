@@ -1115,6 +1115,71 @@
     .hero-scroll-hint .scroll-line { animation: none !important; }
   }
 
+  /* ─── LANGUAGE SWITCHER + CJK TYPE (2026-08-17) ───
+     English is the DOM's source language; the i18n script swaps copy for
+     zh-Hant / ja at load. These rules add the switcher UI and give CJK
+     text dignified system-font fallbacks (PingFang/Songti on iOS,
+     Hiragino/Yu on JP devices) — no CJK webfont is shipped; the embedded
+     Latin faces stay for names and numerals. */
+  .lang-btn {
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.06em;
+    padding: 0.32rem 0.6rem;
+    border: none;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--text-mid);
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s;
+  }
+  .lang-btn:hover { color: var(--text); }
+  .lang-btn.active { background: var(--golden); color: var(--olive); }
+  .lang-btn:focus-visible { outline: 2px solid var(--olive); outline-offset: 2px; }
+  .nav-lang {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.1rem;
+    margin-left: 1.1rem;
+    padding-left: 1.1rem;
+    border-left: 1px solid var(--divider);
+  }
+  .lang-chip {
+    position: fixed;
+    top: 14px;
+    right: 14px;
+    z-index: 95;
+    display: none;
+    gap: 0.1rem;
+    padding: 0.22rem;
+    background: var(--glass-bg-solid);
+    border: 1px solid var(--glass-edge);
+    border-radius: 999px;
+    box-shadow: var(--glass-inset), var(--glass-shadow);
+  }
+  @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .lang-chip {
+      background: var(--glass-bg);
+      -webkit-backdrop-filter: var(--glass-blur);
+      backdrop-filter: var(--glass-blur);
+    }
+  }
+  .lang-chip .lang-btn {
+    width: 42px;
+    min-height: 42px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  html[lang="zh-Hant"] body {
+    font-family: 'Cormorant Garamond', 'Songti TC', 'Noto Serif TC', 'PingFang TC', 'Microsoft JhengHei', serif;
+  }
+  html[lang="ja"] body {
+    font-family: 'Cormorant Garamond', 'Hiragino Mincho ProN', 'Yu Mincho', 'Noto Serif JP', 'Meiryo', serif;
+  }
+
   /* ─── REDUCED TRANSPARENCY ───
      Guests who ask their OS for less transparency get solid surfaces:
      every glass element drops its blur and returns to a near-opaque
@@ -1142,6 +1207,8 @@
        longer render here at all, matching the full-bleed hero photo
        look this was changed to on 2026-08-12. */
     nav { display: none; }
+
+    .lang-chip { display: flex; }
 
     /* ── BOTTOM TAB BAR — floating frosted pill (2026-08-18 restyle) ──
        Was a full-width opaque bar with a hard border-top — the classic
@@ -1438,6 +1505,11 @@
     <a href="#rsvp"        class="nav-link nav-cta" onclick="closeNav()">RSVP</a>
     <a href="#gallery"     class="nav-link" onclick="closeNav()">Gallery</a>
     <a href="#more"        class="nav-link" onclick="closeNav()">More</a>
+    <span class="nav-lang" role="group" aria-label="Language">
+      <button type="button" class="lang-btn" data-set-lang="en">EN</button>
+      <button type="button" class="lang-btn" data-set-lang="zh">繁</button>
+      <button type="button" class="lang-btn" data-set-lang="ja">日</button>
+    </span>
   </div>
 </nav>
 
@@ -1472,6 +1544,15 @@
     <span class="tab-icon-wrap"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"><rect x="3.5" y="5" width="17" height="14" rx="1.5"/><circle cx="9" cy="10" r="1.6"/><path d="m4 17 5-4.5 3.5 3L17 11l3.5 4"/></svg></span>
     <span>Photos</span>
   </a>
+</div>
+
+<!-- Language chip — mobile only (the top nav, which carries the language
+     group on desktop, is display:none below 700px). Same buttons, same
+     handler; glass material to match the rest of the chrome. -->
+<div class="lang-chip" role="group" aria-label="Language">
+  <button type="button" class="lang-btn" data-set-lang="en">EN</button>
+  <button type="button" class="lang-btn" data-set-lang="zh">繁</button>
+  <button type="button" class="lang-btn" data-set-lang="ja">日</button>
 </div>
 
 <!-- ─── HERO ─── -->
@@ -2878,6 +2959,349 @@
 <!-- Loads SUPABASE_URL / SUPABASE_ANON_KEY onto window from Vercel env vars -->
 <script src="/api/config.js"></script>
 
+<!-- ─── I18N — Traditional Chinese + Japanese (2026-08-17) ───
+     English lives in the DOM as the source of truth; this block swaps it
+     out at load for zh-Hant / ja. Runs BEFORE the main script so the
+     `tt`/`tf` helpers exist when the RSVP flow first renders.
+     Language pick: saved choice (localStorage 'mc-lang') beats detection;
+     detection maps any zh* -> Traditional Chinese, ja* -> Japanese,
+     everything else -> English. Names, the Besotted Love / Liana script
+     lines ("Christy & Mitchell", "You're All Set") and venue proper nouns
+     on the floor-plan map stay in English by design — they are calligraphy
+     and map labels, not prose. -->
+<script>
+(function () {
+  var LANGS = ['en', 'zh', 'ja'];
+  function detect() {
+    try {
+      var saved = localStorage.getItem('mc-lang');
+      if (LANGS.indexOf(saved) !== -1) return saved;
+    } catch (e) {}
+    var l = ((navigator.languages && navigator.languages[0]) || navigator.language || 'en').toLowerCase();
+    if (l.indexOf('zh') === 0) return 'zh';   // Simplified AND Traditional -> Traditional
+    if (l.indexOf('ja') === 0) return 'ja';
+    return 'en';
+  }
+
+  var I18N = {
+
+    /* ══════════════ 繁體中文（香港） ══════════════ */
+    zh: {
+      title: 'Christy & Mitchell — 2026年11月12日',
+      desc: '誠邀您於2026年11月12日（星期四）蒞臨香港半島酒店利士廳，見證我們的婚禮。敬請於2026年9月12日前回覆。',
+      dom: {
+        '.nav-list .nav-link': ['首頁', '婚禮當日', '交通', '問與答', '回覆出席', '相冊', '更多'],
+        '.bottom-tab > span:last-child': ['首頁', '當日', '交通', '問答', '回覆', '相片'],
+        '.hero-script': '敬請預留',
+        '.hero-chambolle': '與 Chambolle',
+        '.hero-meta': '星期四 <span>•</span> 2026年11月12日 <span>•</span> 香港',
+        '.countdown-label': ['日', '小時', '分鐘', '秒'],
+        '.hero-rsvp-btn': '回覆出席',
+        '.hero-scroll-hint > span:first-child': '往下滑',
+        '.invite-pre': '我們與雙方家人',
+        '.invite-request': '誠摯邀請您<br>蒞臨我們的婚禮',
+        '.invite-when': '2026年11月12日（星期四）',
+        '.invite-where': '利士廳<br>香港半島酒店',
+        '.invite-addr': '九龍尖沙咀梳士巴利道',
+        '.invite-attire': '<span>服裝</span>隆重晚裝',
+        '.day-title': ['到場・先打幾圈', '覆水難收', '你真正為之而來的部分'],
+        '.day-desc': [
+          '請早點到場。有吃的，有喝的，還有麻雀——是的，麻雀是免費的，請不必再問。這一小時用來寒暄、安頓，並為接下來的事作好心理準備。我們建議準時到達。我們知道你不會。麻雀會等你。',
+          '就是這一刻。十年、一隻哥基，加上相當程度的說服工夫——我們真的要結婚了。誠邀你與我們的家人一同見證這件事變成正式、永久、而且在法律上極難撤銷。請入座。請不要哭得比我們早。',
+          '傳統中式婚宴，因為有些事不能妥協。酒單由文俊親自挑選——他花了不合理地多的時間，並希望你能留意到。有溫暖、有感謝、有喜悅，還有很多道菜。慢慢來，夜還長，酒真的很好。'
+        ],
+        '.day-ps': 'P.S. 請多拍芷晴。多拍幾張。她化了妝、穿了禮服，歷史數據顯示這種情況未必會再出現。',
+        '#travel .eyebrow': '前往方法',
+        '#travel h2.section-title': '香港<em>半島酒店</em>',
+        '#travel > .container > div:nth-of-type(3) p': '場地是香港尖沙咀梳士巴利道半島酒店的利士廳。這是香港最具代表性的酒店之一，自1928年屹立至今，應該不難找。我們對你有信心。',
+        '.map-address': '<strong>地點</strong>香港半島酒店 利士廳<br>九龍尖沙咀梳士巴利道',
+        '.map-actions .map-btn': ['Apple 地圖', '規劃路線'],
+        '#travel .map-wrapper + div p': [
+          '<strong>港鐵：</strong>尖沙咀站（尖東J出口），步行約三分鐘。這是最簡單的方法。用它。',
+          '<strong>的士：</strong>跟司機說「<strong>半島酒店</strong>，尖沙咀」就可以。'
+        ],
+        '#qa .eyebrow': '問與答',
+        '#qa .qa-question > span:first-child': [
+          '我應該幾點到？', '最遲何時回覆？', '酒是怎樣的？', 'Chambolle 會出席嗎？', '可以帶伴嗎？'
+        ],
+        '#qa .qa-answer p': [
+          '五時開始入場。建議<strong>17:00至18:00</strong>之間到達——有飲品、有麻雀，總比在大堂徘徊好。婚禮儀式<strong>18:30</strong>準時開始。利士廳就在半島酒店裡面，跟着指示牌走，你可以的。應該。',
+          '<strong>2026年9月12日</strong>。距離婚禮還有兩個月，我們認為相當合理。這個期限存在，是因為芷晴要同時處理座位表、菜單，以及大約一千件其他事情——她非常希望在崩潰之前知道你來不來。請不要讓她追着你問。直接在本頁回覆就可以。',
+          '問得好，文俊等這條問題很久了。紅酒方面，他投得了<strong>Hospices de Beaune 2024</strong>拍賣批次——布根地最負盛名的年度拍賣之一——所以，是的，會很特別，而且他大概會提起。白酒則來自他最喜愛的酒莊<strong>00 Wine</strong>——他親自去過那裡幫忙收成。如有偏好或敏感，請在回覆時註明。如對他的選擇有意見，請保留給自己。',
+          '不會。半島酒店執行嚴格的「不准哥基」政策，我們認為極有商榷餘地，但決定不作追究。Chambolle 已獲通知。他有意見。當日他會留在家中他的小城堡裡，深表不滿，等待我們帶臭臭零食回去。他有條件地送上祝福。',
+          '簡單答案：邀請卡上有名字的才可以。場地有人數上限，芷晴有座位表，文俊訂了酒，三者都沒有為突擊嘉賓預留空間。如你的邀請包含同行者，回覆時便可以填上他們的名字。不確定的話，直接問我們。'
+        ],
+        '#rsvp .eyebrow': '請於此日前回覆',
+        '#rsvp h2.section-title': '回覆出席<br><em style="font-size:1.1rem;color:var(--text-mid);">2026年9月12日</em>',
+        '#rsvp-no-code h3': '專屬邀請',
+        '#rsvp-no-code p': '如需回覆及查看座位，請直接聯絡芷晴或文俊索取你的專屬連結。',
+        '#rsvp-loading p': '正在查找你的邀請…',
+        '#rsvp-invalid h3': '找不到邀請',
+        '#rsvp-invalid p': '這條連結與名單上的邀請不符。請核對邀請卡上的編碼，或直接聯絡我們。',
+        '#member-picker-label': '誰在回覆？',
+        '#f-name-label': '姓名',
+        'label[for="f-email"]': '電郵地址',
+        'label[for="f-phone"]': '聯絡電話 / WhatsApp',
+        '#attendance-label': '你會出席嗎？*',
+        '.att-btn[data-val="yes"]': '欣然出席',
+        '.att-btn[data-val="no"]': '抱歉未能出席',
+        'label[for="f-plusone"]': '同行者姓名（如適用）',
+        'label[for="f-dietary"]': '飲食需要',
+        '#f-dietary option': ['無特別需要', '素食', '純素', '清真', '猶太潔食', '無麩質', '堅果敏感', '其他（請在下方註明）'],
+        'label[for="f-song"]': '點歌 <span style="font-weight:300;text-transform:none;letter-spacing:0;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:0.85rem;color:var(--text-light);">— 當晚設有現場樂隊</span>',
+        'label[for="f-message"]': '給新人的話',
+        '#rsvp-submit': '送出回覆',
+        '.seat-card-head .venue': '利士廳<br>香港半島酒店',
+        '.seat-card-note': [
+          '座位已預先安排。如有任何問題，請直接聯絡我們。',
+          '婚禮前約兩星期請再回來看看——芷晴可能會對座位作最後調整。'
+        ],
+        'button[onclick="toggleCalendarChoices()"]': '加入行事曆',
+        'button[onclick="openFloorPlan()"]': '查看座位圖',
+        'button[onclick="editRsvp()"]': '更改回覆',
+        '.calendar-choices .label': '選擇你的行事曆',
+        '.fp-sub': '已標示你的桌子——點一下即可查看同桌賓客',
+        '.fp-panel-eyebrow': '你的桌子',
+        '#gallery .eyebrow': '婚前拍攝',
+        '#gallery h2.section-title': '<em>相冊</em>',
+        '#more > .container > div:nth-of-type(2) .eyebrow': '完全可以跳過',
+        '#more > .container > div:nth-of-type(2) h2.section-title': '隨便<em>看看就好</em>',
+        '.more-panel-header > span:first-child': ['我們的故事', '認識 Chambolle'],
+        '#story .story-body .eyebrow': '我們的故事',
+        '#story h2.section-title': '一段<em>沒有人要求的</em>時間線',
+        '.story-quote': '「十年。一隻哥基。零後悔（大概）。」',
+        '#story .story-body p': [
+          '我們在大學認識——那時最大的決定，是逃哪一課和買哪款即食麵。並非一見鍾情。芷晴做正確的決定；文俊令芷晴的決定變得比較有趣。',
+          '之後是共同建立生活的十年——新城市、新工作、一隻很有主見的哥基——靠一種不張揚、但絕不離開的愛支撐着。',
+          '我們算是長大了。不會假裝每天都詩情畫意，有些日子純粹在爭論輪到誰洗碗。但我們一直為對方出現，在平凡與重要的時刻都是，而不知不覺間，這成了我們倆不小心做過最好的事。',
+          '練習了十年，我們決定把它變成永久。這就是那場婚禮。你被邀請了。請來——你的晚餐我們已經付款。'
+        ],
+        '#chambolle .eyebrow': '簡單介紹',
+        '#chambolle h2.section-title': '我們的孩子',
+        '#chambolle .chambolle-info p': [
+          '這位是 Chambolle，一隻威爾斯哥基。在法律上和情感上，他都是我們的孩子——這一點不接受提問。',
+          '他的名字來自布根地一條村莊，那條村開啟了我們最昂貴的嗜好之一。（指酒，不是狗。雖然老實說，預算差不多。）',
+          '求婚時他不在場。選場地沒有諮詢他。他對座位表有意見，我們選擇無視。',
+          '他不會出席婚禮。他非常難過。我們並不抱歉。'
+        ],
+        'footer p': '2026年11月12日 &nbsp;·&nbsp; 香港半島酒店'
+      },
+      attr: {
+        '#f-plusone::placeholder': '伴侶／同行者姓名',
+        '#f-song::placeholder': '想聽的歌——廣東話、國語或英文都可以',
+        '#f-message::placeholder': '祝福或想說的話…'
+      },
+      ui: {
+        today: '就是今天！♡',
+        willMiss: '未能出席', toAssign: '待編排', declined: '已婉拒',
+        tableFmt: '第 {n} 桌', seatFmt: '第 {n} 位',
+        panelTableFmt: '第 <em>{n}</em> 桌',
+        loading: '載入中…', loadTable: '正在載入你的桌子…',
+        errRest: '未能載入你同桌的其他賓客——請重新整理再試。',
+        errOwn: '未能載入你的桌子——請重新整理再試。',
+        notYour: '這不是你的桌子——我們只會顯示與你同桌的賓客。',
+        arranging: '座位安排中。', youMark: ' &nbsp;·&nbsp; 你',
+        noSeat: '你的座位尚未編排——臨近婚禮時再回來看看。',
+        replied: '已回覆',
+        selectWho: '請選擇回覆人。', sending: '傳送中…', send: '送出回覆',
+        wrong: '出了點問題，請再試一次或直接聯絡我們。',
+        shushOff: '暫時安靜 Chambolle', shushOn: '已安靜——點一下請他回來'
+      },
+      quips: [
+        '汪。（沒有人諮詢過我。）',
+        '聽說有臭臭零食。',
+        '坐在我的城堡裡，深表不滿。',
+        '網站都有我的名字，我應得一個攜伴名額。',
+        'Pinot？麻煩了。',
+        '叫文俊把 Hospices de Beaune 留給我。',
+        '你滑了很遠喔，乖。',
+        '我是首席士氣官。',
+        '歡迎來探我。'
+      ]
+    },
+
+    /* ══════════════ 日本語 ══════════════ */
+    ja: {
+      title: 'Christy & Mitchell — 2026年11月12日',
+      desc: '2026年11月12日（木）、ザ・ペニンシュラ香港「ソールズベリールーム」にて挙式いたします。2026年9月12日までにご出欠をお知らせください。',
+      dom: {
+        '.nav-list .nav-link': ['ホーム', '挙式当日', 'アクセス', 'Q&A', 'ご出欠', 'ギャラリー', 'その他'],
+        '.bottom-tab > span:last-child': ['ホーム', '当日', 'アクセス', 'Q&A', '出欠', '写真'],
+        '.hero-script': '結婚式のお知らせ',
+        '.hero-chambolle': 'と Chambolle',
+        '.hero-meta': '2026年11月12日（木） <span>•</span> 香港',
+        '.countdown-label': ['日', '時間', '分', '秒'],
+        '.hero-rsvp-btn': 'ご出欠のお返事',
+        '.hero-scroll-hint > span:first-child': 'スクロール',
+        '.invite-pre': '両家の家族とともに',
+        '.invite-request': '私たちの結婚式に<br>謹んでご招待申し上げます',
+        '.invite-when': '2026年11月12日（木曜日）',
+        '.invite-where': 'ソールズベリールーム<br>ザ・ペニンシュラ香港',
+        '.invite-addr': '九龍・尖沙咀 ソールズベリーロード',
+        '.invite-attire': '<span>ドレスコード</span>イブニング・フォーマル',
+        '.day-title': ['受付・そして麻雀を', '引き返せない瞬間', '皆さまのお目当て'],
+        '.day-desc': [
+          'お早めにお越しください。軽食もお飲み物も、麻雀もございます——はい、無料です、ご心配なく。この一時間で歓談し、席に落ち着き、これから起こることに心の準備をどうぞ。時間どおりのご到着をおすすめします。難しいのは承知しています。麻雀はお待ちしています。',
+          'いよいよです。十年とコーギー一匹、そして相当な説得の末——本当に結婚します。両家の家族とともに、この関係が正式で、永久で、法的に取り消しの難しいものになる瞬間をお見届けください。ご着席のうえ、私たちより先に泣かないでください。',
+          '伝統的な中国式披露宴です。譲れないものは譲れませんから。ワインリストはMitchellが自ら選びました。不合理なほど時間をかけたので、気づいていただけると喜びます。温かさと感謝と喜び、そしてたくさんのお料理を。夜は長く、ワインは本当に良いものです。ゆっくりどうぞ。'
+        ],
+        '.day-ps': 'P.S. Christyの写真をたくさん撮ってください。ドレスアップした彼女がまた見られる保証は、歴史的にありません。',
+        '#travel .eyebrow': 'アクセス',
+        '#travel h2.section-title': 'ザ・ペニンシュラ<em>香港</em>',
+        '#travel > .container > div:nth-of-type(3) p': '会場は尖沙咀ソールズベリーロード、ザ・ペニンシュラ香港の「ソールズベリールーム」です。1928年から続く香港を代表するホテルですので、迷うことはないはずです。ご健闘をお祈りします。',
+        '.map-address': '<strong>会場</strong>ザ・ペニンシュラ香港 ソールズベリールーム<br>九龍・尖沙咀 ソールズベリーロード',
+        '.map-actions .map-btn': ['Apple マップ', '経路を表示'],
+        '#travel .map-wrapper + div p': [
+          '<strong>MTR：</strong>尖沙咀駅（尖東J出口）から徒歩3分。いちばん簡単な方法です。',
+          '<strong>タクシー：</strong>運転手に「<strong>半島酒店</strong>（ペニンシュラホテル）、尖沙咀」とお伝えください。'
+        ],
+        '#qa .eyebrow': 'よくあるご質問',
+        '#qa .qa-question > span:first-child': [
+          '何時に着けばいいですか？', 'いつまでにお返事を？', 'ワインは？', 'Chambolleは来ますか？', '同伴者は可能ですか？'
+        ],
+        '#qa .qa-answer p': [
+          '開場は<strong>17:00</strong>。17時から18時の間のご到着がおすすめです——お飲み物と麻雀があり、ロビーをうろうろするよりずっと有意義です。挙式は<strong>18:30</strong>ちょうどに始まります。ソールズベリールームはペニンシュラホテルの中。案内表示に従えば大丈夫です。たぶん。',
+          '<strong>2026年9月12日</strong>まで。挙式の二か月前ですから、十分ご猶予があるかと。この締切があるのは、Christyが席次表とお料理と、その他およそ千件を同時に進めているためです。追いかけさせないであげてください。このページからそのままご返信いただけます。',
+          'よくぞ聞いてくださいました。Mitchellはこの質問を待っていました。赤は<strong>Hospices de Beaune 2024</strong>のオークションロット——ブルゴーニュ屈指の由緒あるオークションです。ええ、特別ですし、彼はたぶんその話をします。白は彼のお気に入り<strong>00 Wine</strong>から。収穫まで手伝いに行った、思い入れのある造り手です。ご希望やアレルギーはご返信の際にお知らせください。彼の選択へのご意見は、心の中にどうぞ。',
+          '来ません。ペニンシュラは厳格な「コーギーお断り」ポリシーを掲げており、私たちは大いに疑問を持ちつつも争わないことにしました。Chambolleには伝えてあります。彼には言い分があります。当日は自宅の小さなお城で、大変不服そうに、私たちの帰りと臭いおやつを待っています。条件付きで愛を送るそうです。',
+          '端的には：招待状にお名前のある方のみです。会場には定員があり、Christyには席次表が、Mitchellにはワインの発注数があり、いずれもサプライズゲストの余地がありません。招待状に同伴者が含まれる場合は、ご返信の際にお名前をご記入いただけます。ご不明な場合は直接お尋ねください。'
+        ],
+        '#rsvp .eyebrow': 'ご返信期日',
+        '#rsvp h2.section-title': 'ご出欠<br><em style="font-size:1.1rem;color:var(--text-mid);">2026年9月12日</em>',
+        '#rsvp-no-code h3': 'ご招待について',
+        '#rsvp-no-code p': 'ご出欠の登録とお席の確認には専用リンクが必要です。ChristyまたはMitchellまで直接お問い合わせください。',
+        '#rsvp-loading p': '招待状を確認しています…',
+        '#rsvp-invalid h3': '招待が見つかりません',
+        '#rsvp-invalid p': 'このリンクは名簿と一致しませんでした。招待状のコードをご確認いただくか、直接ご連絡ください。',
+        '#member-picker-label': 'どなたのご返信ですか？',
+        '#f-name-label': 'お名前',
+        'label[for="f-email"]': 'メールアドレス',
+        'label[for="f-phone"]': 'お電話番号 / WhatsApp',
+        '#attendance-label': 'ご出席いただけますか？*',
+        '.att-btn[data-val="yes"]': '喜んで出席します',
+        '.att-btn[data-val="no"]': '残念ながら欠席します',
+        'label[for="f-plusone"]': 'お連れ様のお名前（該当する場合）',
+        'label[for="f-dietary"]': 'お食事のご要望',
+        '#f-dietary option': ['特になし', 'ベジタリアン', 'ヴィーガン', 'ハラール', 'コーシャ', 'グルテンフリー', 'ナッツアレルギー', 'その他（下欄にご記入ください）'],
+        'label[for="f-song"]': 'リクエスト曲 <span style="font-weight:300;text-transform:none;letter-spacing:0;font-family:\'Cormorant Garamond\',serif;font-style:italic;font-size:0.85rem;color:var(--text-light);">— 当日は生バンドが演奏します</span>',
+        'label[for="f-message"]': 'お二人へのメッセージ',
+        '#rsvp-submit': '送信する',
+        '.seat-card-head .venue': 'ソールズベリールーム<br>ザ・ペニンシュラ香港',
+        '.seat-card-note': [
+          'お席は事前に決められています。気になる点があれば直接ご連絡ください。',
+          '挙式の約二週間前に、もう一度ご確認ください——Christyが席次を最終調整する場合があります。'
+        ],
+        'button[onclick="toggleCalendarChoices()"]': 'カレンダーに追加',
+        'button[onclick="openFloorPlan()"]': 'フロアマップを見る',
+        'button[onclick="editRsvp()"]': '返信を変更する',
+        '.calendar-choices .label': 'カレンダーを選択',
+        '.fp-sub': 'あなたのテーブルがハイライトされています——タップすると同席の方が見られます',
+        '.fp-panel-eyebrow': 'あなたのテーブル',
+        '#gallery .eyebrow': '前撮り',
+        '#gallery h2.section-title': '<em>ギャラリー</em>',
+        '#more > .container > div:nth-of-type(2) .eyebrow': '読まなくても大丈夫',
+        '#more > .container > div:nth-of-type(2) h2.section-title': 'お時間があれば<em>どうぞ</em>',
+        '.more-panel-header > span:first-child': ['私たちの物語', 'Chambolleのこと'],
+        '#story .story-body .eyebrow': '私たちの物語',
+        '#story h2.section-title': '誰も頼んでいない<em>年表</em>',
+        '.story-quote': '「十年。コーギー一匹。後悔ゼロ（たぶん）。」',
+        '#story .story-body p': [
+          '出会いは大学。どの講義をサボるか、どのカップ麺を買うかが最大の決断だった頃です。一目惚れではありませんでした。Christyは正しい決断をする人で、Mitchellはその決断を少し面白くする人でした。',
+          'それからの十年、新しい街、新しい仕事、そして一匹の主張の強いコーギーとともに、声高ではないけれど決して離れない愛に支えられて、生活を築いてきました。',
+          '私たちは、まあまあ大人になりました。毎日が詩のようだったとは言いません。皿洗いの当番を巡るだけの日もありました。それでも平凡な日も大切な日も互いのそばにいて、いつの間にかそれは、二人がうっかり成し遂げた最良のことになっていました。',
+          '十年の練習を経て、これを永久のものにすることにしました。それがこの結婚式です。ご招待します。ぜひお越しください——お食事代はもう払ってあります。'
+        ],
+        '#chambolle .eyebrow': 'ご紹介',
+        '#chambolle h2.section-title': '私たちの子ども',
+        '#chambolle .chambolle-info p': [
+          'Chambolleです。ウェルシュ・コーギー。法的にも感情的にも私たちの子どもです——ご質問は受け付けません。',
+          '名前の由来はブルゴーニュの村。私たちの最も高くつく趣味が始まった場所です。（ワインの話です、犬ではなく。もっとも予算は似たようなものですが。）',
+          'プロポーズに彼は立ち会っていません。会場選びで相談もされていません。席次表には意見があるようですが、無視することにしました。',
+          '彼は結婚式に出席しません。とても悲しんでいます。私たちは謝りません。'
+        ],
+        'footer p': '2026年11月12日 &nbsp;·&nbsp; ザ・ペニンシュラ香港'
+      },
+      attr: {
+        '#f-plusone::placeholder': 'お連れ様のお名前',
+        '#f-song::placeholder': '聴きたい曲——日本語の曲でも大丈夫です',
+        '#f-message::placeholder': 'お祝いの言葉やメッセージを…'
+      },
+      ui: {
+        today: '今日がその日です！♡',
+        willMiss: 'ご欠席', toAssign: '調整中', declined: '欠席',
+        tableFmt: 'テーブル {n}', seatFmt: '{n}番席',
+        panelTableFmt: 'テーブル <em>{n}</em>',
+        loading: '読み込み中…', loadTable: 'テーブル情報を読み込んでいます…',
+        errRest: '同じテーブルの方を読み込めませんでした——再読み込みしてお試しください。',
+        errOwn: 'テーブル情報を読み込めませんでした——再読み込みしてお試しください。',
+        notYour: 'こちらは別のテーブルです——同席の方のみ表示されます。',
+        arranging: '席を調整中です。', youMark: ' &nbsp;·&nbsp; あなた',
+        noSeat: 'お席はまだ決まっていません——当日が近づいたら再度ご確認ください。',
+        replied: '返信済み',
+        selectWho: 'どなたのご返信か選択してください。', sending: '送信中…', send: '送信する',
+        wrong: '問題が発生しました。もう一度お試しいただくか、直接ご連絡ください。',
+        shushOff: 'Chambolleを静かにさせる', shushOn: '静かにさせています——タップで戻ります'
+      },
+      quips: [
+        'ワン。（相談されていません。）',
+        '臭いおやつがあると聞きました。',
+        'お城で待機中。大変不服です。',
+        'サイトに名前が載ってるんだから、同伴枠をください。',
+        'ピノ？いただきます。',
+        'MitchellにHospices de Beauneを取っておいてと伝えて。',
+        'ここまでスクロールしたの？えらい。',
+        '私は最高士気責任者です。',
+        '遊びに来てください。'
+      ]
+    }
+  };
+
+  var lang = detect();
+  var pack = I18N[lang] || null;
+  window.MC_LANG = lang;
+  window.tt = function (k, en) { return (pack && pack.ui && pack.ui[k]) || en; };
+  window.tf = function (k, en, n) { return ((pack && pack.ui && pack.ui[k]) || en).replace('{n}', n); };
+  if (pack) window.MC_QUIPS = pack.quips;
+
+  // Language switcher (nav group on desktop, floating chip on mobile —
+  // same buttons, same handler). A manual pick persists and wins over
+  // detection on every future visit.
+  document.querySelectorAll('.lang-btn').forEach(function (b) {
+    b.classList.toggle('active', b.getAttribute('data-set-lang') === lang);
+    b.setAttribute('aria-pressed', b.getAttribute('data-set-lang') === lang ? 'true' : 'false');
+    b.addEventListener('click', function () {
+      try { localStorage.setItem('mc-lang', b.getAttribute('data-set-lang')); } catch (e) {}
+      location.reload();
+    });
+  });
+
+  if (!pack) return; // English: the DOM already IS the content.
+
+  document.documentElement.lang = (lang === 'zh') ? 'zh-Hant' : 'ja';
+  document.title = pack.title;
+  var md = document.querySelector('meta[name="description"]');
+  if (md) md.setAttribute('content', pack.desc);
+  var og = document.querySelector('meta[property="og:description"]');
+  if (og) og.setAttribute('content', pack.desc);
+
+  Object.keys(pack.dom).forEach(function (sel) {
+    var val = pack.dom[sel];
+    var els = document.querySelectorAll(sel);
+    if (!els.length) { console.warn('[i18n] no match:', sel); return; }
+    els.forEach(function (el, i) {
+      var v = Array.isArray(val) ? val[i] : val;
+      if (v != null) el.innerHTML = v;
+    });
+  });
+  Object.keys(pack.attr).forEach(function (key) {
+    var parts = key.split('::');
+    document.querySelectorAll(parts[0]).forEach(function (el) {
+      el.setAttribute(parts[1], pack.attr[key]);
+    });
+  });
+})();
+</script>
+
 <script>
   // ─── SUPABASE CONFIG ───
   // Values are injected by /api/config.js (reads from Vercel env vars).
@@ -3019,7 +3443,7 @@
       opt.dataset.id = m.id;
       opt.innerHTML = `
         <span>${escHtml(m.name)} <span class="meta">${escHtml(m.side || '')}</span></span>
-        ${m.has_rsvpd ? '<span class="badge">Replied</span>' : ''}
+        ${m.has_rsvpd ? `<span class="badge">${tt('replied','Replied')}</span>` : ''}
       `;
       opt.onclick = () => selectMember(m);
       picker.appendChild(opt);
@@ -3086,17 +3510,17 @@
       const declined = m.has_rsvpd && m.attendance === false;
       let locHtml;
       if (declined) {
-        locHtml = `<span class="pending">Will be missed</span>`;
+        locHtml = `<span class="pending">${tt('willMiss','Will be missed')}</span>`;
       } else if (m.has_seat) {
-        locHtml = `<span class="table">Table ${m.table_number}</span><span class="seat">Seat ${m.seat_number}</span>`;
+        locHtml = `<span class="table">${tf('tableFmt','Table {n}',m.table_number)}</span><span class="seat">${tf('seatFmt','Seat {n}',m.seat_number)}</span>`;
       } else {
-        locHtml = `<span class="pending">To be assigned</span>`;
+        locHtml = `<span class="pending">${tt('toAssign','To be assigned')}</span>`;
       }
       rows.innerHTML += `
         <div class="seat-row">
           <div class="seat-name">
             ${escHtml(m.name)}
-            ${declined ? '<span class="att-no">Declined</span>' : ''}
+            ${declined ? `<span class="att-no">${tt('declined','Declined')}</span>` : ''}
           </div>
           <div class="seat-loc">${locHtml}</div>
         </div>`;
@@ -3146,7 +3570,7 @@
     const mine = (CURRENT_SEATS || []).filter(s => s.has_seat);
     if (!mine.length) return '';
     return mine
-      .map(s => `${escHtml(s.name)} &nbsp;·&nbsp; Table ${s.table_number}, Seat ${s.seat_number}`)
+      .map(s => `${escHtml(s.name)} &nbsp;·&nbsp; ${tf('tableFmt','Table {n}',s.table_number)}, ${tf('seatFmt','Seat {n}',s.seat_number)}`)
       .join('<br>');
   }
 
@@ -3204,10 +3628,10 @@
     const listEl  = document.getElementById('fp-panel-list');
     if (!titleEl || !listEl) return;
 
-    titleEl.innerHTML = `Table <em>${tableNum}</em>`;
+    titleEl.innerHTML = tf('panelTableFmt','Table <em>{n}</em>', tableNum);
 
     if (TABLE_LOAD === 'loading' || TABLE_LOAD === 'idle') {
-      listEl.innerHTML = '<p class="fp-panel-hint">Loading…</p>';
+      listEl.innerHTML = `<p class="fp-panel-hint">${tt('loading','Loading…')}</p>`;
       return;
     }
 
@@ -3217,20 +3641,20 @@
       const seat = ownSeatLine();
       listEl.innerHTML = seat
         ? `<div class="fp-occupant you"><span>${seat}</span></div>
-           <p class="fp-panel-hint">We couldn't load the rest of your table just now — please refresh and try again.</p>`
-        : '<p class="fp-panel-hint">We couldn\'t load your table just now — please refresh and try again.</p>';
+           <p class="fp-panel-hint">${tt('errRest',"We couldn't load the rest of your table just now — please refresh and try again.")}</p>`
+        : `<p class="fp-panel-hint">${tt('errOwn',"We couldn't load your table just now — please refresh and try again.")}</p>`;
       return;
     }
 
     // Only the guest's own table reveals names. Everything else stays private.
     if (!isOwnTable(tableNum)) {
-      listEl.innerHTML = '<p class="fp-panel-hint">This isn\'t your table — we only show you the people you\'re sitting with.</p>';
+      listEl.innerHTML = `<p class="fp-panel-hint">${tt('notYour',"This isn't your table — we only show you the people you're sitting with.")}</p>`;
       return;
     }
 
     const occupants = (TABLE_DATA || {})[String(tableNum)] || [];
     if (occupants.length === 0) {
-      listEl.innerHTML = '<p class="fp-empty">Seats being arranged.</p>';
+      listEl.innerHTML = `<p class="fp-empty">${tt('arranging','Seats being arranged.')}</p>`;
       return;
     }
 
@@ -3242,8 +3666,8 @@
         const isYou = own.has((o.name || '').trim().toLowerCase());
         return `
           <div class="fp-occupant ${isYou ? 'you' : ''}">
-            <span>${escHtml(o.name)}${isYou ? ' &nbsp;·&nbsp; you' : ''}</span>
-            <span class="seat">${o.seat ? 'Seat ' + o.seat : ''}</span>
+            <span>${escHtml(o.name)}${isYou ? tt('youMark',' &nbsp;·&nbsp; you') : ''}</span>
+            <span class="seat">${o.seat ? tf('seatFmt','Seat {n}',o.seat) : ''}</span>
           </div>`;
       }).join('');
   }
@@ -3272,7 +3696,7 @@
     const titleEl = document.getElementById('fp-panel-title');
     const listEl  = document.getElementById('fp-panel-list');
     if (titleEl) titleEl.textContent = '—';
-    if (listEl)  listEl.innerHTML = '<p class="fp-panel-hint">Loading your table…</p>';
+    if (listEl)  listEl.innerHTML = `<p class="fp-panel-hint">${tt('loadTable','Loading your table…')}</p>`;
 
     // Lock everything until we know which table is theirs, so a fast tap
     // during the fetch can't select a table it shouldn't.
@@ -3287,10 +3711,10 @@
       selectTable(own[0]);
     } else if (TABLE_LOAD === 'error' && listEl) {
       if (titleEl) titleEl.textContent = '—';
-      listEl.innerHTML = '<p class="fp-panel-hint">We couldn\'t load your table just now — please refresh and try again.</p>';
+      listEl.innerHTML = `<p class="fp-panel-hint">${tt('errOwn',"We couldn't load your table just now — please refresh and try again.")}</p>`;
     } else if (listEl) {
       if (titleEl) titleEl.textContent = '—';
-      listEl.innerHTML = '<p class="fp-panel-hint">Your seat hasn\'t been assigned yet — check back closer to the day.</p>';
+      listEl.innerHTML = `<p class="fp-panel-hint">${tt('noSeat',"Your seat hasn't been assigned yet — check back closer to the day.")}</p>`;
     }
   }
 
@@ -3430,7 +3854,7 @@
     const now = new Date();
     const diff = target - now;
     if (diff <= 0) {
-      document.getElementById('countdown').innerHTML = '<div style="font-family:\'Raleway\',sans-serif;font-size:0.85rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mid);">Today is the day! ♡</div>';
+      document.getElementById('countdown').innerHTML = `<div style="font-family:'Raleway',sans-serif;font-size:0.85rem;letter-spacing:0.18em;text-transform:uppercase;color:var(--text-mid);">${tt('today','Today is the day! ♡')}</div>`;
       return;
     }
     const days  = Math.floor(diff / (1000*60*60*24));
@@ -3533,7 +3957,7 @@
     errEl.style.display = 'none';
 
     if (!INVITATION || !SELECTED_MEMBER) {
-      errEl.textContent = 'Please select who is replying.';
+      errEl.textContent = tt('selectWho','Please select who is replying.');
       errEl.style.display = 'block';
       return;
     }
@@ -3548,7 +3972,7 @@
 
     const btn = document.getElementById('rsvp-submit');
     btn.disabled = true;
-    btn.textContent = 'SENDING…';
+    btn.textContent = tt('sending','SENDING…');
 
     try {
       const out = await rpc('submit_rsvp', {
@@ -3589,8 +4013,8 @@
     } catch(e) {
       console.error(e);
       btn.disabled = false;
-      btn.textContent = 'SEND RSVP';
-      errEl.textContent = 'Something went wrong. Please try again or contact us directly.';
+      btn.textContent = tt('send','SEND RSVP');
+      errEl.textContent = tt('wrong','Something went wrong. Please try again or contact us directly.');
       errEl.style.display = 'block';
     }
   }
@@ -3915,7 +4339,7 @@
 
 <script>
 // ── CHAMBOLLE EASTER EGG ─────────────────────────────
-const QUIPS = [
+const QUIPS = window.MC_QUIPS || [
   "Woof. (I was not consulted.)",
   "I heard there are stinky treats.",
   "Sitting in my castle. Deeply unimpressed.",
@@ -3956,7 +4380,7 @@ function applyShushUI() {
   const shushed = isChambolleShushed();
   btn.classList.toggle('shushed', shushed);
   btn.setAttribute('aria-pressed', shushed ? 'true' : 'false');
-  btn.title = shushed ? 'Chambolle is shushed — tap to bring back' : 'Shush Chambolle for this session';
+  btn.title = shushed ? tt('shushOn','Chambolle is shushed — tap to bring back') : tt('shushOff','Shush Chambolle for this session');
   if (shushed) {
     // Immediately hide anything currently visible
     document.querySelectorAll('.chambolle-egg.visible').forEach(e => e.classList.remove('visible'));
