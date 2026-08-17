@@ -130,8 +130,9 @@ The four nested sections' internal markup was **moved, not rewritten** (same ids
 - Supabase REST API integration
 - Fields: name, email, **contact number / WhatsApp** (added 2026-08-13, `#f-phone`, `type="tel"`), attendance toggle, plus-one, dietary, **song request** (live band), message
 - `song_request` included in payload — Supabase column needed
-- `phone` included in payload as of 2026-08-13 (`p_phone` in the `submit_rsvp` RPC call) — see Supabase Schema below, schema file updated but **⚠️ Pending: still needs to be (re-)run against the live database**, same as the rest of `supabase_schema_seed.sql`.
-- **⚠️ Pending:** Replace `YOUR_SUPABASE_URL` / `YOUR_SUPABASE_ANON_KEY`
+- `phone` included in payload as of 2026-08-13 (`p_phone` in the `submit_rsvp` RPC call). **✅ Applied to the live DB 2026-08-17** via `supabase/migrations/2026-08-17_submit_rsvp_phone.sql` — until then EVERY submit failed with PGRST202 (the live function still had the old 8-param signature) and guests saw "Something went wrong". Verified live: 9-param signature answers 200, old 8-param overload removed.
+- ⚠️ **Dashboard SQL editor lesson (2026-08-17):** its statement splitter can break inside plpgsql function bodies — the first attempt committed the `DROP FUNCTION` but failed the `CREATE`, leaving production with **no** `submit_rsvp` at all for a few minutes. When pasting function DDL into the dashboard: fresh query tab, nothing selected when you hit Run, no interleaved comments, named dollar tag (`$fn$`). Safer still: `psql` with the session-pooler connection string.
+- ✅ Credentials are injected at runtime by `/api/config.js` from Vercel env vars (verified live 2026-08-17) — nothing to replace in the HTML.
 - Demo mode active (simulates success when no real URL)
 - The section's own dedicated `<style>` block (RSVP states + the floor-plan-modal CSS it triggers into) lives immediately before `<section id="rsvp">` in the file — moved together with the section during the reorg so the two stay co-located for anyone editing RSVP CSS.
 
@@ -307,7 +308,7 @@ rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request
 - RLS enabled on both tables
 - Public can read `guests`, insert to `rsvp`
 - Service role has full access
-- **⚠️ Pending:** Run SQL in Supabase dashboard; add credentials to `wedding-invitation.html` and `seed-guests.js`
+- ✅ Schema is deployed and credentials flow from Vercel env vars via `/api/config.js` (verified 2026-08-17). Schema deltas now go in `supabase/migrations/` — see `2026-08-17_submit_rsvp_phone.sql` for the pattern (idempotent, applied + verified the same night).
 
 ---
 
