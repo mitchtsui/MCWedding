@@ -1618,9 +1618,11 @@
      text (selectable, translatable, screen-readable, responsive) in the site's
      own fonts, and it is the ONE place venue/date/attire are stated.
 
-     The garden art is kept — it is genuinely lovely and it has Chambolle in it
-     — but as a decorative band at the foot of the section where nothing is set
-     on top of it, and as WebP (139KB, down from 2135KB). -->
+     The garden art is gone (2026-08-24, couple's call: "make it plain"). It was
+     a cover-cropped band at the foot of the section 2026-08-17..24; on 08-24 the
+     printer's die-cut layer PNGs were tried both as a composited pop-up diorama
+     and as cut-outs behind the card, and both read as clutter. The section is
+     now just the card and the timeline on sage. -->
 <style>
   /* ── Card palette. Sampled from the printed invitation, scoped to this
      section so it cannot leak into the site's Pantone tokens. Gold is used
@@ -1634,7 +1636,6 @@
     --card-gold-soft: #DFCDA2;
     --card-seal:      #A63A2E;
     background: var(--card-sage);
-    padding-bottom: 0;
     overflow: hidden;
   }
 
@@ -1815,24 +1816,6 @@
     color: var(--text-light);
   }
 
-  /* ── Garden band ──
-     The pop-up card's artwork, kept as pure decoration at the foot of the
-     section. Nothing is ever set on top of it, which was the original
-     complaint. object-position keeps Chambolle and the front border of
-     flowers in frame as the band gets shorter on narrow screens. */
-  .garden-band {
-    margin-top: clamp(2.5rem, 6vw, 3.5rem);
-    height: clamp(130px, 22vw, 210px);
-    overflow: hidden;
-    line-height: 0;
-  }
-  .garden-band img {
-    width: 100%;
-    height: 100%;
-    object-fit: cover;
-    object-position: center 88%;
-    display: block;
-  }
 
   @media (max-width: 700px) {
     .invite-card { padding: 2rem 1.1rem; }
@@ -1889,7 +1872,7 @@
     <ol class="day-timeline">
       <li class="day-item reveal">
         <div class="day-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2.5v4"/><path d="M10 4.5h4"/><path d="M6 21v-9.5L12 7l6 4.5V21"/><path d="M3 21h18"/><path d="M10.4 21v-4.2a1.6 1.6 0 0 1 3.2 0V21"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><rect x="5.6" y="2.8" width="12.8" height="18.4" rx="1.7"/><rect x="8.4" y="8.9" width="7.2" height="6.2"/><path d="M12 6.5v11"/></svg>
         </div>
         <div>
           <div class="day-time">17:00 – 18:00</div>
@@ -1899,7 +1882,7 @@
       </li>
       <li class="day-item reveal">
         <div class="day-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="9" cy="14" r="5.4"/><circle cx="15" cy="14" r="5.4"/><path d="M12 5.4 10 8h4l-2-2.6Z"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="8.7" cy="12" r="5"/><circle cx="15.3" cy="12" r="5"/></svg>
         </div>
         <div>
           <div class="day-time">18:30 – 19:30</div>
@@ -1910,7 +1893,7 @@
       </li>
       <li class="day-item reveal">
         <div class="day-icon" aria-hidden="true">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 3.5h10"/><path d="M8.2 3.5 9 9.4a3 3 0 0 0 6 0l.8-5.9"/><path d="M12 12.4V19"/><path d="M8.6 19h6.8"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"><path d="M9.6 4.2h4.8"/><path d="M9.6 4.2C7.2 5.5 6 8 6.6 10c.6 2 2.9 3.3 5.4 3.3s4.8-1.3 5.4-3.3c.6-2-.6-4.5-3-5.8"/><path d="M12 13.3v6.5"/><path d="M8.6 19.8h6.8"/></svg>
         </div>
         <div>
           <div class="day-time">19:45 – 23:00</div>
@@ -1919,13 +1902,6 @@
         </div>
       </li>
     </ol>
-  </div>
-
-  <div class="garden-band" aria-hidden="true">
-    <picture>
-      <source srcset="photos/wedding-day-garden.webp" type="image/webp">
-      <img src="photos/wedding-day-garden.jpg" width="1092" height="960" alt="" loading="lazy" decoding="async">
-    </picture>
   </div>
 </section>
 
