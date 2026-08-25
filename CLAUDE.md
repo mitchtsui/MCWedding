@@ -312,13 +312,27 @@ Admin-only tool (Supabase magic-link auth, `is_admin()` allowlist). Reads and wr
 
 The Outreach dropdown was labelled just "Status" until 2026-08-25, which made it read as the attendance answer. It is now "Outreach", and Attending sits above it.
 
-**2026-08-25 — attendance became editable, per user request.** `rsvp_status` used to render as a small read-only pill among four others in `.guest-info-meta`. It is now a 3-way segmented control (`.rsvp-seg`) in the tracker column, and the old pill was removed rather than left as a duplicate. Most guests answer by WhatsApp or in person, not through the website, so the couple needs to record attendance by hand — that path did not exist before.
+**2026-08-25 — attendance became editable, then correctly defined.** `rsvp_status` used to render as a small read-only pill; it is now a 3-way segmented control (`.rsvp-seg`) in the tracker column, and the old pill was removed rather than left as a duplicate.
 
-- **`rsvpOf(g)` normalises `rsvp_status` to exactly `Yes` / `No` / `Pending`** and is used by the card, the stats and the filter, so all three always agree. Raw values can be NULL, `''`, or spreadsheet-era casing; anything that is not exactly `Yes`/`No` counts as Pending.
-- **The header shows attendance counts** (Attending / Declined / No Reply) alongside the outreach counts. This is the number that matters against the 180-seat cap.
-- **A "Replied online" badge marks guests who answered on the website themselves**, read from the `rsvp` table (`rsvpReplies`, loaded by `loadReplies()`). Changing such a guest's attendance to something *different* from what they submitted raises a `confirm()` first — the one case where a click silently contradicts the guest. Loading replies is wrapped in try/catch: if it fails the tool still works, it just loses the badge.
-- **Setting Attending to Yes/No also flips `outreach_status` from `Sent` to `Responded`.** This is what finally makes `Responded` a live state — `mark_household_sent()` protected it but nothing ever set it. It fires only from `Sent`, so `Not Contacted` / `Skip` / `Bounced` are left alone.
-- **The 2 `[PREVIEW]` rows are excluded from every header count** (2026-08-25, per user request) — Total, all three attendance counts, Sent, Not Contacted, Responded and Households. The header used to read 200 rather than 198. They are still listed and still fully usable for testing; a **`Preview` badge** on the card marks a row that is not being counted, so an excluded row is never a silent one. `isPreview(g)` matches on `group_name = 'Admin Preview'` **or** invitation code `MC-BRIDE` / `MC-GROOM` (case-insensitive), so renaming the group by hand does not quietly put them back into the headcount. They **are** still in the CSV export, which is a raw data dump — filter on `group_name` in Excel.
+⚠️ **`guests.rsvp_status` is NOT an answer.** It was seeded from the couple's planning spreadsheet — 156 Yes / 20 No / 22 Pending — recorded before a single invitation went out. It is who they *expected*, not who replied. The tool used to count it as confirmed, so the header read "156 Attending" when the true figure was zero.
+
+**Attendance has exactly three sources, and `attendanceOf(g)` in the tool mirrors the `attendance_truth` view in SQL — change one, change both:**
+
+| Source | Condition | Shown as |
+|---|---|---|
+| Website | a row in `rsvp` for this guest | ✓ Replied online |
+| Admin | `guests.rsvp_confirmed_at` is set | ✎ Recorded by you |
+| Neither | — | No Reply (the spreadsheet value is shown as a greyed hint, never counted) |
+
+- **`guests.rsvp_confirmed_at` (added `2026-08-25_rsvp_confirmed_at.sql`) is what makes an admin's record distinguishable from a leftover spreadsheet value** — both live in `rsvp_status`. Clicking Yes/No stamps it; clicking No reply clears it back to NULL. `submit_rsvp` deliberately does **not** set it: a website reply is detected from the `rsvp` table itself, keeping the two sources clean.
+- **When both exist, the later one wins.** That is what lets an admin override a website reply, and equally lets a guest who replies afterwards have the last word. Verified in both directions, in SQL and in the browser.
+- **Nothing was deleted.** The spreadsheet's Yes/No stays in `rsvp_status` and still shows on the card as *"spreadsheet expected Yes"*, so the couple keep their planning estimate — it just stops counting as an answer nobody gave.
+- **`attendance_truth` is the view to read for a real headcount**, never `guests.rsvp_status`. It excludes the preview rows and reports `answered_via` per guest.
+- **The header counts confirmed answers only** (Attending / Declined / No Reply). Against the 180-seat cap, this is the number that matters.
+- **Overriding a live website reply raises a `confirm()` first** — the one click that would silently contradict the guest. It does not re-ask once an admin record already supersedes that reply.
+- **Setting attendance to Yes/No also flips `outreach_status` from `Sent` to `Responded`.** This is what finally makes `Responded` a live state — `mark_household_sent()` protected it but nothing ever set it. It fires only from `Sent`.
+- **The 2 `[PREVIEW]` rows are excluded from every header count** (Total, all three attendance counts, Sent, Not Contacted, Responded, Households) — the header used to read 200 rather than 198. They are still listed and fully usable for testing; a **`Preview` badge** marks a row that is not counted. `isPreview(g)` matches on `group_name = 'Admin Preview'` **or** invitation code `MC-BRIDE` / `MC-GROOM` (case-insensitive), so renaming the group by hand does not quietly put them back into the headcount. `attendance_truth` excludes them too.
+- **The CSV export gains `attendance` and `answered_via`** (the derived truth) alongside the raw `rsvp_status` / `rsvp_confirmed_at`. Preview rows stay in the export — it is a raw dump; filter on `group_name` in Excel.
 - **Header overflow fix (same day):** `.header-actions` is ~490px wide and did not wrap, pushing the page 124px sideways on a phone. `header` already wrapped; its children did not. Now wraps below 700px. Verified zero horizontal overflow at 344 / 390 / 744 / 1400px.
 
 Verified in headless Chromium against a stubbed Supabase client: stats, badge, override `confirm()` (including that cancelling writes nothing), the `Sent → Responded` bump firing only from `Sent`, no-op clicks on the active button, and a 46px touch target on mobile.
@@ -327,17 +341,36 @@ Verified in headless Chromium against a stubbed Supabase client: stats, badge, o
 
 ## 6. RSVP / Guest Management
 
-### Guest List Stats (from `RSVP_.xlsx`, 198 guests)
-| Status | Count |
+### Guest List Stats — live roster, verified 2026-08-25
+
+**`schema_seed.sql` now carries the live roster (162 numbered rows), not the original 198.** Regenerated with `supabase/migrations/export_roster_as_seed.sql` from the live database. The couple uninvited 34 people after the spreadsheet was made; the seed's INSERT is an upsert that never deletes, so until this was done a full re-run would have resurrected all 34 and issued them invitation codes. Verified against a real Postgres 16: loading the file gives 164 rows (162 + the 2 `[PREVIEW]`), every row has an invitation code, no duplicate `guest_number`, and **re-running it a second time still gives 164** — the 34 stay gone.
+
+⚠️ **Two live rows are NOT in the seed, because both have `guest_number IS NULL` and the export skips those:**
+
+| Row | Invitation code | What to do |
+|---|---|---|
+| **Eva Ng** — Mitch Work Friends | `MC-X7DV2` | A real guest added by hand. She is fine in the live DB, but the seed cannot manage her and a rebuild from the file would lose her. Give her a number (`UPDATE guests SET guest_number = next_guest_number() WHERE id = '082343f7-a4d9-46db-8f10-ff666fdb8849';`), re-export, and paste the block over again. |
+| **ZZ Test Guest** — `ZZ TEST - DELETE ME` | `MC-F3FJ7` | Leftover test row. Delete its `rsvp` rows first (`rsvp.guest_id` has no ON DELETE rule), then the guest. |
+
+So the **real roster is 163 people** (162 in the seed + Eva Ng), plus 1 test row pending deletion and the 2 preview rows. `guests` holds 166 rows today.
+
+⚠️ **The numbers below are the couple's pre-invitation *expectations*, not replies** — they seed `guests.rsvp_status`. For who has actually answered, read `attendance_truth`. See §5b.
+
+| Field | Count (162 seeded rows) |
 |--------|-------|
-| ✅ Confirmed Yes | 156 |
-| ❌ Declined | 20 |
-| ⏳ Pending | 22 |
-| 女方 (Christy's side) confirmed | 100 |
-| 男方 (Mitchell's side) confirmed | 56 |
+| Expected Yes | 154 |
+| Expected No | 3 |
+| ⏳ Pending | 5 |
+| 女方 (Christy's side) | 105 |
+| 男方 (Mitchell's side) | 57 |
 | Kids | 4 |
-| Dietary requirements | 5 |
-| Seats remaining (180 cap) | 24 |
+| Dietary requirements | 6 |
+| Distinct invitation codes | 162 |
+| Seats remaining (180 cap, vs 163 real guests) | 17 |
+
+ℹ️ **Guest numbers are sparse** — 1–198 with 36 gaps, since uninviting removes the row but never renumbers. Do not assume `guest_number` is contiguous or that `MAX` equals the headcount.
+
+ℹ️ Two name pairs share a name across separate rows (`Flora and Poting` ×2 — one with a trailing space — and `Mr & Mrs Mark Robson` ×2). That is the household pattern: one row per seat. The trailing space is harmless (name matching uses `TRIM`), but do not "dedupe" these rows.
 
 ### Excel Tracker Sheets (`RSVP_Master_Tracker.xlsx`)
 1. **📋 Guest List** — full cleaned list, RSVP dropdown (Yes/No/Pending), Table # dropdown (1–15), conditional colour coding by status and side

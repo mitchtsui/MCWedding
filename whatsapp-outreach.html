@@ -466,7 +466,10 @@
     text-transform: uppercase;
     color: var(--accent);
   }
-  .replied-badge::before { content: '\2713\00a0'; }
+  .replied-badge.src-web::before    { content: '\2713\00a0'; }
+  .replied-badge.src-manual { color: var(--olive); }
+  .replied-badge.src-manual::before { content: '\270e\00a0'; }
+  .replied-badge.src-none   { color: var(--text-light); text-transform: none; letter-spacing: 0.03em; }
 
   .stat-chip.att-yes     { border-left: 3px solid var(--ok); }
   .stat-chip.att-no      { border-left: 3px solid var(--error); }
@@ -1010,18 +1013,49 @@ function isPreview(g) {
       || PREVIEW_CODES.includes((g.invitation_code || '').trim().toUpperCase());
 }
 
-// Normalises whatever is in guests.rsvp_status to exactly one of
-// Yes / No / Pending, so the card, the stats and the filter always agree.
-function rsvpOf(g) {
+// Attendance is what the guest ANSWERED, and there are exactly three
+// ways to know it:
+//   1. a row in `rsvp`          -> they answered through their invitation link
+//   2. rsvp_confirmed_at is set -> we took their answer by WhatsApp / in person
+//   3. neither                  -> No Reply
+//
+// Case 3 is the important one. guests.rsvp_status was seeded from the
+// planning spreadsheet, so 156 rows say 'Yes' for people who have never
+// been asked. That value is a guess, not an answer: it is still shown on
+// the card as an estimate, but it never counts as attendance.
+//
+// When both 1 and 2 exist, the later one wins — that is what lets an
+// admin override a website reply, and equally lets a guest who replies
+// later have the last word.
+function attendanceOf(g) {
+  const reply    = rsvpReplies.get(g.id);
+  const manualAt = g.rsvp_confirmed_at ? Date.parse(g.rsvp_confirmed_at) : NaN;
+  const replyAt  = reply && reply.submitted_at ? Date.parse(reply.submitted_at) : NaN;
+
+  if (reply && (isNaN(manualAt) || !(replyAt < manualAt))) {
+    return { value: reply.attendance ? 'Yes' : 'No', source: 'website' };
+  }
+  if (!isNaN(manualAt)) {
+    const v = (g.rsvp_status || '').trim();
+    return { value: (v === 'Yes' || v === 'No') ? v : 'Pending', source: 'manual' };
+  }
+  return { value: 'Pending', source: 'none' };
+}
+
+// Just the Yes/No/Pending, for the stats and the filter.
+function rsvpOf(g) { return attendanceOf(g).value; }
+
+// The spreadsheet's original guess, shown only while nobody has answered.
+function estimateOf(g) {
   const v = (g.rsvp_status || '').trim();
-  return (v === 'Yes' || v === 'No') ? v : 'Pending';
+  return (v === 'Yes' || v === 'No') ? v : '';
 }
 
 async function loadGuests() {
   setSync('saving', 'Loading…');
   const { data, error } = await sb
     .from('guests')
-    .select('id, guest_number, name, group_name, side, invited, rsvp_status, invitation_code, phone, outreach_status, outreach_channel, outreach_sent_at, outreach_notes')
+    .select('id, guest_number, name, group_name, side, invited, rsvp_status, rsvp_confirmed_at, invitation_code, phone, outreach_status, outreach_channel, outreach_sent_at, outreach_notes')
     .order('guest_number', { ascending: true });
   await loadReplies();
   if (error) {
@@ -1322,10 +1356,16 @@ function renderCard(g) {
   const sideLabel = g.side === '女方' ? 'Christy 女方'
                    : g.side === '男方' ? 'Mitchell 男方' : '';
   const sideCls = g.side === '女方' ? 'side-f' : g.side === '男方' ? 'side-m' : '';
-  const rsvp = rsvpOf(g);
+  const att  = attendanceOf(g);
+  const rsvp = att.value;
   const reply = rsvpReplies.get(g.id);
-  const repliedBadge = reply
-    ? `<div class="replied-badge" title="Answered through the website — not entered by hand">Replied online${reply.submitted_at ? ` · ${escHtml(fmtSent(reply.submitted_at))}` : ''}</div>`
+  const sourceNote =
+      att.source === 'website'
+        ? `<div class="replied-badge src-web" title="Answered through their invitation link">Replied online${reply && reply.submitted_at ? ` · ${escHtml(fmtSent(reply.submitted_at))}` : ''}</div>`
+    : att.source === 'manual'
+        ? `<div class="replied-badge src-manual" title="You recorded this answer by hand">Recorded by you${g.rsvp_confirmed_at ? ` · ${escHtml(fmtSent(g.rsvp_confirmed_at))}` : ''}</div>`
+    : estimateOf(g)
+        ? `<div class="replied-badge src-none" title="From the planning spreadsheet — not an answer from this guest, and not counted">Not answered yet · spreadsheet expected ${escHtml(estimateOf(g))}</div>`
     : '';
   const householdLabel = codeShared
     ? `<span class="pill shared">Shared code · ${householdMembers(g.invitation_code).length} ppl</span>`
@@ -1385,7 +1425,7 @@ function renderCard(g) {
           <button type="button" class="v-pending${rsvp==='Pending'?' on':''}" data-act="set-rsvp" data-val="Pending" aria-pressed="${rsvp==='Pending'}">No reply</button>
         </div>
       </div>
-      ${repliedBadge}
+      ${sourceNote}
       <div class="field-row">
         <label>Outreach</label>
         <select data-act="set-status">
@@ -1490,7 +1530,7 @@ async function setRsvp(g, val) {
   // Guard the one case that loses information: the guest answered on the
   // website themselves and the admin is about to contradict them.
   const reply = rsvpReplies.get(g.id);
-  if (reply) {
+  if (reply && attendanceOf(g).source === 'website') {
     const said = reply.attendance ? 'Yes' : 'No';
     if (said !== val && !confirm(
       `${g.name} answered "${said}" on the website` +
@@ -1499,7 +1539,12 @@ async function setRsvp(g, val) {
     )) return;
   }
 
-  const fields = { rsvp_status: val };
+  // Stamping this is what turns a spreadsheet guess into a recorded
+  // answer. Clearing it on "No reply" un-records it again.
+  const fields = {
+    rsvp_status: val,
+    rsvp_confirmed_at: (val === 'Yes' || val === 'No') ? new Date().toISOString() : null
+  };
   // We messaged them and now have an answer — that is what Responded means.
   if ((val === 'Yes' || val === 'No') && g.outreach_status === 'Sent') {
     fields.outreach_status = 'Responded';
@@ -1527,16 +1572,19 @@ async function updateStatus(g, newStatus) {
 // ─── EXPORT ───
 function exportCsv() {
   const cols = [
-    'guest_number','name','group_name','side','invited','rsvp_status',
+    'guest_number','name','group_name','side','invited',
+    'attendance','answered_via','rsvp_status','rsvp_confirmed_at',
     'invitation_code','phone','outreach_status','outreach_channel',
     'outreach_sent_at','outreach_notes','invite_url'
   ];
   const rows = [cols.join(',')];
   guests.forEach(g => {
     const row = cols.map(c => {
-      const v = c === 'invite_url'
-        ? inviteUrl(g.invitation_code || '')
-        : (g[c] == null ? '' : String(g[c]));
+      const a = attendanceOf(g);
+      const v = c === 'invite_url'  ? inviteUrl(g.invitation_code || '')
+              : c === 'attendance'  ? a.value
+              : c === 'answered_via' ? ({ website: 'website', manual: 'recorded by admin', none: 'no reply' })[a.source]
+              : (g[c] == null ? '' : String(g[c]));
       return `"${v.replace(/"/g, '""')}"`;
     });
     rows.push(row.join(','));
