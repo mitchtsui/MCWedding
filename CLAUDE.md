@@ -341,24 +341,36 @@ Verified in headless Chromium against a stubbed Supabase client: stats, badge, o
 
 ## 6. RSVP / Guest Management
 
-### Guest List Stats (from `RSVP_.xlsx` — ⚠️ the original 198, NOT the live roster)
+### Guest List Stats — live roster, verified 2026-08-25
 
-🔴 **The live roster is 164 guests, not 198.** Verified against the live DB 2026-08-25: `guests` holds 166 rows, of which 2 are the `[PREVIEW]` admin rows. The couple deliberately uninvited 34 people after the spreadsheet was made. **Every number in the table below is therefore stale** and describes the original spreadsheet, not who is being invited — treat it as history until it is regenerated from the live roster.
+**`schema_seed.sql` now carries the live roster (162 numbered rows), not the original 198.** Regenerated with `supabase/migrations/export_roster_as_seed.sql` from the live database. The couple uninvited 34 people after the spreadsheet was made; the seed's INSERT is an upsert that never deletes, so until this was done a full re-run would have resurrected all 34 and issued them invitation codes. Verified against a real Postgres 16: loading the file gives 164 rows (162 + the 2 `[PREVIEW]`), every row has an invitation code, no duplicate `guest_number`, and **re-running it a second time still gives 164** — the 34 stay gone.
 
-⚠️ **`schema_seed.sql` still carries all 198 rows, and its INSERT is an upsert (`ON CONFLICT (guest_number)`) that only adds and updates — it never deletes.** A full re-run would resurrect all 34 uninvited guests and issue them invitation codes. The fix is the one the file's own §23 note already prescribes and which was skipped: regenerate the VALUES block with `supabase/migrations/export_roster_as_seed.sql` and paste it over, so the file and the database agree.
+⚠️ **Two live rows are NOT in the seed, because both have `guest_number IS NULL` and the export skips those:**
 
-⚠️ **The Yes/No/Pending figures are the couple's pre-invitation *expectations*, not replies** — entered before any invitation went out, and they seed `guests.rsvp_status`. For who has actually answered, read the `attendance_truth` view. See §5b.
+| Row | Invitation code | What to do |
+|---|---|---|
+| **Eva Ng** — Mitch Work Friends | `MC-X7DV2` | A real guest added by hand. She is fine in the live DB, but the seed cannot manage her and a rebuild from the file would lose her. Give her a number (`UPDATE guests SET guest_number = next_guest_number() WHERE id = '082343f7-a4d9-46db-8f10-ff666fdb8849';`), re-export, and paste the block over again. |
+| **ZZ Test Guest** — `ZZ TEST - DELETE ME` | `MC-F3FJ7` | Leftover test row. Delete its `rsvp` rows first (`rsvp.guest_id` has no ON DELETE rule), then the guest. |
 
-| Status | Count |
+So the **real roster is 163 people** (162 in the seed + Eva Ng), plus 1 test row pending deletion and the 2 preview rows. `guests` holds 166 rows today.
+
+⚠️ **The numbers below are the couple's pre-invitation *expectations*, not replies** — they seed `guests.rsvp_status`. For who has actually answered, read `attendance_truth`. See §5b.
+
+| Field | Count (162 seeded rows) |
 |--------|-------|
-| Expected Yes | 156 |
-| Expected No | 20 |
-| ⏳ Pending | 22 |
-| 女方 (Christy's side) confirmed | 100 |
-| 男方 (Mitchell's side) confirmed | 56 |
+| Expected Yes | 154 |
+| Expected No | 3 |
+| ⏳ Pending | 5 |
+| 女方 (Christy's side) | 105 |
+| 男方 (Mitchell's side) | 57 |
 | Kids | 4 |
-| Dietary requirements | 5 |
-| Seats remaining (180 cap) | 24 |
+| Dietary requirements | 6 |
+| Distinct invitation codes | 162 |
+| Seats remaining (180 cap, vs 163 real guests) | 17 |
+
+ℹ️ **Guest numbers are sparse** — 1–198 with 36 gaps, since uninviting removes the row but never renumbers. Do not assume `guest_number` is contiguous or that `MAX` equals the headcount.
+
+ℹ️ Two name pairs share a name across separate rows (`Flora and Poting` ×2 — one with a trailing space — and `Mr & Mrs Mark Robson` ×2). That is the household pattern: one row per seat. The trailing space is harmless (name matching uses `TRIM`), but do not "dedupe" these rows.
 
 ### Excel Tracker Sheets (`RSVP_Master_Tracker.xlsx`)
 1. **📋 Guest List** — full cleaned list, RSVP dropdown (Yes/No/Pending), Table # dropdown (1–15), conditional colour coding by status and side
