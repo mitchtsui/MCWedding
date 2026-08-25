@@ -339,6 +339,21 @@ rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request
 - Service role has full access
 - ✅ Schema is deployed and credentials flow from Vercel env vars via `/api/config.js` (verified 2026-08-17). Schema deltas now go in `supabase/migrations/` — see `2026-08-17_submit_rsvp_phone.sql` for the pattern (idempotent, applied + verified the same night).
 
+### Outreach templates live in Supabase, not localStorage (2026-08-25)
+
+`whatsapp-outreach.html`'s three WhatsApp templates (bilingual / friends / formal) are stored in the **`outreach_templates`** table — `supabase/migrations/2026-08-25_outreach_templates.sql`, admin-only via the existing `is_admin()` allowlist, with a `BEFORE INSERT OR UPDATE` trigger stamping `updated_at` / `updated_by`.
+
+⚠️ **Why this moved, and the bug class never to reintroduce.** They used to live in `localStorage['mc-outreach-templates-v2']`, loaded as `templates = { ...DEFAULT_TEMPLATES, ...parsed }` — **the stored copy won**. Wrong in both directions: an edit never left the browser it was typed in (so the two admins never saw each other's copy), *and* any browser that had ever touched the editor permanently shadowed every future deploy. Concretely: the dinner time was corrected to 8pm in the deployed defaults on 2026-08-25 and Christy's browser kept showing `7:45pm` regardless, because her saved copy overrode it. **Do not cache template copy per-browser again.**
+
+- `DEFAULT_TEMPLATES` in the HTML is a **fallback only** now — used when the server has no row for a key or the fetch fails, never spread over a server response.
+- The **same three strings** seed the migration and live in the HTML; both were emitted from one generator, so they cannot drift. Change one, change the other.
+- The seed is `ON CONFLICT (key) DO NOTHING` **on purpose** — re-running the migration must never clobber copy the couple has since edited in the UI. Pushing new default copy to an already-seeded DB requires updating the row deliberately.
+- Old local copies are retired on next load by `migrateLegacyTemplateStorage()`: the key is moved to `mc-outreach-templates-v2-backup` and removed, so it can never shadow the server again (moved rather than deleted, in case an unsaved edit mattered).
+- Saves are **debounced 800ms** — the editor fires on every keystroke and each save is now a shared network write.
+- Concurrency is **last-write-wins**. Fine for two people; the editor shows `last edited <when> by <who>` and has a **Reload** button to pull the other admin's copy.
+- **Deploy order is safe either way.** If the frontend ships before the migration is applied, the fetch fails, the tool falls back to `DEFAULT_TEMPLATES` (which hold the current correct copy), the status line reads *"Not loaded from Supabase — showing built-in defaults"*, and edits fail loudly with a toast rather than silently.
+- ⚠️ **`groupOverrides` (`mc-outreach-overrides-v1`) is still per-browser localStorage** — same bug class, not yet centralised. Which template each guest group defaults to is therefore *not* shared between Christy and Mitchell.
+
 ---
 
 ## 7. Pending / TODO

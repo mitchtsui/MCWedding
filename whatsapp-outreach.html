@@ -614,13 +614,15 @@
         <textarea class="tpl-textarea" id="tpl-editor" oninput="onTemplateInput()"></textarea>
         <div class="tpl-help">
           Placeholders: <code>{name}</code> first name · <code>{fullname}</code> full name · <code>{link}</code> personalised RSVP link · <code>{code}</code> 5-character code · <code>{deadline}</code> 12 Sep 2026.
-          Templates auto-save to this browser. Tool picks a default per group; you can override on any guest below.
+          Templates are shared \u2014 they save to Supabase and every admin sees the same copy. Tool picks a default per group; you can override on any guest below.
         </div>
+        <div class="tpl-help" id="tpl-meta" style="margin-top:0.3rem;"></div>
         <div class="tpl-actions">
           <div style="font-size: 0.72rem; color: var(--text-light);">
             Preview will render with the first matching guest's details below.
           </div>
           <div style="display:flex;gap:0.4rem;">
+            <button class="btn" onclick="reloadTemplates()">Reload</button>
             <button class="btn" onclick="resetTemplate()">Reset to default</button>
           </div>
         </div>
@@ -681,6 +683,10 @@ const ADMIN_ALLOWLIST = [
 const RSVP_DEADLINE = '12 September 2026';
 
 // ─── DEFAULT TEMPLATES ───
+// Fallback only. The live copy lives in Supabase (table `outreach_templates`,
+// seeded from these exact strings by
+// supabase/migrations/2026-08-25_outreach_templates.sql). These are used when
+// the server has no row for a key, or the fetch fails — never as an override.
 const DEFAULT_TEMPLATES = {
   bilingual:
 `Hi {name}!
@@ -693,13 +699,15 @@ We've made a personal invitation page just for you (please don't share — it's 
 Kindly RSVP by {deadline}. Once you've RSVP'd, this page will keep evolving — please check back about two weeks before the wedding for your seating and any final details.
 
 ——
+Hi {name}!
 
-黃志良 & 周詩茵 誠意邀請 {fullname} 出席我們的婚禮:
+徐文俊 & 周芷晴 誠意邀請你出席我們的婚禮:
 
 • 日期: 2026年11月12日 (星期四)
 • 地點: 香港半島酒店 The Salisbury Room
 • 時間: 5:00pm 賓客到場 · 6:30pm 證婚 · 8:00pm 晚宴
 
+{link}
 請於 {deadline} 前透過上面的連結回覆,謝謝!婚禮前兩星期請重新查看此連結,以獲取座位安排及最新資訊。
 
 With love,
@@ -712,14 +720,14 @@ Christy & Mitch here — saving the date didn't quite cover the full picture, so
 
 • Thursday, 12 November 2026
 • The Salisbury Room, The Peninsula Hong Kong
-• Arrival 5pm · Ceremony 6:30pm · Dinner 8pm
+• Arrival 5:00pm · Ceremony 6:30pm · Dinner 8:00pm
 • Elegant evening attire
 
-We've set up a personalised invitation page for you — it remembers your name and dietary, and later shows your table:
+We've set up a personalised invitation page for you — it remembers your name, plus-one and dietary, and later shows your seat:
 
 {link}
 
-Please RSVP by {deadline} so we can finalise seating. Then check the link again about two weeks before the wedding — that's when your table will show up (plus any last-minute updates).
+Please RSVP by {deadline} so we can finalise seating. Then check the link again about two weeks before the wedding — that's when your seat will show up (plus any last-minute updates).
 
 Chambolle the corgi will not be attending (Peninsula policy) but sends his regards and is hoping you'll bring him stinky treats afterwards.
 
@@ -835,7 +843,7 @@ function initSupabase() {
 }
 
 async function bootstrap() {
-  loadTemplatesFromStorage();
+  migrateLegacyTemplateStorage();
   loadOverridesFromStorage();
   initSupabase();
   if (!sb) {
@@ -879,7 +887,7 @@ async function sendMagicLink() {
 
 async function signOut() { await sb.auth.signOut(); }
 
-function enterApp(s) {
+async function enterApp(s) {
   session = s;
   const email = (s.user && s.user.email || '').toLowerCase();
   if (!ADMIN_ALLOWLIST.includes(email)) {
@@ -892,6 +900,9 @@ function enterApp(s) {
   document.getElementById('auth-gate').style.display = 'none';
   document.getElementById('app').style.display = 'flex';
   document.getElementById('who').textContent = email;
+  // Templates are only readable once signed in (RLS is admin-only), so the
+  // fetch belongs here, not in bootstrap().
+  await loadTemplatesFromServer();
   selectTemplate(currentTemplate);
   loadGuests();
 }
@@ -968,22 +979,92 @@ async function markHouseholdSent(code) {
   return true;
 }
 
-// ─── TEMPLATES (localStorage) ───
-const LS_TPL = 'mc-outreach-templates-v2';
+// ─── TEMPLATES (Supabase — shared across every admin and device) ───
+//
+// These used to live in localStorage under LS_TPL_LEGACY, which was wrong in
+// both directions: an edit never left the browser it was typed in, AND the
+// stored copy was spread OVER DEFAULT_TEMPLATES on load, so it shadowed every
+// later deploy. Christy's browser kept showing 7:45pm dinner for a day after
+// the site had been corrected to 8pm, because her saved copy won.
+//
+// Now: Supabase is the single source of truth, DEFAULT_TEMPLATES is only a
+// fallback, and nothing about the templates is cached per-browser.
+const LS_TPL_LEGACY = 'mc-outreach-templates-v2';   // pre-2026-08-25, migrated away
+const LS_TPL_BACKUP = 'mc-outreach-templates-v2-backup';
 const LS_OVERRIDES = 'mc-outreach-overrides-v1';
 
-function loadTemplatesFromStorage() {
+let templateMeta = {};        // key -> { updated_at, updated_by }
+let templatesLoaded = false;
+
+// One-time cleanup: a stale local copy must never shadow the server again.
+// It is moved aside rather than deleted, so an edit nobody kept a copy of is
+// still recoverable from devtools if it turns out to have mattered.
+function migrateLegacyTemplateStorage() {
   try {
-    const raw = localStorage.getItem(LS_TPL);
-    if (raw) {
-      const parsed = JSON.parse(raw);
-      templates = { ...DEFAULT_TEMPLATES, ...parsed };
-    }
+    const raw = localStorage.getItem(LS_TPL_LEGACY);
+    if (!raw) return;
+    if (!localStorage.getItem(LS_TPL_BACKUP)) localStorage.setItem(LS_TPL_BACKUP, raw);
+    localStorage.removeItem(LS_TPL_LEGACY);
+    console.info('[outreach] Retired this browser\'s local template copy; templates now come from Supabase. Previous copy kept under', LS_TPL_BACKUP);
   } catch (e) { /* ignore */ }
 }
-function saveTemplatesToStorage() {
-  try { localStorage.setItem(LS_TPL, JSON.stringify(templates)); }
-  catch (e) { /* ignore */ }
+
+async function loadTemplatesFromServer() {
+  if (!sb) return false;
+  const { data, error } = await sb
+    .from('outreach_templates')
+    .select('key, body, updated_at, updated_by');
+  if (error) {
+    console.error(error);
+    setSync('error', 'Templates: load failed');
+    renderTemplateMeta();
+    return false;
+  }
+  const byKey = {};
+  templateMeta = {};
+  (data || []).forEach(r => {
+    if (r && r.key && typeof r.body === 'string' && r.body.length) {
+      byKey[r.key] = r.body;
+      templateMeta[r.key] = { updated_at: r.updated_at, updated_by: r.updated_by };
+    }
+  });
+  templates = { ...DEFAULT_TEMPLATES, ...byKey };
+  templatesLoaded = true;
+  renderTemplateMeta();
+  return true;
+}
+
+async function saveTemplateToServer(key) {
+  if (!sb) return false;
+  setSync('saving', 'Saving template\u2026');
+  const { data, error } = await sb
+    .from('outreach_templates')
+    .upsert({ key, body: templates[key] }, { onConflict: 'key' })
+    .select('key, updated_at, updated_by')
+    .single();
+  if (error) {
+    console.error(error);
+    setSync('error', 'Template save failed');
+    toast('Template save failed \u2014 not shared yet');
+    return false;
+  }
+  if (data) templateMeta[key] = { updated_at: data.updated_at, updated_by: data.updated_by };
+  renderTemplateMeta();
+  setSync('saved', 'Template saved for everyone');
+  clearTimeout(saveTimers._fade);
+  saveTimers._fade = setTimeout(() => setSync('', ''), 1400);
+  return true;
+}
+
+function renderTemplateMeta() {
+  const el = document.getElementById('tpl-meta');
+  if (!el) return;
+  if (!templatesLoaded) { el.textContent = 'Not loaded from Supabase \u2014 showing built-in defaults.'; return; }
+  const m = templateMeta[currentTemplate];
+  if (!m || !m.updated_at) { el.textContent = 'Shared via Supabase \u00b7 never edited (built-in default).'; return; }
+  let when = m.updated_at;
+  try { when = new Date(m.updated_at).toLocaleString(); } catch (e) { /* keep raw */ }
+  el.textContent = `Shared via Supabase \u00b7 last edited ${when}${m.updated_by ? ' by ' + m.updated_by : ''}`;
 }
 function loadOverridesFromStorage() {
   try {
@@ -1002,19 +1083,43 @@ function selectTemplate(key) {
     b.classList.toggle('active', b.dataset.tpl === key);
   });
   document.getElementById('tpl-editor').value = templates[key] || '';
+  renderTemplateMeta();
 }
+
+// Debounced: the editor fires on every keystroke, and every save is now a
+// network write shared with the other admin \u2014 one request per character is
+// both wasteful and a great way to lose a race with yourself.
 function onTemplateInput() {
-  templates[currentTemplate] = document.getElementById('tpl-editor').value;
-  saveTemplatesToStorage();
-  // Re-render so previews update
-  render();
+  const key = currentTemplate;
+  templates[key] = document.getElementById('tpl-editor').value;
+  render();                       // previews stay live while typing
+  setSync('saving', 'Unsaved\u2026');
+  clearTimeout(saveTimers._tpl);
+  saveTimers._tpl = setTimeout(() => saveTemplateToServer(key), 800);
 }
-function resetTemplate() {
-  if (!confirm(`Reset the "${currentTemplate}" template to the default?`)) return;
-  templates[currentTemplate] = DEFAULT_TEMPLATES[currentTemplate];
-  saveTemplatesToStorage();
-  document.getElementById('tpl-editor').value = templates[currentTemplate];
+
+async function resetTemplate() {
+  if (!confirm(`Reset the "${currentTemplate}" template to the built-in default? This replaces it for everyone, not just you.`)) return;
+  const key = currentTemplate;
+  clearTimeout(saveTimers._tpl);
+  templates[key] = DEFAULT_TEMPLATES[key];
+  document.getElementById('tpl-editor').value = templates[key];
   render();
+  await saveTemplateToServer(key);
+}
+
+// Pull the latest copy the other admin may have saved since this tab loaded.
+async function reloadTemplates() {
+  clearTimeout(saveTimers._tpl);
+  setSync('saving', 'Reloading templates\u2026');
+  const ok = await loadTemplatesFromServer();
+  document.getElementById('tpl-editor').value = templates[currentTemplate] || '';
+  render();
+  if (ok) {
+    setSync('saved', 'Templates up to date');
+    clearTimeout(saveTimers._fade);
+    saveTimers._fade = setTimeout(() => setSync('', ''), 1200);
+  }
 }
 
 // ─── RENDER ───
