@@ -1619,7 +1619,7 @@
 
      What replaced it: the invitation itself, rebuilt in HTML/CSS/SVG from the
      printed card's own vocabulary — ivory panel on sage, gold double rule with
-     corner flourishes, the MC monogram, the formal wording, the 囍 seal, and the
+     corner flourishes, the formal wording, the 囍 seal, and the
      card's line-art icon timeline. Same design language, but it is now real
      text (selectable, translatable, screen-readable, responsive) in the site's
      own fonts, and it is the ONE place venue/date/attire are stated.
@@ -1678,17 +1678,14 @@
 
   .invite-inner { position: relative; z-index: 1; }
 
-  /* ── Monogram ── */
-  .invite-monogram { color: var(--card-gold); margin-bottom: 1.4rem; }
-  .invite-monogram svg { width: clamp(96px, 20vw, 124px); height: auto; display: block; margin: 0 auto; }
-  .invite-monogram .mono-letter {
-    font-family: 'Cormorant Garamond', serif;
-    font-size: 40px;
-    font-weight: 500;
-    fill: var(--card-gold);
-  }
-
-  /* ── Wording ── */
+  /* ── Wording ──
+     There is deliberately NO top ornament. The frame's four corner flourishes
+     already crown the card, and the 囍 seal below is the card's one loaded
+     mark — a seal belongs at the foot, not doubled at the head. The wording
+     is therefore the first thing in the card; this margin lifts it clear of
+     the corner curls (their ink reaches ~34px down the card's edge on
+     desktop, ~28px on mobile) so it reads as a start, not a collision. */
+  .invite-pre { margin-top: 0.7rem; }
   .invite-pre,
   .invite-request {
     font-family: 'Cormorant Garamond', serif;
@@ -1843,20 +1840,6 @@
       <svg class="invite-corner br" viewBox="0 0 46 46" fill="none" stroke="currentColor" stroke-width="1" aria-hidden="true"><path d="M2 16c0-8 6-14 14-14"/><path d="M2 24c0-12 10-22 22-22"/><path d="M8 8c3.6 0 6.4-1.4 8.4-4"/><circle cx="7.2" cy="7.2" r="1.4" fill="currentColor" stroke="none"/></svg>
 
       <div class="invite-inner">
-        <!-- MC monogram: the card's gold oval + sprigs, with the letters set
-             in Cormorant rather than tracing the printed ligature. -->
-        <div class="invite-monogram" aria-hidden="true">
-          <svg viewBox="0 0 124 84" fill="none" stroke="currentColor" stroke-width="1">
-            <ellipse cx="62" cy="42" rx="55" ry="34"/>
-            <ellipse cx="62" cy="42" rx="51" ry="30" opacity="0.5"/>
-            <text class="mono-letter" x="46" y="55" text-anchor="middle" stroke="none">M</text>
-            <text class="mono-letter" x="78" y="55" text-anchor="middle" stroke="none">C</text>
-            <path d="M62 8c-4 0-7 2-8 5M62 8c4 0 7 2 8 5" opacity="0.75"/>
-            <path d="M54 11c-2.6-1.4-5-1.2-6.6.4M70 11c2.6-1.4 5-1.2 6.6.4" opacity="0.55"/>
-            <path d="M62 76c-3 0-5.6-1.6-6.6-4M62 76c3 0 5.6-1.6 6.6-4" opacity="0.75"/>
-          </svg>
-        </div>
-
         <p class="invite-pre">Together with their families</p>
         <p class="invite-names">Christy &amp; Mitchell</p>
         <p class="invite-request">request the pleasure of your company<br>at their wedding celebration</p>
@@ -2156,15 +2139,10 @@
     text-align: right;
     font-family: 'Raleway', sans-serif;
   }
+  /* The table number carries the row on its own now that the seat number is
+     gone, so it takes the prominent treatment the seat number used to have
+     (Cormorant, olive) rather than staying a small Raleway label above it. */
   .seat-loc .table {
-    font-size: 0.78rem;
-    letter-spacing: 0.16em;
-    text-transform: uppercase;
-    color: var(--text-mid);
-  }
-  .seat-loc .seat {
-    display: block;
-    margin-top: 0.2rem;
     font-family: 'Cormorant Garamond', serif;
     font-size: 1.2rem;
     color: var(--olive);
@@ -2175,6 +2153,10 @@
     font-style: italic;
     font-size: 0.95rem;
     color: var(--text-light);
+  }
+  .seat-card-plan {
+    margin-top: 1.4rem;
+    text-align: center;
   }
   .seat-card-note {
     margin-top: 1.2rem;
@@ -2411,14 +2393,6 @@
   }
   .fp-occupant:last-child { border-bottom: none; }
   .fp-occupant.you { color: var(--olive); font-weight: 500; }
-  .fp-occupant .seat {
-    font-family: 'Raleway', sans-serif;
-    font-size: 0.75rem;
-    letter-spacing: 0.14em;
-    color: var(--text-light);
-    flex-shrink: 0;
-  }
-  .fp-occupant.you .seat { color: var(--olive); }
   .fp-empty {
     font-family: 'Cormorant Garamond', serif;
     font-style: italic;
@@ -2556,11 +2530,19 @@
             <div class="venue">The Salisbury Room<br>The Peninsula Hong Kong</div>
           </div>
           <div id="seat-card-rows"></div>
+          <!-- The seating-plan button sits HERE, directly under the rows, because
+               it replaces the per-guest seat number that used to be the second
+               line of each row (removed 2026-08-25 — seats are provisional until
+               Christy's final pass, so a number was a promise we couldn't keep).
+               It is the answer to "where exactly am I?", so it belongs with the
+               table information, not down in the Calendar/Update actions. -->
+          <div class="seat-card-plan">
+            <button class="seat-edit-link" onclick="openFloorPlan()">View Seating Plan</button>
+          </div>
           <p class="seat-card-note">Seats are pre-arranged. If anything looks wrong, please reach out to us.</p>
           <p class="seat-card-note">Please check back roughly two weeks before the big day — Christy may make some final adjustments to the seating plan.</p>
           <div class="seat-card-actions">
             <button class="seat-edit-link primary" onclick="toggleCalendarChoices()">Add to Calendar</button>
-            <button class="seat-edit-link" onclick="openFloorPlan()">View Floor Plan</button>
             <button class="seat-edit-link" onclick="editRsvp()">Update my RSVP</button>
           </div>
           <div class="calendar-choices" id="calendar-choices">
@@ -3076,7 +3058,7 @@
       ui: {
         today: '就是今天！♡',
         willMiss: '未能出席', toAssign: '待編排', declined: '已婉拒',
-        tableFmt: '第 {n} 桌', seatFmt: '第 {n} 位',
+        tableFmt: '第 {n} 桌',
         panelTableFmt: '第 <em>{n}</em> 桌',
         loading: '載入中…', loadTable: '正在載入你的桌子…',
         errRest: '未能載入你同桌的其他賓客——請重新整理再試。',
@@ -3174,7 +3156,7 @@
           '挙式の約二週間前に、もう一度ご確認ください——Christyが席次を最終調整する場合があります。'
         ],
         'button[onclick="toggleCalendarChoices()"]': 'カレンダーに追加',
-        'button[onclick="openFloorPlan()"]': 'フロアマップを見る',
+        'button[onclick="openFloorPlan()"]': '座席表を見る',
         'button[onclick="editRsvp()"]': '返信を変更する',
         '.calendar-choices .label': 'カレンダーを選択',
         '.fp-sub': 'あなたのテーブルがハイライトされています——タップすると同席の方が見られます',
@@ -3211,7 +3193,7 @@
       ui: {
         today: '今日がその日です！♡',
         willMiss: 'ご欠席', toAssign: '調整中', declined: '欠席',
-        tableFmt: 'テーブル {n}', seatFmt: '{n}番席',
+        tableFmt: 'テーブル {n}',
         panelTableFmt: 'テーブル <em>{n}</em>',
         loading: '読み込み中…', loadTable: 'テーブル情報を読み込んでいます…',
         errRest: '同じテーブルの方を読み込めませんでした——再読み込みしてお試しください。',
@@ -3494,7 +3476,9 @@
       if (declined) {
         locHtml = `<span class="pending">${tt('willMiss','Will be missed')}</span>`;
       } else if (m.has_seat) {
-        locHtml = `<span class="table">${tf('tableFmt','Table {n}',m.table_number)}</span><span class="seat">${tf('seatFmt','Seat {n}',m.seat_number)}</span>`;
+        // Table only. Seat numbers are deliberately not shown anywhere
+        // post-RSVP — they move right up to the final seating pass.
+        locHtml = `<span class="table">${tf('tableFmt','Table {n}',m.table_number)}</span>`;
       } else {
         locHtml = `<span class="pending">${tt('toAssign','To be assigned')}</span>`;
       }
@@ -3552,7 +3536,7 @@
     const mine = (CURRENT_SEATS || []).filter(s => s.has_seat);
     if (!mine.length) return '';
     return mine
-      .map(s => `${escHtml(s.name)} &nbsp;·&nbsp; ${tf('tableFmt','Table {n}',s.table_number)}, ${tf('seatFmt','Seat {n}',s.seat_number)}`)
+      .map(s => `${escHtml(s.name)} &nbsp;·&nbsp; ${tf('tableFmt','Table {n}',s.table_number)}`)
       .join('<br>');
   }
 
@@ -3649,7 +3633,6 @@
         return `
           <div class="fp-occupant ${isYou ? 'you' : ''}">
             <span>${escHtml(o.name)}${isYou ? tt('youMark',' &nbsp;·&nbsp; you') : ''}</span>
-            <span class="seat">${o.seat ? tf('seatFmt','Seat {n}',o.seat) : ''}</span>
           </div>`;
       }).join('');
   }
@@ -3751,9 +3734,10 @@
 
     const seated = (CURRENT_SEATS || []).filter(s => s.has_seat);
     if (seated.length) {
-      lines.push('', 'Your seat' + (seated.length > 1 ? 's' : '') + ':');
+      // Says "table", not "seat" — the seat number is no longer shown anywhere.
+      lines.push('', 'Your table' + (seated.length > 1 ? 's' : '') + ':');
       seated.forEach(s => {
-        lines.push(`  ${s.name}: Table ${s.table_number}, Seat ${s.seat_number}`);
+        lines.push(`  ${s.name}: Table ${s.table_number}`);
       });
     }
 
