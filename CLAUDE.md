@@ -341,9 +341,13 @@ Verified in headless Chromium against a stubbed Supabase client: stats, badge, o
 
 ## 6. RSVP / Guest Management
 
-### Guest List Stats (from `RSVP_.xlsx`, 198 guests)
+### Guest List Stats (from `RSVP_.xlsx` — ⚠️ the original 198, NOT the live roster)
 
-⚠️ **These are the couple's pre-invitation *expectations*, not replies** — they were entered in the spreadsheet before any invitation went out, and they seed `guests.rsvp_status`. For who has actually answered, read the `attendance_truth` view. See §5b.
+🔴 **The live roster is 164 guests, not 198.** Verified against the live DB 2026-08-25: `guests` holds 166 rows, of which 2 are the `[PREVIEW]` admin rows. The couple deliberately uninvited 34 people after the spreadsheet was made. **Every number in the table below is therefore stale** and describes the original spreadsheet, not who is being invited — treat it as history until it is regenerated from the live roster.
+
+⚠️ **`schema_seed.sql` still carries all 198 rows, and its INSERT is an upsert (`ON CONFLICT (guest_number)`) that only adds and updates — it never deletes.** A full re-run would resurrect all 34 uninvited guests and issue them invitation codes. The fix is the one the file's own §23 note already prescribes and which was skipped: regenerate the VALUES block with `supabase/migrations/export_roster_as_seed.sql` and paste it over, so the file and the database agree.
+
+⚠️ **The Yes/No/Pending figures are the couple's pre-invitation *expectations*, not replies** — entered before any invitation went out, and they seed `guests.rsvp_status`. For who has actually answered, read the `attendance_truth` view. See §5b.
 
 | Status | Count |
 |--------|-------|
