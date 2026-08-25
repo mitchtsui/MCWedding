@@ -81,25 +81,35 @@ WHERE g.rsvp_status IS DISTINCT FROM CASE WHEN r.attendance THEN 'Yes' ELSE 'No'
 ORDER BY r.submitted_at DESC;
 
 
--- 7. Phone numbers stranded on the rsvp row.
---    The form writes the WhatsApp number to rsvp.phone. submit_rsvp does
---    NOT copy it to guests.phone, and the outreach tool reads ONLY
---    guests.phone — so these numbers are invisible there.
-SELECT g.guest_number, g.name, r.phone AS phone_guest_gave_us,
-       g.phone AS phone_in_outreach_list, r.submitted_at
-FROM rsvp r
-JOIN guests g ON g.id = r.guest_id
-WHERE COALESCE(NULLIF(TRIM(r.phone),''), '') <> ''
-  AND COALESCE(NULLIF(TRIM(g.phone),''), '') IS DISTINCT FROM COALESCE(NULLIF(TRIM(r.phone),''), '')
-ORDER BY r.submitted_at DESC;
+-- 7. Phone numbers the guest gave that differ from the one on file.
+--    FIXED 2026-08-25: submit_rsvp now copies rsvp.phone onto
+--    guests.phone whenever the guest record is blank, and the existing
+--    numbers were backfilled the same way — so "stranded in rsvp only"
+--    no longer happens. What remains is genuine disagreement, which is
+--    deliberately NOT overwritten. Review and decide case by case.
+SELECT * FROM phone_conflicts;
 
--- 7b. One-line fix for the above, if you want the numbers carried across.
---     Review query 7 first — this overwrites guests.phone where it is blank.
--- UPDATE guests g SET phone = TRIM(r.phone)
--- FROM rsvp r
--- WHERE r.guest_id = g.id
---   AND COALESCE(NULLIF(TRIM(r.phone),''),'') <> ''
---   AND COALESCE(NULLIF(TRIM(g.phone),''),'') = '';
+-- 7b. To accept the guest's number over the one on file, for one guest:
+-- UPDATE guests SET phone = '+852 ...' WHERE guest_number = 123;
+--
+--     Or to accept ALL of them at once, after reviewing query 7:
+-- UPDATE guests g SET phone = trim(r.phone)
+--   FROM rsvp r
+--  WHERE r.guest_id = g.id
+--    AND COALESCE(NULLIF(TRIM(r.phone),''),'') <> '';
+
+
+-- 7c. Guests with no contact number anywhere — not on the guest record
+--     and not supplied on a reply. These are the ones you cannot reach.
+SELECT g.guest_number, g.name, g.side, g.group_name, g.rsvp_status
+FROM guests g
+WHERE COALESCE(NULLIF(TRIM(g.phone),''),'') = ''
+  AND NOT EXISTS (
+    SELECT 1 FROM rsvp r
+    WHERE r.guest_id = g.id
+      AND COALESCE(NULLIF(TRIM(r.phone),''),'') <> ''
+  )
+ORDER BY g.guest_number;
 
 
 -- 8. Plus-ones named on a reply who are not yet guests.

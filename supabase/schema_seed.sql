@@ -641,10 +641,15 @@ BEGIN
     p_plus_one_name, p_dietary, p_song_request, p_message
   );
 
-  -- Mirror status onto guests.rsvp_status for the admin tracker
+  -- Mirror status onto guests.rsvp_status for the admin tracker.
+  -- phone is carried across too, but only into a BLANK guest record --
+  -- the outreach tool reads guests.phone, and the number already there
+  -- is the one that successfully delivered the invitation. Disagreements
+  -- are left alone and surface in the phone_conflicts view instead.
   UPDATE guests
   SET rsvp_status = CASE WHEN p_attendance THEN 'Yes' ELSE 'No' END,
-      dietary     = COALESCE(NULLIF(trim(p_dietary), ''), dietary)
+      dietary     = COALESCE(NULLIF(trim(p_dietary), ''), dietary),
+      phone       = COALESCE(NULLIF(trim(phone), ''), NULLIF(trim(p_phone), ''))
   WHERE id = p_guest_id;
 
   RETURN jsonb_build_object('success', true);
@@ -999,3 +1004,30 @@ WHERE g.invitation_code IS NULL          -- code never generated
 ORDER BY g.guest_number;
 
 GRANT SELECT ON roster_diff TO authenticated;
+
+
+-- 26. phone_conflicts → a guest gave us a contact number on their RSVP
+--     that differs from the one already on their guest record. Nothing is
+--     overwritten in that case (see submit_rsvp), so this view is the only
+--     place the disagreement is visible. Compared on the last 8 digits, so
+--     formatting and a +852 country code do not count as a difference —
+--     the outreach tool's waLink() strips non-digits the same way.
+CREATE OR REPLACE VIEW phone_conflicts AS
+SELECT
+  g.guest_number,
+  g.name,
+  g.side,
+  g.group_name,
+  g.phone AS phone_on_file,
+  r.phone AS phone_guest_gave,
+  r.submitted_at
+FROM rsvp r
+JOIN guests g ON g.id = r.guest_id
+WHERE COALESCE(NULLIF(trim(r.phone), ''), '') <> ''
+  AND COALESCE(NULLIF(trim(g.phone), ''), '') <> ''
+  AND right(regexp_replace(g.phone, '[^0-9]', '', 'g'), 8)
+      IS DISTINCT FROM
+      right(regexp_replace(r.phone, '[^0-9]', '', 'g'), 8)
+ORDER BY r.submitted_at DESC;
+
+GRANT SELECT ON phone_conflicts TO authenticated;
