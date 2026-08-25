@@ -92,10 +92,10 @@ node supabase/seed-guests.js
 1. **Each guest gets a personalised URL**: `https://[host]/?code=MC-XXXXX`
 2. Guest opens the link → invitation looked up via `lookup_invitation` RPC → form prefills with their name (and household, for couples).
 3. Guest submits RSVP → `submit_rsvp` RPC writes a row linked by `guest_id` and mirrors `rsvp_status` onto `guests`.
-4. Confirmation page shows table + seat number for everyone on that invitation, pulled via `lookup_seats`.
+4. Confirmation page shows the table number for everyone on that invitation, pulled via `lookup_seats`. (Seat numbers are deliberately not displayed anywhere post-RSVP — they move until the final seating pass.)
 5. Guest can revisit the same URL anytime to see their seat or update their RSVP.
 6. **You assign seats** in `seating-planner.html` (magic-link sign-in for `christychowtc@gmail.com` / `mitchell.tsui.mc@gmail.com`). Drag-drop persists `table_number` + `seat_number` to Supabase.
-7. Plus-ones not on the master list appear in the `pending_plus_ones` view for manual placement.
+7. `pending_plus_ones` still exists but no longer receives new rows — the RSVP form's plus-one field was removed on 2026-08-25, so a plus-one has to be added to the `guests` master list directly. Historical rows are still listed.
 8. To move a whole table's worth of guests at once, install `supabase/migrations/swap_tables.sql` and call `SELECT swap_tables(1, 2);` — everyone swaps places, keeping their seat numbers. Dragging them one by one in the planner works too, but `guests` has a unique index on `(table_number, seat_number)`, so a bulk hand-written `UPDATE` collides; the function parks one side on a scratch number to get around it. Running a swap twice undoes it, and `SELECT * FROM table_occupancy;` shows who is where.
 
 ### What a guest can see of the seating plan
