@@ -149,7 +149,7 @@ Admin-only tool for sending out the personal RSVP links by WhatsApp and tracking
    - **Bilingual (中英)** — auto-selected for relatives and church friends
    - **Friends · English** — auto-selected for friends / colleagues / classmates
    - **Formal** — auto-selected for parents' friends (`*Dad Friends` / `*Mom Friends`)
-   - Templates support placeholders: `{name}`, `{fullname}`, `{link}`, `{code}`, `{deadline}`. Edits auto-save to your browser; per-guest overrides are possible.
+   - Templates support placeholders: `{name}`, `{fullname}`, `{link}`, `{code}`, `{deadline}`. **Edits are shared** — they save to the `outreach_templates` table (admin-only RLS) and both admins see the same copy, with a `last edited by` line and a **Reload** button. `DEFAULT_TEMPLATES` in the HTML is only a fallback. (Before 2026-08-25 these lived in per-browser localStorage, so edits never synced *and* a stale local copy shadowed every deploy.) Per-guest overrides are still possible, but which template a *group* defaults to is still stored per-browser.
 3. Each guest row shows their personal `?code=MC-XXXXX` URL, a copy button, the rendered WhatsApp link, and:
    - **Status** (Not Contacted / Sent / Responded / Bounced / Skip) — clicking the green "Send via WhatsApp" button auto-flips a guest from `Not Contacted` → `Sent` and stamps `outreach_sent_at`.
    - **Phone** — if filled, the WhatsApp link opens that contact directly (`wa.me/<phone>?text=…`); if blank, WhatsApp lets you pick the recipient.
