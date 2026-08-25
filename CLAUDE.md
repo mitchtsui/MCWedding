@@ -284,6 +284,32 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 
 ---
 
+## 5b. WhatsApp Outreach (`whatsapp-outreach.html`)
+
+Admin-only tool (Supabase magic-link auth, `is_admin()` allowlist). Reads and writes the `guests` table **directly** — `.from('guests')`, not the `outreach_list` view — so any column the couple must see has to exist on `guests`.
+
+**Two different "statuses" live on each card and they are NOT the same thing.** Mixing them up is the easy mistake here:
+
+| Control | Column | Means |
+|---|---|---|
+| **Attending** (segmented Yes / No / No reply) | `guests.rsvp_status` | Is this guest coming? |
+| **Outreach** (dropdown) | `guests.outreach_status` | Have we messaged them yet? |
+
+The Outreach dropdown was labelled just "Status" until 2026-08-25, which made it read as the attendance answer. It is now "Outreach", and Attending sits above it.
+
+**2026-08-25 — attendance became editable, per user request.** `rsvp_status` used to render as a small read-only pill among four others in `.guest-info-meta`. It is now a 3-way segmented control (`.rsvp-seg`) in the tracker column, and the old pill was removed rather than left as a duplicate. Most guests answer by WhatsApp or in person, not through the website, so the couple needs to record attendance by hand — that path did not exist before.
+
+- **`rsvpOf(g)` normalises `rsvp_status` to exactly `Yes` / `No` / `Pending`** and is used by the card, the stats and the filter, so all three always agree. Raw values can be NULL, `''`, or spreadsheet-era casing; anything that is not exactly `Yes`/`No` counts as Pending.
+- **The header shows attendance counts** (Attending / Declined / No Reply) alongside the outreach counts. This is the number that matters against the 180-seat cap.
+- **A "Replied online" badge marks guests who answered on the website themselves**, read from the `rsvp` table (`rsvpReplies`, loaded by `loadReplies()`). Changing such a guest's attendance to something *different* from what they submitted raises a `confirm()` first — the one case where a click silently contradicts the guest. Loading replies is wrapped in try/catch: if it fails the tool still works, it just loses the badge.
+- **Setting Attending to Yes/No also flips `outreach_status` from `Sent` to `Responded`.** This is what finally makes `Responded` a live state — `mark_household_sent()` protected it but nothing ever set it. It fires only from `Sent`, so `Not Contacted` / `Skip` / `Bounced` are left alone.
+- ⚠️ **Guest numbers include the 2 `[PREVIEW]` rows** (`MC-BRIDE` / `MC-GROOM`, `group_name = 'Admin Preview'`), so the header's Total reads 200, not 198. Filter them out for a real headcount.
+- **Header overflow fix (same day):** `.header-actions` is ~490px wide and did not wrap, pushing the page 124px sideways on a phone. `header` already wrapped; its children did not. Now wraps below 700px. Verified zero horizontal overflow at 344 / 390 / 744 / 1400px.
+
+Verified in headless Chromium against a stubbed Supabase client: stats, badge, override `confirm()` (including that cancelling writes nothing), the `Sent → Responded` bump firing only from `Sent`, no-op clicks on the active button, and a 46px touch target on mobile.
+
+---
+
 ## 6. RSVP / Guest Management
 
 ### Guest List Stats (from `RSVP_.xlsx`, 198 guests)
