@@ -343,34 +343,28 @@ Verified in headless Chromium against a stubbed Supabase client: stats, badge, o
 
 ### Guest List Stats — live roster, verified 2026-08-25
 
-**`schema_seed.sql` now carries the live roster (162 numbered rows), not the original 198.** Regenerated with `supabase/migrations/export_roster_as_seed.sql` from the live database. The couple uninvited 34 people after the spreadsheet was made; the seed's INSERT is an upsert that never deletes, so until this was done a full re-run would have resurrected all 34 and issued them invitation codes. Verified against a real Postgres 16: loading the file gives 164 rows (162 + the 2 `[PREVIEW]`), every row has an invitation code, no duplicate `guest_number`, and **re-running it a second time still gives 164** — the 34 stay gone.
+**`schema_seed.sql` carries the live roster: 163 numbered guests.** Regenerated with `supabase/migrations/export_roster_as_seed.sql` from the live database and now fully in step with it — `guests` holds 165 rows (163 + the 2 `[PREVIEW]`), and loading the file reproduces exactly that.
 
-⚠️ **Two live rows are NOT in the seed, because both have `guest_number IS NULL` and the export skips those:**
+⚠️ **The couple uninvited 34 people after the spreadsheet was made.** The seed's INSERT is an upsert that never deletes, so until it was regenerated a full re-run would have resurrected all 34 and issued them invitation codes. Verified against a real Postgres 16: loading the file gives 165 rows, every row has an invitation code, no duplicate `guest_number`, `attendance_truth` reports 163, and **re-running the whole file a second time still gives 165** — the 34 stay gone. Whenever guests are added or removed by hand, regenerate this block again; that step was skipped once and is what created the hazard.
 
-| Row | Invitation code | What to do |
-|---|---|---|
-| **Eva Ng** — Mitch Work Friends | `MC-X7DV2` | A real guest added by hand. She is fine in the live DB, but the seed cannot manage her and a rebuild from the file would lose her. Give her a number (`UPDATE guests SET guest_number = next_guest_number() WHERE id = '082343f7-a4d9-46db-8f10-ff666fdb8849';`), re-export, and paste the block over again. |
-| **ZZ Test Guest** — `ZZ TEST - DELETE ME` | `MC-F3FJ7` | Leftover test row. Delete its `rsvp` rows first (`rsvp.guest_id` has no ON DELETE rule), then the guest. |
+ℹ️ **Eva Ng is `guest_number` 200**, not 199 — she was added by hand with no number, and the `MAX + 1` statement was run twice. Harmless; numbers only need to be unique.
 
-So the **real roster is 163 people** (162 in the seed + Eva Ng), plus 1 test row pending deletion and the 2 preview rows. `guests` holds 166 rows today.
+ℹ️ **Guest numbers are sparse** — 1–200 with 37 gaps, since uninviting removes the row but never renumbers. Do not assume `guest_number` is contiguous or that `MAX` equals the headcount. The export's `WHERE guest_number IS NOT NULL` filter is there to skip the `[PREVIEW]` rows, but it silently skips any hand-added guest with no number too — that is how Eva Ng was nearly lost. Run the sanity checks at the foot of `export_roster_as_seed.sql` after every export.
+
+ℹ️ Two name pairs share a name across separate rows (`Flora and Poting` ×2 — one with a trailing space — and `Mr & Mrs Mark Robson` ×2). That is the household pattern: one row per seat. The trailing space is harmless (name matching uses `TRIM`), but do not "dedupe" these rows.
 
 ⚠️ **The numbers below are the couple's pre-invitation *expectations*, not replies** — they seed `guests.rsvp_status`. For who has actually answered, read `attendance_truth`. See §5b.
 
-| Field | Count (162 seeded rows) |
+| Field | Count (163 seeded rows) |
 |--------|-------|
-| Expected Yes | 154 |
+| Expected Yes | 155 |
 | Expected No | 3 |
 | ⏳ Pending | 5 |
 | 女方 (Christy's side) | 105 |
-| 男方 (Mitchell's side) | 57 |
+| 男方 (Mitchell's side) | 58 |
 | Kids | 4 |
 | Dietary requirements | 6 |
-| Distinct invitation codes | 162 |
-| Seats remaining (180 cap, vs 163 real guests) | 17 |
-
-ℹ️ **Guest numbers are sparse** — 1–198 with 36 gaps, since uninviting removes the row but never renumbers. Do not assume `guest_number` is contiguous or that `MAX` equals the headcount.
-
-ℹ️ Two name pairs share a name across separate rows (`Flora and Poting` ×2 — one with a trailing space — and `Mr & Mrs Mark Robson` ×2). That is the household pattern: one row per seat. The trailing space is harmless (name matching uses `TRIM`), but do not "dedupe" these rows.
+| Seats remaining (180 cap) | 17 |
 
 ### Excel Tracker Sheets (`RSVP_Master_Tracker.xlsx`)
 1. **📋 Guest List** — full cleaned list, RSVP dropdown (Yes/No/Pending), Table # dropdown (1–15), conditional colour coding by status and side
