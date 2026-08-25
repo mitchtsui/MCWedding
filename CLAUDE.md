@@ -299,6 +299,32 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 
 ---
 
+## 5b. WhatsApp Outreach (`whatsapp-outreach.html`)
+
+Admin-only tool (Supabase magic-link auth, `is_admin()` allowlist). Reads and writes the `guests` table **directly** — `.from('guests')`, not the `outreach_list` view — so any column the couple must see has to exist on `guests`.
+
+**Two different "statuses" live on each card and they are NOT the same thing.** Mixing them up is the easy mistake here:
+
+| Control | Column | Means |
+|---|---|---|
+| **Attending** (segmented Yes / No / No reply) | `guests.rsvp_status` | Is this guest coming? |
+| **Outreach** (dropdown) | `guests.outreach_status` | Have we messaged them yet? |
+
+The Outreach dropdown was labelled just "Status" until 2026-08-25, which made it read as the attendance answer. It is now "Outreach", and Attending sits above it.
+
+**2026-08-25 — attendance became editable, per user request.** `rsvp_status` used to render as a small read-only pill among four others in `.guest-info-meta`. It is now a 3-way segmented control (`.rsvp-seg`) in the tracker column, and the old pill was removed rather than left as a duplicate. Most guests answer by WhatsApp or in person, not through the website, so the couple needs to record attendance by hand — that path did not exist before.
+
+- **`rsvpOf(g)` normalises `rsvp_status` to exactly `Yes` / `No` / `Pending`** and is used by the card, the stats and the filter, so all three always agree. Raw values can be NULL, `''`, or spreadsheet-era casing; anything that is not exactly `Yes`/`No` counts as Pending.
+- **The header shows attendance counts** (Attending / Declined / No Reply) alongside the outreach counts. This is the number that matters against the 180-seat cap.
+- **A "Replied online" badge marks guests who answered on the website themselves**, read from the `rsvp` table (`rsvpReplies`, loaded by `loadReplies()`). Changing such a guest's attendance to something *different* from what they submitted raises a `confirm()` first — the one case where a click silently contradicts the guest. Loading replies is wrapped in try/catch: if it fails the tool still works, it just loses the badge.
+- **Setting Attending to Yes/No also flips `outreach_status` from `Sent` to `Responded`.** This is what finally makes `Responded` a live state — `mark_household_sent()` protected it but nothing ever set it. It fires only from `Sent`, so `Not Contacted` / `Skip` / `Bounced` are left alone.
+- **The 2 `[PREVIEW]` rows are excluded from every header count** (2026-08-25, per user request) — Total, all three attendance counts, Sent, Not Contacted, Responded and Households. The header used to read 200 rather than 198. They are still listed and still fully usable for testing; a **`Preview` badge** on the card marks a row that is not being counted, so an excluded row is never a silent one. `isPreview(g)` matches on `group_name = 'Admin Preview'` **or** invitation code `MC-BRIDE` / `MC-GROOM` (case-insensitive), so renaming the group by hand does not quietly put them back into the headcount. They **are** still in the CSV export, which is a raw data dump — filter on `group_name` in Excel.
+- **Header overflow fix (same day):** `.header-actions` is ~490px wide and did not wrap, pushing the page 124px sideways on a phone. `header` already wrapped; its children did not. Now wraps below 700px. Verified zero horizontal overflow at 344 / 390 / 744 / 1400px.
+
+Verified in headless Chromium against a stubbed Supabase client: stats, badge, override `confirm()` (including that cancelling writes nothing), the `Sent → Responded` bump firing only from `Sent`, no-op clicks on the active button, and a 46px touch target on mobile.
+
+---
+
 ## 6. RSVP / Guest Management
 
 ### Guest List Stats (from `RSVP_.xlsx`, 198 guests)
@@ -334,10 +360,16 @@ rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request
 
 `phone` added 2026-08-13 (contact number / WhatsApp, collected on the RSVP form). The `submit_rsvp(...)` RPC function and its `GRANT EXECUTE` signature were updated to match (`p_phone TEXT`, inserted after `p_email`) — also added to the `admin_rsvps` view so the couple can actually see submitted numbers.
 
+**⚠️ `admin_rsvps` is a VIEW, not a table** (`rsvp` LEFT JOIN `guests`) — as are `admin_song_requests`, `admin_messages`, `pending_plus_ones`, `outreach_list`, `phone_conflicts` and `roster_diff`. A submission is written **once**, to `rsvp`; the view renders it. Row counts therefore cannot drift. What the LEFT JOIN *can* do is blank out every `guests`-side column (`guest_name`, `side`, `table_number`, `invitation_code`…) for an `rsvp` row whose `guest_id` is NULL or dangling — the row still appears, as a near-empty line. The Phase-1 `rsvp` table had no `guest_id` at all, so pre-migration submissions look like this. **`admin_rsvps` is website replies only** — the 156 Yes / 20 No came from the spreadsheet and have no `rsvp` row, so never read that view as the headcount.
+
+**2026-08-25 — `guests.phone` write-through.** `rsvp.phone` and `guests.phone` are **different columns**, and `whatsapp-outreach.html` reads only `guests.phone` (`.from('guests')`, not the `outreach_list` view). Between 2026-08-13 and 2026-08-25 every number a guest typed on the website landed in `rsvp.phone` and was invisible in the outreach tool. `submit_rsvp` now also sets `phone = COALESCE(NULLIF(trim(phone),''), NULLIF(trim(p_phone),''))`, and `supabase/migrations/2026-08-25_phone_writethrough.sql` backfilled the existing rows the same way. **The rule is non-destructive: a number already on the guest record wins**, and the guest's only fills a blank — the couple's number is the one that actually delivered the invitation, and a guest typo must not clobber it. This deliberately differs from `dietary` in the same function, where the guest's value *does* win. Disagreements are never silently dropped; they surface in the **`phone_conflicts`** view (compared on the last 8 digits, so `+852` prefixes and spacing don't register as conflicts). The migration carries a commented-out "accept all guest-supplied numbers" statement for when the couple wants the opposite policy.
+
+**`supabase/audit_rsvp_consistency.sql`** is a read-only, 13-query consistency check (row parity, orphaned replies, name/code drift, duplicate replies, status disagreements, phone conflicts, unreachable guests, pending plus-ones, dietary drift, headline counts). Run it as an admin, **one block at a time** — see the dashboard-splitter warning under 📬 RSVP Form.
+
 - RLS enabled on both tables
 - Public can read `guests`, insert to `rsvp`
 - Service role has full access
-- ✅ Schema is deployed and credentials flow from Vercel env vars via `/api/config.js` (verified 2026-08-17). Schema deltas now go in `supabase/migrations/` — see `2026-08-17_submit_rsvp_phone.sql` for the pattern (idempotent, applied + verified the same night).
+- ✅ Schema is deployed and credentials flow from Vercel env vars via `/api/config.js` (verified 2026-08-17). Schema deltas now go in `supabase/migrations/` — see `2026-08-17_submit_rsvp_phone.sql` and `2026-08-25_phone_writethrough.sql` for the pattern (idempotent, verified against a real Postgres 16 before shipping).
 
 ### Outreach templates live in Supabase, not localStorage (2026-08-25)
 

@@ -389,6 +389,10 @@
     background: var(--bg-panel);
     border: 1px solid var(--accent-light);
   }
+  .tpl-badge.preview-badge {
+    color: var(--warn);
+    border-color: #d6c094;
+  }
   .guest-info-meta {
     font-size: 0.72rem;
     color: var(--text-light);
@@ -413,6 +417,63 @@
   .guest-info-meta .pill.rsvp-yes { color: var(--ok); border-color: #a8c0a8; }
   .guest-info-meta .pill.rsvp-no  { color: var(--error); border-color: #d6a8a8; }
   .guest-info-meta .pill.rsvp-pending  { color: var(--warn); border-color: #d6c094; }
+
+  /* Attendance segmented control — the admin's manual Yes/No/Pending.
+     Distinct from the Outreach select below it: this is "are they coming",
+     that is "have we messaged them". */
+  .rsvp-seg {
+    display: flex;
+    flex: 1;
+    border: 1px solid var(--divider);
+    overflow: hidden;
+  }
+  .rsvp-seg button {
+    flex: 1 1 0;
+    padding: 0.45rem 0.3rem;
+    background: var(--white);
+    border: 0;
+    border-right: 1px solid var(--divider);
+    font-family: 'Raleway', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--text-light);
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s;
+  }
+  .rsvp-seg button:last-child { border-right: 0; }
+  .rsvp-seg button:hover { background: var(--bg-panel); color: var(--text-mid); }
+  .rsvp-seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+  .rsvp-seg button.on { color: var(--white); font-weight: 600; }
+  .rsvp-seg button.on.v-yes     { background: var(--ok); }
+  .rsvp-seg button.on.v-no      { background: var(--error); }
+  .rsvp-seg button.on.v-pending { background: var(--warn); }
+  @media (max-width: 700px) {
+    .rsvp-seg button { padding: 0.68rem 0.3rem; font-size: 0.72rem; }
+    /* Pre-existing: the header's action row is ~490px wide and did not
+       wrap, pushing the whole page 124px sideways on a phone. header
+       itself already wraps; its children did not. */
+    .header-actions { margin-left: 0; flex-wrap: wrap; width: 100%; }
+    .header-actions .who { flex-basis: 100%; }
+  }
+
+  /* Marks a guest who answered on the website themselves, so the admin
+     knows an override is overriding the guest, not filling a blank. */
+  .replied-badge {
+    margin-top: 0.3rem;
+    font-size: 0.62rem;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--accent);
+  }
+  .replied-badge::before { content: '\2713\00a0'; }
+
+  .stat-chip.att-yes     { border-left: 3px solid var(--ok); }
+  .stat-chip.att-no      { border-left: 3px solid var(--error); }
+  .stat-chip.att-pending { border-left: 3px solid var(--warn); }
+  .stat-chip.att-yes strong     { color: var(--ok); }
+  .stat-chip.att-no strong      { color: var(--error); }
+  .stat-chip.att-pending strong { color: var(--warn); }
 
   .link-block {
     display: flex;
@@ -584,6 +645,9 @@
     </div>
     <div class="header-stats">
       <div class="stat-chip"><strong id="stat-total">0</strong>Total</div>
+      <div class="stat-chip att-yes" title="Guests marked as attending"><strong id="stat-att-yes">0</strong>Attending</div>
+      <div class="stat-chip att-no" title="Guests who declined"><strong id="stat-att-no">0</strong>Declined</div>
+      <div class="stat-chip att-pending" title="No answer yet"><strong id="stat-att-pending">0</strong>No Reply</div>
       <div class="stat-chip"><strong id="stat-sent">0</strong>Sent</div>
       <div class="stat-chip"><strong id="stat-pending">0</strong>Not Contacted</div>
       <div class="stat-chip"><strong id="stat-responded">0</strong>Responded</div>
@@ -915,12 +979,51 @@ function exitApp() {
 }
 
 // ─── DATA ───
+
+// Website replies, keyed by guest id. Only used to show WHO answered on
+// the site themselves — the attendance value itself always comes from
+// guests.rsvp_status, which submit_rsvp keeps in step. A failure here is
+// non-fatal: the tool still works, it just cannot show the badge.
+let rsvpReplies = new Map();
+
+async function loadReplies() {
+  try {
+    const { data, error } = await sb.from('rsvp').select('guest_id, attendance, submitted_at');
+    if (error) throw error;
+    rsvpReplies = new Map(
+      (data || []).filter(r => r.guest_id).map(r => [r.guest_id, r])
+    );
+  } catch (e) {
+    console.warn('Could not load website replies:', e);
+    rsvpReplies = new Map();
+  }
+}
+
+// The two [PREVIEW] rows seeded by schema_seed.sql (section 22) so the
+// couple can walk the invitation flow without borrowing a real guest's
+// code. They are still listed and still testable — they are just kept
+// out of every headcount, since 200 is not the number of people coming.
+// Matched on either signal in case one is edited by hand.
+const PREVIEW_CODES = ['MC-BRIDE', 'MC-GROOM'];
+function isPreview(g) {
+  return g.group_name === 'Admin Preview'
+      || PREVIEW_CODES.includes((g.invitation_code || '').trim().toUpperCase());
+}
+
+// Normalises whatever is in guests.rsvp_status to exactly one of
+// Yes / No / Pending, so the card, the stats and the filter always agree.
+function rsvpOf(g) {
+  const v = (g.rsvp_status || '').trim();
+  return (v === 'Yes' || v === 'No') ? v : 'Pending';
+}
+
 async function loadGuests() {
   setSync('saving', 'Loading…');
   const { data, error } = await sb
     .from('guests')
     .select('id, guest_number, name, group_name, side, invited, rsvp_status, invitation_code, phone, outreach_status, outreach_channel, outreach_sent_at, outreach_notes')
     .order('guest_number', { ascending: true });
+  await loadReplies();
   if (error) {
     console.error(error);
     setSync('error', 'Load failed: ' + error.message);
@@ -1137,7 +1240,7 @@ function applyFilters() {
   return guests.filter(g => {
     if (q && !`${g.name || ''} ${g.group_name || ''} ${g.invitation_code || ''}`.toLowerCase().includes(q)) return false;
     if (status && (g.outreach_status || 'Not Contacted') !== status) return false;
-    if (rsvp && (g.rsvp_status || 'Pending') !== rsvp) return false;
+    if (rsvp && rsvpOf(g) !== rsvp) return false;
     if (side && g.side !== side) return false;
     if (group && g.group_name !== group) return false;
     return true;
@@ -1161,11 +1264,19 @@ function householdMembers(code) {
 }
 
 function updateStats() {
-  const total = guests.length;
-  const sent = guests.filter(g => g.outreach_status === 'Sent' || g.outreach_status === 'Responded').length;
-  const pending = guests.filter(g => !g.outreach_status || g.outreach_status === 'Not Contacted').length;
-  const responded = guests.filter(g => g.outreach_status === 'Responded').length;
-  const households = new Set(guests.map(g => g.invitation_code).filter(Boolean)).size;
+  // Every headline number counts real guests only — never the preview rows.
+  const real = guests.filter(g => !isPreview(g));
+  const total = real.length;
+  const sent = real.filter(g => g.outreach_status === 'Sent' || g.outreach_status === 'Responded').length;
+  const pending = real.filter(g => !g.outreach_status || g.outreach_status === 'Not Contacted').length;
+  const responded = real.filter(g => g.outreach_status === 'Responded').length;
+  const households = new Set(real.map(g => g.invitation_code).filter(Boolean)).size;
+  const attYes     = real.filter(g => rsvpOf(g) === 'Yes').length;
+  const attNo      = real.filter(g => rsvpOf(g) === 'No').length;
+  const attPending = real.filter(g => rsvpOf(g) === 'Pending').length;
+  document.getElementById('stat-att-yes').textContent = attYes;
+  document.getElementById('stat-att-no').textContent = attNo;
+  document.getElementById('stat-att-pending').textContent = attPending;
   document.getElementById('stat-total').textContent = total;
   document.getElementById('stat-sent').textContent = sent;
   document.getElementById('stat-pending').textContent = pending;
@@ -1211,12 +1322,18 @@ function renderCard(g) {
   const sideLabel = g.side === '女方' ? 'Christy 女方'
                    : g.side === '男方' ? 'Mitchell 男方' : '';
   const sideCls = g.side === '女方' ? 'side-f' : g.side === '男方' ? 'side-m' : '';
-  const rsvp = g.rsvp_status || 'Pending';
-  const rsvpCls = rsvp === 'Yes' ? 'rsvp-yes' : rsvp === 'No' ? 'rsvp-no' : 'rsvp-pending';
+  const rsvp = rsvpOf(g);
+  const reply = rsvpReplies.get(g.id);
+  const repliedBadge = reply
+    ? `<div class="replied-badge" title="Answered through the website — not entered by hand">Replied online${reply.submitted_at ? ` · ${escHtml(fmtSent(reply.submitted_at))}` : ''}</div>`
+    : '';
   const householdLabel = codeShared
     ? `<span class="pill shared">Shared code · ${householdMembers(g.invitation_code).length} ppl</span>`
     : '';
   const groupDefault = defaultTemplateFor(g.group_name);
+  const previewBadge = isPreview(g)
+    ? `<span class="tpl-badge preview-badge" title="Test row seeded by the schema — excluded from all headcounts">Preview</span>`
+    : '';
   const overrideBadge = (groupOverrides[g.id] && groupOverrides[g.id] !== groupDefault)
     ? `<span class="tpl-badge" title="Template overridden from group default (${groupDefault})">${escHtml(tplKey)}</span>`
     : '';
@@ -1224,11 +1341,10 @@ function renderCard(g) {
   return `
   <div class="${cardCls}" data-id="${g.id}" data-code="${escHtml(g.invitation_code || '')}">
     <div>
-      <div class="guest-info-name">${escHtml(g.name || '(no name)')}${overrideBadge}</div>
+      <div class="guest-info-name">${escHtml(g.name || '(no name)')}${previewBadge}${overrideBadge}</div>
       <div class="guest-info-meta">
         ${sideLabel ? `<span class="pill ${sideCls}">${escHtml(sideLabel)}</span>` : ''}
         <span class="pill">${escHtml(g.group_name || '—')}</span>
-        <span class="pill ${rsvpCls}">RSVP: ${escHtml(rsvp)}</span>
         ${householdLabel}
         ${g.invitation_code ? `<span class="pill" style="font-family:'SF Mono',Menlo,monospace;color:var(--accent);">${escHtml(g.invitation_code)}</span>` : `<span class="pill" style="color:var(--error);">NO CODE</span>`}
       </div>
@@ -1262,7 +1378,16 @@ function renderCard(g) {
 
     <div class="tracker-block">
       <div class="field-row">
-        <label>Status</label>
+        <label>Attending</label>
+        <div class="rsvp-seg" role="group" aria-label="Attendance for ${escHtml(g.name || 'guest')}">
+          <button type="button" class="v-yes${rsvp==='Yes'?' on':''}"         data-act="set-rsvp" data-val="Yes"     aria-pressed="${rsvp==='Yes'}">Yes</button>
+          <button type="button" class="v-no${rsvp==='No'?' on':''}"           data-act="set-rsvp" data-val="No"      aria-pressed="${rsvp==='No'}">No</button>
+          <button type="button" class="v-pending${rsvp==='Pending'?' on':''}" data-act="set-rsvp" data-val="Pending" aria-pressed="${rsvp==='Pending'}">No reply</button>
+        </div>
+      </div>
+      ${repliedBadge}
+      <div class="field-row">
+        <label>Outreach</label>
         <select data-act="set-status">
           <option ${status==='Not Contacted'?'selected':''}>Not Contacted</option>
           <option ${status==='Sent'?'selected':''}>Sent</option>
@@ -1334,6 +1459,9 @@ function attachHandlers(root) {
     card.querySelector('[data-act="set-status"]')?.addEventListener('change', e => {
       updateStatus(g, e.target.value);
     });
+    card.querySelectorAll('[data-act="set-rsvp"]').forEach(btn => {
+      btn.addEventListener('click', () => setRsvp(g, btn.dataset.val));
+    });
     card.querySelector('[data-act="set-phone"]')?.addEventListener('change', e => {
       const v = e.target.value.trim() || null;
       g.phone = v;
@@ -1352,6 +1480,33 @@ function flashCopied(btn) {
   btn.textContent = 'Copied';
   btn.classList.add('copied');
   setTimeout(() => { btn.textContent = orig; btn.classList.remove('copied'); }, 900);
+}
+
+// Admin sets attendance by hand — for the many guests who answer by
+// WhatsApp or in person rather than through the website.
+async function setRsvp(g, val) {
+  if (rsvpOf(g) === val) return;
+
+  // Guard the one case that loses information: the guest answered on the
+  // website themselves and the admin is about to contradict them.
+  const reply = rsvpReplies.get(g.id);
+  if (reply) {
+    const said = reply.attendance ? 'Yes' : 'No';
+    if (said !== val && !confirm(
+      `${g.name} answered "${said}" on the website` +
+      (reply.submitted_at ? ` on ${fmtSent(reply.submitted_at)}` : '') +
+      `.\n\nChange it to "${val}"?`
+    )) return;
+  }
+
+  const fields = { rsvp_status: val };
+  // We messaged them and now have an answer — that is what Responded means.
+  if ((val === 'Yes' || val === 'No') && g.outreach_status === 'Sent') {
+    fields.outreach_status = 'Responded';
+  }
+  Object.assign(g, fields);
+  const ok = await patchGuest(g.id, fields);
+  if (ok) render();
 }
 
 async function updateStatus(g, newStatus) {
