@@ -301,7 +301,8 @@ VALUES
   (195, 'Zeno Cheung', 'Mitch Work Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
   (196, 'Charine Chin', 'Mitch Work Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
   (197, 'Jia Jhang', 'Uni Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
-  (198, 'Huang Jia', 'Uni Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL)
+  (198, 'Huang Jia', 'Uni Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL),
+  (200, 'Eva Ng', 'Mitch Work Friends', '男方', 'Yes', 'Yes', NULLIF('',''), FALSE, NULL)
 ON CONFLICT (guest_number) WHERE guest_number IS NOT NULL
 DO UPDATE SET
   name       = EXCLUDED.name,
