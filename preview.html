@@ -39,6 +39,27 @@
     flex-shrink: 0;
     flex-wrap: wrap;
   }
+
+  /* ─── ADMIN NAV ─── */
+  .admin-nav {
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+    padding: 0.55rem 1.5rem;
+    background: #2C2820;
+    font-size: 0.62rem;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+  .admin-nav a {
+    color: var(--accent-light, #C4A0AB);
+    text-decoration: none;
+    opacity: 0.85;
+  }
+  .admin-nav a:hover { opacity: 1; text-decoration: underline; }
+  .admin-nav a.current { color: #F2EDE5; opacity: 1; font-weight: 600; }
+  .admin-nav .sep { color: #5A4E45; }
   h1 {
     font-family: 'Cormorant Garamond', serif;
     font-size: 1.3rem;
@@ -180,6 +201,17 @@
 </style>
 </head>
 <body>
+
+<!-- ─── ADMIN NAV ─── -->
+<nav class="admin-nav">
+  <a href="admin.html">← Portal</a>
+  <span class="sep">·</span>
+  <a href="seating-planner.html">Seating Planner</a>
+  <span class="sep">·</span>
+  <a href="whatsapp-outreach.html">WhatsApp Outreach</a>
+  <span class="sep">·</span>
+  <a href="preview.html" class="current">Preview</a>
+</nav>
 
 <header>
   <div>
