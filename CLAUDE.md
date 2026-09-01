@@ -289,6 +289,20 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 - **Lightbox arrow keys are now scoped to the open lightbox** — they used to fire from anywhere on the page, including while typing in the RSVP fields.
 
 
+## 4b. Admin Portal (`admin.html`)
+
+**2026-09-01, per user request** ("combine the seating planner, preview, whatsapp outreach pages into one admin portal... instead I can open one webpage, and it will direct me to different pages").
+
+- `admin.html` is a new, standalone hub page — three cards linking to `seating-planner.html`, `whatsapp-outreach.html`, and `preview.html`, plus a "View Live Site" link to `wedding-invitation.html`. Uses the shared admin-tool palette (`--bg #EAE5DB`, `--bg-card #F2EDE5`, `--accent #7A4F5A`, `--olive #686B38`, Cormorant Garamond + Raleway) already used by the three tools it links to.
+- **No auth gate on `admin.html` itself** — it holds no guest data, only navigation links, matching the precedent `preview.html` already set (also unauthenticated). Clicking into Seating Planner or WhatsApp Outreach still hits their existing Supabase magic-link auth gates unchanged.
+- Chose a navigation hub over merging the three tools' internals into one single-page app — each tool is a large standalone Supabase-backed page; combining their JS/CSS into one file risked naming collisions for a much larger effort than the user's literal ask ("direct me to different pages").
+- **Cross-navigation is bidirectional.** All three tool pages (`preview.html`, `seating-planner.html`, `whatsapp-outreach.html`) got a dark `.admin-nav` strip added as the first element in `<body>` — "← Portal" plus links to the other two tools, current page bolded/highlighted. This was added beyond the literal request so navigation works from inside a tool too, not just one-way from the hub.
+  - Inserted as a `flex-shrink: 0` sibling before each page's existing `<header>`/`#auth-gate` — safe because all three pages already use `body { display: flex; flex-direction: column }` with their main content area (`.stage`, `.auth-gate`, `#app`) taking `flex: 1`, so the new strip just claims its own row and the rest reflows automatically. No JS changes needed.
+  - `.admin-nav` was added to the existing `@media print` hide-lists in `seating-planner.html` and `whatsapp-outreach.html` (it has no print-relevant content and shouldn't appear in the printed seating chart / guest list). `preview.html` has no print rules to extend.
+- Verified via Playwright at desktop (1280px) and mobile (390px) widths: hub cards render and hover states work, all three tool pages show the nav strip with the correct current-page highlighted, auth cards stay centered, and `preview.html`'s iframe stage reflows correctly under the added strip. Inline `<script>` blocks in all three modified tool files pass a `new Function()` syntax check.
+
+---
+
 ## 5. Seating Planner (`seating-planner.html`)
 
 - 15 tables × 12 seats
