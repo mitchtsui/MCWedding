@@ -142,6 +142,7 @@ The four nested sections' internal markup was **moved, not rewritten** (same ids
 - Demo mode active (simulates success when no real URL)
 - The section's own dedicated `<style>` block (RSVP states + the floor-plan-modal CSS it triggers into) lives immediately before `<section id="rsvp">` in the file — moved together with the section during the reorg so the two stay co-located for anyone editing RSVP CSS.
 - **Floor-plan SVG matches the Peninsula's real Salisbury Room / Foyer plan (2026-08-17, refined same night per the couple).** Geometry traced from the hotel's own floor plan (`SynologyDrive/MC Wedding/034ec716….png`, 0.82 scale, same orientation): **15 tables** — Room holds 11·9 (flanking a centred 12ft × 8ft stage), 10·6·3·7, 8·2·1·5; Foyer holds 12·13, 15, 16·17. **Tables 4 and 14 are deliberately skipped** (numbering superstition — this is correct, don't "fix" it). **The two spaces are ONE connected outline** — an upside-down 凸 `<path class="fp-wall">` (wide Room above, narrower Foyer below, no dividing wall), with the foyer's unused right corridor trimmed (foyer x 205–575). Per the couple: no mock cake, no pillar blocks, and **every TV is a thin 8px strip straddling its wall** (same treatment as the built-in screens on the top wall) — top-right shoulder, foyer right wall, two mirror TVs on the foyer left wall. **Two shaded structural columns** (`fp-column`, 50% grey) sit at the open Room/Foyer boundary — the plan's shady blocks offset behind tables 2 and 1; they are what actually stands where the removed wall was, and the Room's built-in TV hangs on the column behind table 1. Reception furniture removed (2026-08-17, couple's request). The invented "LIVE BAND" box is gone (not on the real plan). Verified programmatically: all 15 seat rings clear each other, every ring inside the 凸 outline, no ring touches stage/TVs/furniture; also verified rendered in-browser (demo code, table highlighted, occupants panel working). Style classes unchanged (`fp-frame`/`fp-stage`/`fp-table`/`fp-seat-dots` + `fp-wall`/`fp-fixture`/`fp-label`/`fp-area-label`). **Tables 16/17 are new to the site** — the lock/unlock and occupant JS is generic (`data-table` driven), nothing else needed updating.
+- **2026-09-03: Tables 16 and 17 removed.** A live-DB check (`SELECT table_number, COUNT(*) FROM guests GROUP BY table_number`) showed both permanently at 0 — and for good reason: `seating-planner.html`'s own `TABLES` array (§5) never included them in the first place, so no admin could ever have assigned a guest to either through the actual seating tool. The guest-facing floor plan showing 15 tables while the admin tool only ever offered 13 was a pre-existing inconsistency, not a couple's-choice reserve — this fix makes the two agree. Removed the two `<g class="fp-table" data-table="16"|"17">` groups (each was `translate(304, 652)` / `translate(476, 648)` in the Foyer's bottom row); left the wall path, frame, and both TV fixtures in that lower area untouched, since they're the venue's real physical fixtures traced from the hotel plan, not tied to a specific table. The Foyer comment now reads "(3 tables)", not "(5 tables)". Cap is now **13 × 12 = 156 seats**, not 180 — see the flag under §6 Guest List Stats.
 - **Post-submit scroll (2026-08-17):** `scrollRsvpIntoView()` runs after a successful submit and on "Update my RSVP" — the form is much taller than the seat card, so after the swap the viewport used to sit below the card's heading ("You're All Set" cut off at the top). Honours `scroll-margin-top` and `prefers-reduced-motion`. Deliberately NOT called on page load.
 
 ##### Seat Card (post-RSVP confirmation / re-lookup, `#seat-card`)
@@ -305,7 +306,7 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 
 ## 5. Seating Planner (`seating-planner.html`)
 
-- 15 tables × 12 seats
+- 13 tables × 12 seats (156 seats). Documented as 15 until 2026-09-03 — that number matched the guest-facing floor plan's 15 drawn tables, but this tool's own `TABLES` array (seating-planner.html) had only ever listed 13; the two never actually agreed. Fixed by removing the guest-facing plan's unused tables 16/17 rather than adding them here — see §4's Floor-plan SVG note and §6 Guest List Stats.
 - Left sidebar: add/remove/search guests, seated vs unassigned counts
 - Round table SVG with seat dots
 - Drag from sidebar → table, between tables, back to sidebar
@@ -379,6 +380,8 @@ Verified in headless Chromium against a stubbed Supabase client: stats, badge, o
 | Kids | 4 |
 | Dietary requirements | 6 |
 | Seats remaining (180 cap) | 17 |
+
+⚠️ **2026-09-03: real cap is 156, not 180.** `seating-planner.html` only ever had 13 usable tables (§5) — the guest-facing floor plan's tables 16/17 were removed the same day since they could never actually be assigned. At 13 × 12 = 156 seats against 155 Expected Yes (+ up to 5 Pending), there is very little headroom — as few as 1 spare seat if every Pending guest says yes. Confirm with the couple whether a 14th table can be added at the venue, or whether some Expected Yes guests are not actually coming, before RSVPs close.
 
 ### Excel Tracker Sheets (`RSVP_Master_Tracker.xlsx`)
 1. **📋 Guest List** — full cleaned list, RSVP dropdown (Yes/No/Pending), Table # dropdown (1–15), conditional colour coding by status and side
@@ -458,7 +461,7 @@ rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request
 
 ### When working on the seating planner
 - Always edit `/home/claude/seating-planner.html` in place.
-- Keep 15 tables × 12 seats as the fixed structure.
+- Keep 13 tables × 12 seats as the fixed structure.
 
 ### When working on the Excel tracker
 - Always use the cleaned data — do not re-read the raw `RSVP_.xlsx` directly as source of truth (it has uncleaned entries).
