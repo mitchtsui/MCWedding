@@ -1,10 +1,16 @@
-# Wedding day prototype — v3, 2026-09-22
+# Wedding day prototype — v4, 2026-09-22
 
 ## Purpose and entry point
 
 `wedding-day.html` is a read-only wedding party rundown prototype, also linked from `admin.html`. The mobile preview is published at https://mc-wedding-ten.vercel.app/wedding-day.html. It can also be opened directly in a browser; there is no build step. Keep `wedding-day.js`, `wedding-day-now.js`, and `wedding-day-data.js` alongside it.
 
 Acceptance: horizontal day timeline, bride/groom activities, bridesmaid/groomsman duties and locations, usable phone layout, wedding-site palette and typography, source-based instructions without invented assignments.
+
+## v4 — open at the current time
+
+- On the first visible timeline render, jump to the current/preview time with 10% of the visible time grid before the line, excluding the fixed role-label column. Preview changes and “Show now” use the same position. Clock ticks do not move the user's browsing position.
+- At the start of the day the position clamps to the beginning. Extra trailing space allows the 10% position late in the day. Opening initially in My duties defers positioning until the timeline is shown.
+- Browser checks passed at 344/390/744/1440px for initial framing, explicit preview changes, late-day position, start boundary, Show now, deferred duties, unchanged position on clock ticks, no vertical jump, and no page overflow. A read-only reviewer independently checked positioning calculations and event wiring without finding material issues.
 
 ## v3 — current-time line and compact events
 

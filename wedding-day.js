@@ -16,6 +16,7 @@
   const periods = { all: [330, 1440], morning: [330, 840], afternoon: [840, 1020], evening: [1020, 1440] };
   const timelineLayout = { scale: 2, trackHeight: 50, padding: 6 };
   let timelineClock = null;
+  let initialTimePositionPending = true;
   let period = 'all', view = 'timeline';
   const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
   const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
@@ -95,6 +96,7 @@
     const area = $('timelineInner'), [start, end] = periods[period];
     const { scale, trackHeight, padding } = timelineLayout;
     const labelWidth = window.innerWidth <= 540 ? 96 : 130;
+    area.style.minWidth = '';
     area.style.width = `${labelWidth + (end - start) * scale + 140}px`;
     if (!list.length) { area.style.width = '100%'; area.innerHTML = '<p class="empty">No matching moments. Try another team, time, or search.</p>'; return; }
     let html = '<div class="ruler"><div class="ruler-label">12 NOV · HKT</div>';
@@ -119,6 +121,20 @@
     }
     area.innerHTML = html + '<div id="timeMarker" class="time-marker" aria-hidden="true" hidden></div>';
     updateTimeMarker();
+    if (initialTimePositionPending && positionAtCurrentTime()) initialTimePositionPending = false;
+  }
+  function positionAtCurrentTime() {
+    const marker = $('timeMarker'), timeline = $('timeline');
+    if (!marker || marker.hidden || !timeline.clientWidth) return false;
+    const labelWidth = window.innerWidth <= 540 ? 96 : 130;
+    const visibleTimeWidth = Math.max(0, timeline.clientWidth - labelWidth);
+    const markerLeft = parseFloat(marker.style.left);
+    // Keep 10% of the visible time grid before the line, outside the fixed labels.
+    const target = Math.max(0, markerLeft - labelWidth - visibleTimeWidth * 0.1);
+    // Allow the same framing late in the day, even when no later events remain.
+    $('timelineInner').style.minWidth = `${Math.ceil(target + timeline.clientWidth)}px`;
+    timeline.scrollLeft = target;
+    return true;
   }
   function updateTimeMarker() {
     const marker = $('timeMarker'), label = $('timeMarkerLabel');
@@ -162,15 +178,22 @@
   $('search').addEventListener('input', render);
   $('timelineButton').addEventListener('click', () => { view = 'timeline'; render(); });
   $('agendaButton').addEventListener('click', () => { view = 'duties'; render(); });
-  $('showCurrentTime').addEventListener('click', () => {
+  function jumpToCurrentTime() {
     if ($('showCurrentTime').disabled) return;
     if (timelineClock.minutes < periods[period][0] || timelineClock.minutes >= periods[period][1]) period = 'all';
     // Clear a search that would leave no timeline to locate the time on.
     if (!filtered().length) $('search').value = '';
     view = 'timeline'; render();
-    const marker = $('timeMarker');
-    if (marker && !marker.hidden) $('timeline').scrollLeft = Math.max(0, parseFloat(marker.style.left) - $('timeline').clientWidth * 0.55);
-  });
+    if (positionAtCurrentTime()) initialTimePositionPending = false;
+  }
+  $('showCurrentTime').addEventListener('click', jumpToCurrentTime);
+  function previewTimeChanged() {
+    if (view === 'timeline') jumpToCurrentTime();
+    else initialTimePositionPending = true;
+  }
+  $('previewClock').addEventListener('change', previewTimeChanged);
+  $('previewTime').addEventListener('input', previewTimeChanged);
+  $('previewTime').addEventListener('change', previewTimeChanged);
   document.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; render(); $('timeline').scrollLeft = 0; }));
   document.addEventListener('click', event => {
     const moment = event.target.closest('[data-event]'); if (moment) openEvent(moment.dataset.event);
