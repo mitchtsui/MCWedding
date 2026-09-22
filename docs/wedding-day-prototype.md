@@ -1,10 +1,23 @@
-# Wedding day prototype — v1, 2026-09-22
+# Wedding day prototype — v2, 2026-09-22
 
 ## Purpose and entry point
 
-`wedding-day.html` is a local, read-only wedding party rundown prototype, also linked from `admin.html`. Open the HTML directly in a browser; there is no build step. Keep `wedding-day.js` and `wedding-day-data.js` alongside it.
+`wedding-day.html` is a read-only wedding party rundown prototype, also linked from `admin.html`. The mobile preview is published at https://mc-wedding-ten.vercel.app/wedding-day.html. It can also be opened directly in a browser; there is no build step. Keep `wedding-day.js`, `wedding-day-now.js`, and `wedding-day-data.js` alongside it.
 
 Acceptance: horizontal day timeline, bride/groom activities, bridesmaid/groomsman duties and locations, usable phone layout, wedding-site palette and typography, source-based instructions without invented assignments.
+
+## v2 — scrolling and current tasks
+
+- User requested horizontal-only scrolling inside the timeline, with all vertical scrolling on the document. Both desktop and mobile height caps were removed; the timeline expands to its complete content height and only overflows horizontally.
+- Row order is The day → Bride → Bridesmaids → Groom → Groomsmen. The role picker and detail-role order follow the same grouping.
+- A panel directly below the date shows current task(s) and the next two events for the selected person/team. Search and period browsing filters do not hide current or upcoming duties.
+- In a person/team view, the sourced role duty is the primary task text and the general event title is secondary context. Empty duty cells are labelled honestly. This avoids calling the groom's 05:30 preparations “bridal makeup” or his 15:00 suit change “bride restyling”.
+- Time is calculated against 12 November 2026 in Hong Kong (UTC+8), independently of the viewer's local timezone. Before the wedding it shows no fictional current task, just the first two upcoming events. After the selected schedule ends it reports completion; gaps show no current task. Overlapping tasks are all retained.
+- Events with no end time are treated as milestones during their start minute only, without displaying an invented duration. Optional “Preview a time” uses the wedding date and is explicitly labelled; turning it off resumes actual time. The panel refreshes every 30 seconds and on page resume without rerendering the timeline.
+- Verification: 7 timing tests passed with `node --test tests/wedding-day-now.test.cjs`, including before/day/after, UTC/HKT date boundary, end-exclusive intervals, overlaps, gaps, milestones, and selected-team inputs.
+- Browser checks at 344/390/744/1440px: no page overflow, no timeline vertical scroll range, horizontal scrolling works, lane order matches. Vertical wheel scrolls the document; emulated mobile touch verified vertical page swipes and horizontal timeline swipes independently. Panel tests verified role selection, overlapping tasks, preview time, search/period independence, and opening event details. No JavaScript runtime errors in these checks.
+- Physical phones and Safari have not been tested.
+- Fresh-context read-only review independently checked the scrolling behavior, order, and time logic. Its finding about generic titles in role-specific task cards was fixed and covered by source-equality browser assertions for the groom's 05:45 and 15:30 cards.
 
 ## Source and decisions
 

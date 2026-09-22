@@ -5,11 +5,12 @@
   const $ = id => document.getElementById(id);
   if (!data || !Array.isArray(data.events)) {
     $('resultCount').textContent = 'The schedule could not load. Please reload the page or open the source workbook below.';
+    $('currentTask').textContent = 'The schedule could not load. Please reload the page.';
     return;
   }
   const roles = {
-    overview: ['The day', '全日流程'], bride: ['Bride', '新娘'], groom: ['Groom', '新郎'],
-    bridesmaids: ['Bridesmaids', '姊妹'], groomsmen: ['Groomsmen', '兄弟'],
+    overview: ['The day', '全日流程'], bride: ['Bride', '新娘'], bridesmaids: ['Bridesmaids', '姊妹'],
+    groom: ['Groom', '新郎'], groomsmen: ['Groomsmen', '兄弟'],
     brideFamily: ['Bride’s family', '女家屋企人'], groomFamily: ['Groom’s family', '男家屋企人'], vendors: ['Vendors', '各單位']
   };
   const periods = { all: [330, 1440], morning: [330, 840], afternoon: [840, 1020], evening: [1020, 1440] };
@@ -52,6 +53,12 @@
     const person = value.startsWith('person-') ? people[Number(value.slice(7))] : null;
     return { role: person?.role || value, person };
   }
+  const nowNext = window.WeddingDayNow.create({
+    getEvents: () => events.filter(e => selected().role === 'all' || participates(e, selected().role)),
+    getRole: () => selected().role,
+    getDuty: (event, role) => role === 'all' ? '' : event.duties[role]?.trim() || '',
+    eventPlace, range
+  });
   function filtered() {
     const { role } = selected(), query = $('search').value.trim().toLocaleLowerCase();
     const [start, end] = periods[period];
@@ -66,6 +73,9 @@
   }
   function render() {
     const list = filtered();
+    const { role, person } = selected();
+    $('taskScope').textContent = person ? `${person.name} · ${roles[role][0]} team schedule` : role === 'all' ? 'Everyone’s schedule' : `${roles[role][0]} · ${roles[role][1]}`;
+    nowNext.update();
     $('roleNote').textContent = roleNote();
     $('resultCount').textContent = `${list.length} moments · ${period === 'all' ? '05:30–23:45' : `${clock(periods[period][0])}–${period === 'evening' ? '23:45' : clock(periods[period][1])}`} HKT · Tap for full instructions`;
     $('timelineView').hidden = view !== 'timeline'; $('agendaView').hidden = view !== 'duties';
@@ -87,7 +97,7 @@
     for (let t = Math.ceil(start / 60) * 60; t < end; t += 60) html += `<span class="tick" style="left:${labelWidth + (t - start) * scale}px">${clock(t)}</span>`;
     html += '</div>';
     const { role } = selected();
-    const lanes = role === 'all' ? ['overview', 'bride', 'groom', 'bridesmaids', 'groomsmen'] : ['overview', role];
+    const lanes = role === 'all' ? ['overview', 'bride', 'bridesmaids', 'groom', 'groomsmen'] : ['overview', role];
     for (const lane of lanes) {
       const rowEnds = [], blocks = [];
       const laneEvents = list.filter(e => lane === 'overview' || participates(e, lane));
