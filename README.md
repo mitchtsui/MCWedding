@@ -221,7 +221,8 @@ These are the couple's **pre-invitation expectations**, seeded into `guests.rsvp
 
 - [x] Run `supabase/schema_seed.sql` in the Supabase SQL Editor — schema deployed (verified 2026-08-17); roster regenerated from the live DB 2026-08-25, last updated 2026-08-31
 - [x] Add `SUPABASE_URL` + `SUPABASE_ANON_KEY` to Vercel env vars — injected via `/api/config.js`, demo mode off in production (verified 2026-08-17)
-- [x] Add the Vercel domain to Supabase Auth → Site URL + Redirect URLs — the seating planner's magic link is in use; the outreach URL entry was not re-checked
+- [x] Add the Vercel domain to Supabase Auth → Site URL, and `seating-planner.html` to Redirect URLs — verified: the seating planner's magic link is in use
+- [ ] Confirm `whatsapp-outreach.html` is also in Redirect URLs (it has its own magic-link gate) — not re-checked as of 2026-09-22; a failed sign-in on the outreach tool is the symptom
 - [x] Pair couples onto shared codes via `pair_invitation()` — every row has a code; households share where wanted
 - [x] Per-guest URL list — `whatsapp-outreach.html` renders and tracks every guest's link (sending progress lives in `outreach_status`)
 - [x] Sign in to seating planner and assign tables/seats — in use
