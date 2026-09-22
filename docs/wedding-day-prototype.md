@@ -1,10 +1,18 @@
-# Wedding day prototype — v2, 2026-09-22
+# Wedding day prototype — v3, 2026-09-22
 
 ## Purpose and entry point
 
 `wedding-day.html` is a read-only wedding party rundown prototype, also linked from `admin.html`. The mobile preview is published at https://mc-wedding-ten.vercel.app/wedding-day.html. It can also be opened directly in a browser; there is no build step. Keep `wedding-day.js`, `wedding-day-now.js`, and `wedding-day-data.js` alongside it.
 
 Acceptance: horizontal day timeline, bride/groom activities, bridesmaid/groomsman duties and locations, usable phone layout, wedding-site palette and typography, source-based instructions without invented assignments.
+
+## v3 — current-time line and compact events
+
+- A rose line, dot, and time label span the timeline using the same Hong Kong clock as the top task cards. In preview mode the label says “Preview”; on the wedding date it says “Now”. The marker is hidden outside that date or the selected period. It updates on the existing 30-second/page-resume clock without moving the user's scroll position.
+- “Show now” / “Show preview time” brings the marker into view. It switches to the full day if the selected period excludes that time; a search with no results is cleared so the timeline can be shown.
+- Event height is 44px (previously 61px), retaining the 44px touch target and existing 11px time / 12px title sizes. Track spacing is 50px (previously 70px), with tighter row padding. All vertical scrolling remains on the document.
+- Browser checks passed at 344/390/744/1440px: marker alignment across periods and resizing, full-height line, marker click-through, real/preview/date-boundary behavior, timed updates preserving horizontal position, show-time navigation, exact 44px boxes, and no nested vertical or page horizontal overflow. Desktop/mobile screenshots were inspected for readable text. Existing seven clock tests passed.
+- Fresh-context read-only review found no material issues; it independently checked seven clock callback cases plus positioning/scrolling code. Physical mobile browsers remain untested.
 
 ## v2 — scrolling and current tasks
 

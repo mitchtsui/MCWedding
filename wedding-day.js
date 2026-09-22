@@ -14,6 +14,8 @@
     brideFamily: ['Bride’s family', '女家屋企人'], groomFamily: ['Groom’s family', '男家屋企人'], vendors: ['Vendors', '各單位']
   };
   const periods = { all: [330, 1440], morning: [330, 840], afternoon: [840, 1020], evening: [1020, 1440] };
+  const timelineLayout = { scale: 2, trackHeight: 50, padding: 6 };
+  let timelineClock = null;
   let period = 'all', view = 'timeline';
   const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
   const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
@@ -57,6 +59,7 @@
     getEvents: () => events.filter(e => selected().role === 'all' || participates(e, selected().role)),
     getRole: () => selected().role,
     getDuty: (event, role) => role === 'all' ? '' : event.duties[role]?.trim() || '',
+    onClock: value => { timelineClock = value; updateTimeMarker(); },
     eventPlace, range
   });
   function filtered() {
@@ -89,13 +92,14 @@
     } catch { /* file previews may not permit history updates */ }
   }
   function renderTimeline(list) {
-    const area = $('timelineInner'), [start, end] = periods[period], scale = 2;
+    const area = $('timelineInner'), [start, end] = periods[period];
+    const { scale, trackHeight, padding } = timelineLayout;
     const labelWidth = window.innerWidth <= 540 ? 96 : 130;
     area.style.width = `${labelWidth + (end - start) * scale + 140}px`;
     if (!list.length) { area.style.width = '100%'; area.innerHTML = '<p class="empty">No matching moments. Try another team, time, or search.</p>'; return; }
     let html = '<div class="ruler"><div class="ruler-label">12 NOV · HKT</div>';
     for (let t = Math.ceil(start / 60) * 60; t < end; t += 60) html += `<span class="tick" style="left:${labelWidth + (t - start) * scale}px">${clock(t)}</span>`;
-    html += '</div>';
+    html += '<span id="timeMarkerLabel" class="time-marker-label" hidden></span></div>';
     const { role } = selected();
     const lanes = role === 'all' ? ['overview', 'bride', 'bridesmaids', 'groom', 'groomsmen'] : ['overview', role];
     for (const lane of lanes) {
@@ -109,11 +113,28 @@
         let track = rowEnds.findIndex(last => last <= left);
         if (track < 0) track = rowEnds.length;
         rowEnds[track] = left + width + 5;
-        blocks.push(`<button class="event ${lane}${e.issues?.length ? ' flagged' : ''}" data-event="${text(e.id)}" style="left:${labelWidth + left}px;top:${10 + track * 70}px;width:${width}px" aria-label="${text(range(e) + ', ' + roles[lane][0] + ', ' + e.title)}"><small>${text(e.start)}${e.end ? '–' + text(e.end) : ' ◆'}</small><strong lang="zh-Hant">${text(e.title)}</strong></button>`);
+        blocks.push(`<button class="event ${lane}${e.issues?.length ? ' flagged' : ''}" data-event="${text(e.id)}" style="left:${labelWidth + left}px;top:${padding + track * trackHeight}px;width:${width}px" aria-label="${text(range(e) + ', ' + roles[lane][0] + ', ' + e.title)}"><small>${text(e.start)}${e.end ? '–' + text(e.end) : ' ◆'}</small><strong lang="zh-Hant">${text(e.title)}</strong></button>`);
       }
-      html += `<div class="lane" style="height:${Math.max(1, rowEnds.length) * 70 + 20}px"><div class="lane-label">${roles[lane][0]}<small lang="zh-Hant">${roles[lane][1]}</small></div>${blocks.join('')}</div>`;
+      html += `<div class="lane" style="height:${Math.max(1, rowEnds.length) * trackHeight + padding * 2}px"><div class="lane-label">${roles[lane][0]}<small lang="zh-Hant">${roles[lane][1]}</small></div>${blocks.join('')}</div>`;
     }
-    area.innerHTML = html;
+    area.innerHTML = html + '<div id="timeMarker" class="time-marker" aria-hidden="true" hidden></div>';
+    updateTimeMarker();
+  }
+  function updateTimeMarker() {
+    const marker = $('timeMarker'), label = $('timeMarkerLabel');
+    const [start, end] = periods[period];
+    const available = timelineClock?.isWeddingDay && timelineClock.minutes >= periods.all[0] && timelineClock.minutes < periods.all[1];
+    $('showCurrentTime').disabled = !available;
+    $('showCurrentTime').textContent = timelineClock?.preview ? 'Show preview time' : 'Show now';
+    if (!marker || !label) return;
+    const visible = available && timelineClock.minutes >= start && timelineClock.minutes < end;
+    marker.hidden = label.hidden = !visible;
+    if (!visible) return;
+    const left = (window.innerWidth <= 540 ? 96 : 130) + (timelineClock.minutes - start) * timelineLayout.scale;
+    marker.style.left = `${left}px`;
+    label.style.left = `${left + 6}px`;
+    label.textContent = `${timelineClock.preview ? 'Preview' : 'Now'} ${clock(timelineClock.minutes)}`;
+    label.setAttribute('aria-label', `${timelineClock.preview ? 'Preview time' : 'Current time'} ${clock(timelineClock.minutes)} Hong Kong time`);
   }
   function renderAgenda(list) {
     const { role } = selected();
@@ -141,6 +162,15 @@
   $('search').addEventListener('input', render);
   $('timelineButton').addEventListener('click', () => { view = 'timeline'; render(); });
   $('agendaButton').addEventListener('click', () => { view = 'duties'; render(); });
+  $('showCurrentTime').addEventListener('click', () => {
+    if ($('showCurrentTime').disabled) return;
+    if (timelineClock.minutes < periods[period][0] || timelineClock.minutes >= periods[period][1]) period = 'all';
+    // Clear a search that would leave no timeline to locate the time on.
+    if (!filtered().length) $('search').value = '';
+    view = 'timeline'; render();
+    const marker = $('timeMarker');
+    if (marker && !marker.hidden) $('timeline').scrollLeft = Math.max(0, parseFloat(marker.style.left) - $('timeline').clientWidth * 0.55);
+  });
   document.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; render(); $('timeline').scrollLeft = 0; }));
   document.addEventListener('click', event => {
     const moment = event.target.closest('[data-event]'); if (moment) openEvent(moment.dataset.event);

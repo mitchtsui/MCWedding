@@ -160,6 +160,12 @@
       setHtml(nextTaskOne, state.next[0] ? eventMarkup(state.next[0], role, options.eventPlace, options.range, options.getDuty) : noNext);
       setHtml(nextTaskTwo, state.next[1] ? eventMarkup(state.next[1], role, options.eventPlace, options.range, options.getDuty) : noNext);
       if (previewTimeField) previewTimeField.hidden = !(previewClock && previewClock.checked);
+      const parts = hktParts(effective.date);
+      if (typeof options.onClock === 'function') options.onClock({
+        minutes: parts.hour * 60 + parts.minute,
+        isWeddingDay: compareWeddingDate(parts) === 0,
+        preview: effective.preview
+      });
       return state;
     }
 
