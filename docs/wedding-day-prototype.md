@@ -1,10 +1,26 @@
-# Wedding day prototype — v5, 2026-09-23
+# Wedding day prototype — v6, 2026-09-23
 
 ## Purpose and entry point
 
 `wedding-day.html` is a read-only wedding party rundown prototype, also linked from `admin.html`. The mobile preview is published at https://mc-wedding-ten.vercel.app/wedding-day.html. It can also be opened directly in a browser; there is no build step. Keep `wedding-day.js`, `wedding-day-now.js`, and `wedding-day-data.js` alongside it.
 
 Acceptance: horizontal day timeline, bride/groom activities, bridesmaid/groomsman duties and locations, usable phone layout, wedding-site palette and typography, source-based instructions without invented assignments.
+
+## v6 — refreshed workbook snapshot (2026-09-23)
+
+The couple requested alignment with the updated source workbook. The latest XLSX was downloaded directly from the existing Google Sheets source on 23 September 2026. Its SHA-256 is `66bdc83be5e87d29cfabdac5ec0416fb5cc7d5ec7aa8d814e652b43b7c2c0da6`; the binary stays outside the repository.
+
+- The workbook retains the same five tabs and event rows. All 24 changed source cells are reflected in the refreshed snapshot; this is still a static page, not automatic spreadsheet synchronization.
+- `Rundown` row 22 now places bridal restyling at 14:30–15:00, before the 15:00–16:00 M+ photos. The previous photo overlap is resolved, but the new start overlaps row 21's 14:10–14:40 lunch by ten minutes for the bride and groom; flag both events without changing source times. Row 5's duration was corrected to 150 minutes, resolving its warning. Row 26 still states 30 minutes against 17:00–18:00 (60 minutes), so that warning remains.
+- Row 23 now shows `M+`, rows 25/27/30 show `酒店 ballroom`, and row 29's original ceremony notes include the champagne-together re-entry and Champagne Tower. Resolved missing-location warnings are removed.
+- The aliases added in `重要資料` G7:G10 are preserved. The reception aliases now resolve explicitly to Charlie Lee (Cha) and Ho Shuk Ching (HSC); both names carry the reception responsibility from E26 in their person view, and the obsolete identity question is removed.
+- The 11 changed packing-list status cells from `物資` are refreshed, including normalized spelling/spacing and the newly entered `No` at C31; the tea and photo-order values are unchanged. The existing layout, source-based participation rules, Hong Kong timing module and guest website are unchanged.
+
+### Source alignment validation
+
+- A separate read-only checker compared all 782 source fields: 32 events, six milestones, both continuation rows, all 84 reference rows (304 cells), and ten people with aliases and responsibilities. All match the downloaded XLSX. It also verified the remaining lunch/restyling overlap and row 26 duration warning, the fixed windows and the wedding date. Historical review claims in the existing documentation were encountered but were not used as evidence; the review was not fully isolated.
+- Direct clock checks for bride and groom show both lunch and changing/restyling at 14:35, changing/restyling at 14:45, and photography at 15:00 HKT. Six Chromium browser groups passed at 344/390/744/1440px, covering the new source fields and warnings, the bride's current-task transition, aliases and assigned reception responsibilities, source labels, event and reference dialogs, no page overflow, 44px events and the 11.2px type floor. No JavaScript or console errors. The site fonts loaded; the 390px screenshot was visually inspected.
+- Existing timing tests passed 7/7. Data JavaScript syntax and diff checks passed. Physical Safari/Android and assistive technologies remain untested. Raw workbooks and local test artifacts stay outside Git; no guest database access or writes occurred.
 
 ## v5 — sticky ruler, aligned hours, phone layout (2026-09-23)
 
@@ -61,15 +77,15 @@ Built from the reviewed mockup in `mockups/wedding-day-review-2026-09-23/` (Code
 ## Source and decisions
 
 - Workbook: https://docs.google.com/spreadsheets/d/1Ryel1N44PAf1e1gXTHSHXREiQ72liIyu/edit?gid=311413032
-- Downloaded 2026-09-22; source tabs: 重要資料, Rundown, 敬茶, 影相次序, 物資.
+- Initially downloaded 2026-09-22, refreshed 2026-09-23; source tabs: 重要資料, Rundown, 敬茶, 影相次序, 物資.
 - The linked tab is introductory information. The actual schedule is the Rundown tab.
 - Data includes all 32 timed events, including six milestones with no end time. Row 18 continues row 17; row 36 continues row 35. Neither continuation was discarded.
-- Original Chinese wording is retained. Start/end fields govern the timeline. Two inconsistent duration cells are flagged rather than silently corrected.
+- Original Chinese wording is retained. Start/end fields govern the timeline. Inconsistent duration cells are flagged rather than silently corrected; resolved warnings are removed when the source is corrected.
 - Fixed auspicious windows are preserved; all times are Hong Kong UTC+8.
-- Overlapping 15:00–16:00 makeup and M+ photography remain flagged. Missing locations remain unknown.
+- Bridal restyling is now 14:30–15:00, before 15:00–16:00 M+ photography. The former photo overlap is resolved, but the 14:30–14:40 overlap with lunch is flagged for the bride and groom. Missing locations remain unknown.
 - Participation is distinct from duty-cell completeness. Explicit participants in titles/notes are included by `namedInSource` in the UI, while empty instructions are marked as such. This prevents filtering out the bride's ceremony or the groom's makeup.
 - Row 5 explicitly places the groom at his home, despite the row's overall venue being the bridal hotel. His role view uses that explicit location. Other venues are labelled event locations and the detail view explains role differences.
-- Person selection shows team duties, not invented individual assignments. General responsibilities are from the information tab. Reception lead alias `Cha/ HSC` is preserved verbatim pending confirmation of the full names.
+- Person selection shows team duties, not invented individual assignments. General responsibilities are from the information tab. Reception aliases `Cha/ HSC` now map to Charlie Lee and Ho Shuk Ching, as explicitly identified in the 23 September source.
 - Small timeline blocks have a minimum touch width; exact times are printed. A diamond denotes no stated end time. Overlapping blocks use separate tracks.
 - Tea, photo order, and supplies retain source headers and statuses.
 
