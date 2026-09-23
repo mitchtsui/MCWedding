@@ -1,6 +1,6 @@
 window.WEDDING_DAY = {
   "sourceUrl": "https://docs.google.com/spreadsheets/d/1Ryel1N44PAf1e1gXTHSHXREiQ72liIyu/edit?gid=311413032",
-  "snapshotDate": "2026-09-22",
+  "snapshotDate": "2026-09-23",
   "events": [
     {
       "id": "r5",
@@ -19,9 +19,7 @@ window.WEDDING_DAY = {
         "groomFamily": "休息時間",
         "vendors": "化妝師 Call Time 05:30【請填寫】\n攝影師 Call Time 07:00【請填寫】"
       },
-      "issues": [
-        "時限欄為 105 分鐘，但 05:30–08:00 實際為 150 分鐘"
-      ]
+      "issues": []
     },
     {
       "id": "r6",
@@ -306,13 +304,15 @@ window.WEDDING_DAY = {
         "groomFamily": "Lunch",
         "vendors": "Lunch"
       },
-      "issues": []
+      "issues": [
+        "14:30–14:40「LUNCH」與「新娘換妝」重疊 10 分鐘；新娘及新郎兩段均有安排，請確認午餐結束及換裝時間"
+      ]
     },
     {
       "id": "r22",
       "row": 22,
-      "start": "15:00",
-      "end": "16:00",
+      "start": "14:30",
+      "end": "15:00",
       "title": "新娘換妝",
       "location": "半島酒店",
       "notes": "",
@@ -326,7 +326,7 @@ window.WEDDING_DAY = {
         "vendors": "化妝師為新娘轉妝\n司機約定下午集合時間"
       },
       "issues": [
-        "15:00–16:00「新娘換妝」與「M+ 外景拍攝」重疊"
+        "14:30–14:40「LUNCH」與「新娘換妝」重疊 10 分鐘；新娘及新郎兩段均有安排，請確認午餐結束及換裝時間"
       ]
     },
     {
@@ -335,7 +335,7 @@ window.WEDDING_DAY = {
       "start": "15:00",
       "end": "16:00",
       "title": "外景",
-      "location": "",
+      "location": "M+",
       "notes": "外景地點 M+",
       "duties": {
         "bride": "外景拍攝",
@@ -346,10 +346,7 @@ window.WEDDING_DAY = {
         "groomFamily": "休息",
         "vendors": ""
       },
-      "issues": [
-        "15:00–16:00「新娘換妝」與「M+ 外景拍攝」重疊",
-        "地點欄空白；備註記載「外景地點 M+」"
-      ]
+      "issues": []
     },
     {
       "id": "r24",
@@ -376,7 +373,7 @@ window.WEDDING_DAY = {
       "start": "16:30",
       "end": null,
       "title": "MCTim到場",
-      "location": "",
+      "location": "酒店 ballroom",
       "notes": "",
       "duties": {
         "bride": "",
@@ -387,9 +384,7 @@ window.WEDDING_DAY = {
         "groomFamily": "",
         "vendors": ""
       },
-      "issues": [
-        "地點欄空白"
-      ]
+      "issues": []
     },
     {
       "id": "r26",
@@ -418,7 +413,7 @@ window.WEDDING_DAY = {
       "start": "18:00",
       "end": null,
       "title": "證婚律師Valerie Suen到場",
-      "location": "",
+      "location": "酒店 ballroom",
       "notes": "",
       "duties": {
         "bride": "",
@@ -429,9 +424,7 @@ window.WEDDING_DAY = {
         "groomFamily": "",
         "vendors": ""
       },
-      "issues": [
-        "地點欄空白"
-      ]
+      "issues": []
     },
     {
       "id": "r28",
@@ -459,7 +452,7 @@ window.WEDDING_DAY = {
       "end": "19:00",
       "title": "證婚儀式 + 簽署結婚證書(吉時內)",
       "location": "酒店 Ballroom",
-      "notes": "★ 須於註冊吉時 05:07–07:07 PM 內完成\n➡️MC Opening\n➡️新郎從座位中步出通道中央\n➡️邀請外父帶領新娘進場並交予新郎\n➡️由律師主持證婚儀式\n1.⁠ ⁠請新人宣讀誓詞\n2.⁠ ⁠交換結婚戒指\n3.⁠ ⁠新郎為新娘揭頭紗\n4.⁠ ⁠邀請新郎親吻新娘\n5.⁠ ⁠簽署結婚證書(包括邀請兩位主婚人)\n6.⁠ ⁠律師加簽及蓋印\n7.⁠ ⁠禮成並拍攝合照\n➡️March out \n➡️Re-march in \n➡️拋花球 (TBC)\n➡️合照時段 (Refer to 影相次序 Sheet)\n",
+      "notes": "★ 須於註冊吉時 05:07–07:07 PM 內完成\n➡️MC Opening\n➡️新郎從座位中步出通道中央\n➡️邀請外父帶領新娘進場並交予新郎\n➡️由律師主持證婚儀式\n1.⁠ ⁠請新人宣讀誓詞\n2.⁠ ⁠交換結婚戒指\n3.⁠ ⁠新郎為新娘揭頭紗\n4.⁠ ⁠邀請新郎親吻新娘\n5.⁠ ⁠簽署結婚證書(包括邀請兩位主婚人)\n6.⁠ ⁠律師加簽及蓋印\n7.⁠ ⁠禮成並拍攝合照\n➡️March out \n➡️Re-march in (Champagne together)\n➡️Champagne Tower \n➡️拋花球 (TBC)\n➡️合照時段 (Refer to 影相次序 Sheet)\n",
       "duties": {
         "bride": "",
         "bridesmaids": "協助婚紗裙尾、遞花球",
@@ -477,7 +470,7 @@ window.WEDDING_DAY = {
       "start": "19:00",
       "end": null,
       "title": "NoTime 到場",
-      "location": "",
+      "location": "酒店 ballroom",
       "notes": "",
       "duties": {
         "bride": "",
@@ -488,9 +481,7 @@ window.WEDDING_DAY = {
         "groomFamily": "",
         "vendors": ""
       },
-      "issues": [
-        "地點欄空白"
-      ]
+      "issues": []
     },
     {
       "id": "r31",
@@ -638,24 +629,24 @@ window.WEDDING_DAY = {
       "responsibility": ""
     },
     {
-      "name": "Joanne Chan",
+      "name": "Joanne Chan (J)",
       "role": "bridesmaids",
       "responsibility": "全日記錄及保管金器、利是"
     },
     {
-      "name": "Evelyn Yau",
+      "name": "Evelyn Yau (EV)",
       "role": "bridesmaids",
       "responsibility": "負責女家時間控制、聯絡兄弟團"
     },
     {
-      "name": "Charlie Lee",
+      "name": "Charlie Lee (Cha)",
       "role": "bridesmaids",
-      "responsibility": ""
+      "responsibility": "晚宴簽到、人情袋"
     },
     {
-      "name": "Ho Shuk Ching",
+      "name": "Ho Shuk Ching (HSC)",
       "role": "bridesmaids",
-      "responsibility": ""
+      "responsibility": "晚宴簽到、人情袋"
     },
     {
       "name": "Simon Yu",
@@ -951,7 +942,7 @@ window.WEDDING_DAY = {
       [
         "回禮禮物",
         null,
-        "in progress",
+        "In progress",
         null
       ],
       [
@@ -1011,49 +1002,49 @@ window.WEDDING_DAY = {
       [
         "C&M Pajamas",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "C&M 便服 / 便服鞋",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "化妝品/落妝用品",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "充電器",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "隱形眼鏡 / 眼鏡",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "花球(中式)",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "襟花/手花",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
         "利是",
         null,
-        "Yes ",
+        "Yes",
         null
       ],
       [
@@ -1095,7 +1086,7 @@ window.WEDDING_DAY = {
       [
         "紙巾",
         null,
-        null,
+        "No",
         null
       ],
       [
@@ -1167,7 +1158,7 @@ window.WEDDING_DAY = {
       [
         "Blue Tab",
         null,
-        "NO",
+        "No",
         null
       ],
       [
