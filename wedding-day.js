@@ -1,3 +1,77 @@
+/* Phone layout (540px and below): move the same controls into their phone slots; never duplicate IDs or form state. */
+(() => {
+  'use strict';
+  const $ = id => document.getElementById(id);
+  const phone = window.matchMedia('(max-width: 540px)');
+  const controls = document.querySelector('.controls');
+  const moves = [
+    ['personField', 'mobilePerson'],
+    ['rundownNotice', 'mobilePlanningContent'],
+    ['roleNote', 'mobilePlanningContent'],
+    ['clockControls', 'mobilePlanningContent'],
+    ['showCurrentTime', 'mobileJump'],
+    ['toggleSearch', 'controlRow'],
+    ['searchField', 'controlRow']
+  ].map(([id, target]) => {
+    const node = $(id), origin = document.createComment(`${id} desktop position`);
+    node.before(origin);
+    return { node, origin, target: $(target) };
+  });
+  function updateSearchState() {
+    const active = Boolean($('search').value.trim());
+    $('toggleSearch').classList.toggle('has-query', active);
+    $('toggleSearch').setAttribute('aria-label', active ? `Search, active filter: ${$('search').value}` : 'Search moments or places');
+    $('clearSearch').hidden = !phone.matches || !active || controls.classList.contains('search-open');
+    $('clearSearch').setAttribute('aria-label', `Clear filter: ${$('search').value}`);
+  }
+  function setSearchOpen(open) {
+    controls.classList.toggle('search-open', open);
+    $('toggleSearch').setAttribute('aria-expanded', String(open));
+    updateSearchState();
+  }
+  function applyLayout() {
+    const active = document.activeElement;
+    const movedFocus = moves.some(({ node }) => node.contains(active));
+    moves.forEach(({ node, origin, target }) => {
+      if (phone.matches) target.append(node);
+      else origin.after(node);
+    });
+    // Preserve an in-progress edit when rotation moves its control into a disclosure.
+    if (phone.matches && movedFocus && $('mobilePlanningContent').contains(active)) $('mobilePlanningNotes').open = true;
+    setSearchOpen(phone.matches && (Boolean($('search').value.trim()) || active === $('search')));
+    updateSearchState();
+    if (!phone.matches && active === $('toggleSearch')) $('search').focus({ preventScroll: true });
+    else if (movedFocus) active.focus({ preventScroll: true });
+  }
+  $('toggleSearch').addEventListener('click', () => {
+    const open = !controls.classList.contains('search-open');
+    setSearchOpen(open);
+    if (open) $('search').focus({ preventScroll: true });
+  });
+  $('clearSearch').addEventListener('click', () => {
+    $('search').value = '';
+    $('search').dispatchEvent(new Event('input', { bubbles: true }));
+    $('toggleSearch').focus({ preventScroll: true });
+  });
+  $('search').addEventListener('input', updateSearchState);
+  $('search').addEventListener('search', updateSearchState);
+  $('search').addEventListener('keydown', event => {
+    if (event.key === 'Escape' && phone.matches && !$('search').value) {
+      setSearchOpen(false);
+      $('toggleSearch').focus({ preventScroll: true });
+    }
+  });
+  $('mobileSourceStatus').addEventListener('click', event => {
+    event.preventDefault();
+    const notes = $('mobilePlanningNotes');
+    notes.open = true;
+    notes.querySelector('summary').focus({ preventScroll: true });
+    notes.scrollIntoView({ block: 'start' });
+  });
+  phone.addEventListener('change', applyLayout);
+  applyLayout();
+})();
+
 /* Read-only, source-based prototype. No RSVP, guest database, or shared writes. */
 (() => {
   'use strict';
@@ -17,6 +91,7 @@
   const timelineLayout = { scale: 2, trackHeight: 50, padding: 6 };
   let timelineClock = null;
   let initialTimePositionPending = true;
+  let savedScrollLeft = 0, renderedTimelineWidth = 0;
   let period = 'all', view = 'timeline';
   const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
   const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
@@ -56,11 +131,34 @@
     const person = value.startsWith('person-') ? people[Number(value.slice(7))] : null;
     return { role: person?.role || value, person };
   }
+  // A reader who has scrolled past the summary panel keeps the same visual spot when a clock
+  // update changes the panel's height. Native scroll anchoring is off (html{overflow-anchor:none}),
+  // so this is the only adjustment; a scroll or an open dialog in the meantime wins.
+  const readingAnchor = (() => {
+    let snapshot = null, frame = 0;
+    return {
+      before() {
+        cancelAnimationFrame(frame);
+        const panel = document.querySelector('.now-next'), anchor = document.querySelector('.section-heading');
+        snapshot = panel.getBoundingClientRect().bottom <= 0 && !$('details').open
+          ? { anchor, top: anchor.getBoundingClientRect().top, scrollY: window.scrollY } : null;
+      },
+      after() {
+        const saved = snapshot; snapshot = null;
+        if (!saved) return;
+        frame = requestAnimationFrame(() => {
+          if (Math.abs(window.scrollY - saved.scrollY) > 1) return;
+          const delta = saved.anchor.getBoundingClientRect().top - saved.top;
+          if (Math.abs(delta) > 0.5) window.scrollBy(0, delta);
+        });
+      }
+    };
+  })();
   const nowNext = window.WeddingDayNow.create({
-    getEvents: () => events.filter(e => selected().role === 'all' || participates(e, selected().role)),
+    getEvents: () => { readingAnchor.before(); return events.filter(e => selected().role === 'all' || participates(e, selected().role)); },
     getRole: () => selected().role,
     getDuty: (event, role) => role === 'all' ? '' : event.duties[role]?.trim() || '',
-    onClock: value => { timelineClock = value; updateTimeMarker(); },
+    onClock: value => { timelineClock = value; updateTimeMarker(); readingAnchor.after(); },
     eventPlace, range
   });
   function filtered() {
@@ -75,13 +173,26 @@
     if (person) return `${person.name}${person.responsibility ? ' · ' + person.responsibility : ''}. Showing the ${roles[role][0].toLowerCase()} team’s duties; unnamed tasks are not individual assignments.`;
     return role === 'all' ? 'Everyone’s schedule. Select your name or team to focus on your duties.' : `${roles[role][0]} activities and team instructions from the sheet. A blank duty cell does not mean you can skip an activity; 【一人】 / 【兩人】 need named owners.`;
   }
-  function render() {
+  function rememberScroll() {
+    const timeline = $('timeline');
+    // A resize can clamp scrollLeft against the old track before our resize callback.
+    // Only remember positions from the viewport width for which the track was rendered.
+    if (!$('timelineView').hidden && $('timelineInner').dataset.hasEvents === 'true'
+      && timeline.clientWidth === renderedTimelineWidth) savedScrollLeft = timeline.scrollLeft;
+  }
+  function syncRuler() {
+    $('rulerInner').style.transform = `translateX(${-$('timeline').scrollLeft}px)`;
+  }
+  function render({ resetPosition = false } = {}) {
+    if (resetPosition) savedScrollLeft = 0;
+    else rememberScroll();
     const list = filtered();
     const { role, person } = selected();
     $('taskScope').textContent = person ? `${person.name} · ${roles[role][0]} team schedule` : role === 'all' ? 'Everyone’s schedule' : `${roles[role][0]} · ${roles[role][1]}`;
     nowNext.update();
     $('roleNote').textContent = roleNote();
-    $('resultCount').textContent = `${list.length} moments · ${period === 'all' ? '05:30–23:45' : `${clock(periods[period][0])}–${period === 'evening' ? '23:45' : clock(periods[period][1])}`} HKT · Tap for full instructions`;
+    const periodText = period === 'all' ? '05:30–23:45' : `${clock(periods[period][0])}–${period === 'evening' ? '23:45' : clock(periods[period][1])}`;
+    $('resultCount').innerHTML = `${list.length} moments<span class="result-range"> · ${periodText}</span> · HKT<span class="result-hint"> · Tap for full instructions</span>`;
     $('timelineView').hidden = view !== 'timeline'; $('agendaView').hidden = view !== 'duties';
     $('timelineButton').setAttribute('aria-pressed', view === 'timeline');
     $('agendaButton').setAttribute('aria-pressed', view === 'duties');
@@ -96,12 +207,18 @@
     const area = $('timelineInner'), [start, end] = periods[period];
     const { scale, trackHeight, padding } = timelineLayout;
     const labelWidth = window.innerWidth <= 540 ? 96 : 130;
-    area.style.minWidth = '';
-    area.style.width = `${labelWidth + (end - start) * scale + 140}px`;
+    const visibleTimeWidth = Math.max(0, $('timeline').clientWidth - labelWidth);
+    const width = Math.ceil(labelWidth + (end - start) * scale + visibleTimeWidth * 0.9);
+    area.style.width = `${width}px`;
+    area.style.setProperty('--grid-offset', `${labelWidth + ((60 - start % 60) % 60) * scale}px`);
+    area.dataset.hasEvents = String(Boolean(list.length));
+    $('timelineRuler').hidden = !list.length;
     if (!list.length) { area.style.width = '100%'; area.innerHTML = '<p class="empty">No matching moments. Try another team, time, or search.</p>'; return; }
-    let html = '<div class="ruler"><div class="ruler-label">12 NOV · HKT</div>';
-    for (let t = Math.ceil(start / 60) * 60; t < end; t += 60) html += `<span class="tick" style="left:${labelWidth + (t - start) * scale}px">${clock(t)}</span>`;
-    html += '<span id="timeMarkerLabel" class="time-marker-label" hidden></span></div>';
+    let ticks = '';
+    for (let t = Math.ceil(start / 60) * 60; t < end; t += 60) ticks += `<span class="tick" style="left:${labelWidth + (t - start) * scale}px">${clock(t)}</span>`;
+    $('rulerInner').style.width = `${width}px`;
+    $('rulerInner').innerHTML = ticks + '<span id="timeMarkerLabel" class="time-marker-label" hidden></span><span id="timeMarkerDot" class="ruler-marker" hidden></span>';
+    let html = '';
     const { role } = selected();
     const lanes = role === 'all' ? ['overview', 'bride', 'bridesmaids', 'groom', 'groomsmen'] : ['overview', role];
     for (const lane of lanes) {
@@ -115,13 +232,19 @@
         let track = rowEnds.findIndex(last => last <= left);
         if (track < 0) track = rowEnds.length;
         rowEnds[track] = left + width + 5;
-        blocks.push(`<button class="event ${lane}${e.issues?.length ? ' flagged' : ''}" data-event="${text(e.id)}" style="left:${labelWidth + left}px;top:${padding + track * trackHeight}px;width:${width}px" aria-label="${text(range(e) + ', ' + roles[lane][0] + ', ' + e.title)}"><small>${text(e.start)}${e.end ? '–' + text(e.end) : ' ◆'}</small><strong lang="zh-Hant">${text(e.title)}</strong></button>`);
+        blocks.push(`<button class="event ${lane}${e.issues?.length ? ' flagged' : ''}" data-event="${text(e.id)}" title="${text(range(e) + ' · ' + e.title)}" style="left:${labelWidth + left}px;top:${padding + track * trackHeight}px;width:${width}px" aria-label="${text(range(e) + ', ' + roles[lane][0] + ', ' + e.title)}"><small>${text(e.start)}${e.end ? '–' + text(e.end) : ' ◆'}</small><strong lang="zh-Hant">${text(e.title)}</strong></button>`);
       }
       html += `<div class="lane" style="height:${Math.max(1, rowEnds.length) * trackHeight + padding * 2}px"><div class="lane-label">${roles[lane][0]}<small lang="zh-Hant">${roles[lane][1]}</small></div>${blocks.join('')}</div>`;
     }
     area.innerHTML = html + '<div id="timeMarker" class="time-marker" aria-hidden="true" hidden></div>';
     updateTimeMarker();
-    if (initialTimePositionPending && positionAtCurrentTime()) initialTimePositionPending = false;
+    if (!$('timelineView').hidden) {
+      renderedTimelineWidth = $('timeline').clientWidth;
+      $('timeline').scrollLeft = savedScrollLeft;
+      savedScrollLeft = $('timeline').scrollLeft;
+      syncRuler();
+      if (initialTimePositionPending && positionAtCurrentTime()) initialTimePositionPending = false;
+    }
   }
   function positionAtCurrentTime() {
     const marker = $('timeMarker'), timeline = $('timeline');
@@ -131,23 +254,25 @@
     const markerLeft = parseFloat(marker.style.left);
     // Keep 10% of the visible time grid before the line, outside the fixed labels.
     const target = Math.max(0, markerLeft - labelWidth - visibleTimeWidth * 0.1);
-    // Allow the same framing late in the day, even when no later events remain.
-    $('timelineInner').style.minWidth = `${Math.ceil(target + timeline.clientWidth)}px`;
     timeline.scrollLeft = target;
+    savedScrollLeft = timeline.scrollLeft;
+    syncRuler();
     return true;
   }
   function updateTimeMarker() {
-    const marker = $('timeMarker'), label = $('timeMarkerLabel');
+    const marker = $('timeMarker'), label = $('timeMarkerLabel'), dot = $('timeMarkerDot');
     const [start, end] = periods[period];
     const available = timelineClock?.isWeddingDay && timelineClock.minutes >= periods.all[0] && timelineClock.minutes < periods.all[1];
     $('showCurrentTime').disabled = !available;
-    $('showCurrentTime').textContent = timelineClock?.preview ? 'Show preview time' : 'Show now';
+    $('showCurrentTime').textContent = timelineClock?.preview ? (window.innerWidth <= 540 ? `Preview ${clock(timelineClock.minutes)}` : 'Show preview time') : 'Show now';
+    $('showCurrentTime').setAttribute('aria-label', timelineClock?.preview ? `Show preview time ${clock(timelineClock.minutes)} Hong Kong time` : 'Show current time on the timeline');
     if (!marker || !label) return;
     const visible = available && timelineClock.minutes >= start && timelineClock.minutes < end;
-    marker.hidden = label.hidden = !visible;
+    marker.hidden = label.hidden = dot.hidden = !visible;
     if (!visible) return;
     const left = (window.innerWidth <= 540 ? 96 : 130) + (timelineClock.minutes - start) * timelineLayout.scale;
     marker.style.left = `${left}px`;
+    dot.style.left = `${left}px`;
     label.style.left = `${left + 6}px`;
     label.textContent = `${timelineClock.preview ? 'Preview' : 'Now'} ${clock(timelineClock.minutes)}`;
     label.setAttribute('aria-label', `${timelineClock.preview ? 'Preview time' : 'Current time'} ${clock(timelineClock.minutes)} Hong Kong time`);
@@ -182,7 +307,10 @@
     if ($('showCurrentTime').disabled) return;
     if (timelineClock.minutes < periods[period][0] || timelineClock.minutes >= periods[period][1]) period = 'all';
     // Clear a search that would leave no timeline to locate the time on.
-    if (!filtered().length) $('search').value = '';
+    if (!filtered().length) {
+      $('search').value = '';
+      $('search').dispatchEvent(new Event('search'));
+    }
     view = 'timeline'; render();
     if (positionAtCurrentTime()) initialTimePositionPending = false;
   }
@@ -194,14 +322,27 @@
   $('previewClock').addEventListener('change', previewTimeChanged);
   $('previewTime').addEventListener('input', previewTimeChanged);
   $('previewTime').addEventListener('change', previewTimeChanged);
-  document.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => { period = b.dataset.period; render(); $('timeline').scrollLeft = 0; }));
+  document.querySelectorAll('[data-period]').forEach(b => b.addEventListener('click', () => {
+    period = b.dataset.period; render({ resetPosition: true });
+    if (!positionAtCurrentTime() && view !== 'timeline') initialTimePositionPending = true;
+  }));
   document.addEventListener('click', event => {
     const moment = event.target.closest('[data-event]'); if (moment) openEvent(moment.dataset.event);
     const ref = event.target.closest('[data-reference]'); if (ref) showReference(ref.dataset.reference);
   });
   $('details').querySelector('.close').addEventListener('click', () => $('details').close());
   $('details').addEventListener('click', event => { if (event.target === $('details')) { const rect = $('details').getBoundingClientRect(); if (event.clientX < rect.left || event.clientX > rect.right || event.clientY < rect.top || event.clientY > rect.bottom) $('details').close(); } });
-  let mobile = window.innerWidth <= 540;
-  window.addEventListener('resize', () => { const next = window.innerWidth <= 540; if (next !== mobile) { mobile = next; renderTimeline(filtered()); } });
+  function updateRulerTop() {
+    const controls = document.querySelector('.controls');
+    $('timelineRuler').style.top = `${getComputedStyle(controls).position === 'sticky' ? controls.getBoundingClientRect().height : 0}px`;
+  }
+  $('timeline').addEventListener('scroll', () => { rememberScroll(); syncRuler(); }, { passive: true });
+  new ResizeObserver(updateRulerTop).observe(document.querySelector('.controls'));
+  let resizeFrame;
+  window.addEventListener('resize', () => {
+    cancelAnimationFrame(resizeFrame);
+    resizeFrame = requestAnimationFrame(() => { rememberScroll(); renderTimeline(filtered()); updateRulerTop(); });
+  });
   render();
+  updateRulerTop();
 })();
