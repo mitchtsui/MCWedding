@@ -91,7 +91,7 @@
   const timelineLayout = { scale: 2, trackHeight: 50, padding: 6 };
   let timelineClock = null;
   let initialTimePositionPending = true;
-  let savedScrollLeft = 0;
+  let savedScrollLeft = 0, renderedTimelineWidth = 0;
   let period = 'all', view = 'timeline';
   const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
   const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
@@ -174,7 +174,11 @@
     return role === 'all' ? 'Everyone’s schedule. Select your name or team to focus on your duties.' : `${roles[role][0]} activities and team instructions from the sheet. A blank duty cell does not mean you can skip an activity; 【一人】 / 【兩人】 need named owners.`;
   }
   function rememberScroll() {
-    if (!$('timelineView').hidden && $('timelineInner').dataset.hasEvents === 'true') savedScrollLeft = $('timeline').scrollLeft;
+    const timeline = $('timeline');
+    // A resize can clamp scrollLeft against the old track before our resize callback.
+    // Only remember positions from the viewport width for which the track was rendered.
+    if (!$('timelineView').hidden && $('timelineInner').dataset.hasEvents === 'true'
+      && timeline.clientWidth === renderedTimelineWidth) savedScrollLeft = timeline.scrollLeft;
   }
   function syncRuler() {
     $('rulerInner').style.transform = `translateX(${-$('timeline').scrollLeft}px)`;
@@ -235,7 +239,9 @@
     area.innerHTML = html + '<div id="timeMarker" class="time-marker" aria-hidden="true" hidden></div>';
     updateTimeMarker();
     if (!$('timelineView').hidden) {
+      renderedTimelineWidth = $('timeline').clientWidth;
       $('timeline').scrollLeft = savedScrollLeft;
+      savedScrollLeft = $('timeline').scrollLeft;
       syncRuler();
       if (initialTimePositionPending && positionAtCurrentTime()) initialTimePositionPending = false;
     }
@@ -330,7 +336,7 @@
     const controls = document.querySelector('.controls');
     $('timelineRuler').style.top = `${getComputedStyle(controls).position === 'sticky' ? controls.getBoundingClientRect().height : 0}px`;
   }
-  $('timeline').addEventListener('scroll', syncRuler, { passive: true });
+  $('timeline').addEventListener('scroll', () => { rememberScroll(); syncRuler(); }, { passive: true });
   new ResizeObserver(updateRulerTop).observe(document.querySelector('.controls'));
   let resizeFrame;
   window.addEventListener('resize', () => {
