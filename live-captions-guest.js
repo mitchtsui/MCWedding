@@ -284,7 +284,7 @@
       language = button.dataset.language;
       savePreference(languageKey, language);
       localize();
-      if (liveLanguageChanged) void liveLanguageChanged();
+      if (liveLanguageChanged) liveLanguageChanged().catch(error => liveStatus('waiting', error.message));
     });
   });
 
@@ -331,35 +331,36 @@
     renderStatus(); renderSegments();
   }
   async function initLive() {
-    let client, api, token = '', eventId = '', runId = '', subscription = null, store = null, syncing = false, buffered = [], heartbeatTimer = null, fallbackTimer = null;
-    const savedKey = 'mc-captions-guest-event';
-    let selectionEpoch = 0;
-    const request = async (action, payload) => {
-      token = await window.CaptionsLive.accessToken(client); if (!token) throw new Error('Caption access expired');
-      return api.request(action, payload, token);
-    };
+    let client, api, guestKey = null, eventId = '', runId = '', guestToken = '', deviceId = '', subscription = null, store = null, syncing = false, buffered = [], heartbeatTimer = null, fallbackTimer = null;
+    const savedKey = 'mc-captions-guest-link';
+    let selectionEpoch = 0, inbox = Promise.resolve();
+    // The QR link's code is the guest's only key; the server checks it on every snapshot.
+    const request = (_action, payload) => api.request('guestSnapshot', { ...payload, ...(payload.runId ? {} : { runId: undefined }), token: guestToken, deviceId });
     const statusFromBatch = value => value === 'paused' ? 'paused' : ['ended', 'stopped'].includes(value) ? 'ended' :
       ['publisher.expired', 'stream.gap', 'waiting', 'disconnected'].includes(value) ? 'waiting' : 'playing';
-    const noticeFromBatch = value => ['publisher.expired', 'disconnected'].includes(value) ? 'The live publisher connection expired. Waiting for the operator to reconnect.' :
-      value === 'stream.gap' ? 'A caption delivery gap was detected. Resynchronizing from the private snapshot.' : '';
+    const noticeFromBatch = value => ['publisher.expired', 'disconnected'].includes(value) ? 'The live caption connection paused. Waiting for the operator to reconnect.' :
+      value === 'stream.gap' ? 'Some captions were delayed. Catching up.' : '';
     const renderStore = value => {
       snapshot = { status: statusFromBatch(value?.status), revision: value?.messageSeq || 0,
         segments: store.segments(language).map(item => ({ id: item.segmentId, order: item.segmentOrder, text: { [language]: item.text } })), notice: noticeFromBatch(value?.status) };
       renderStatus(); renderSegments({ preserveAnchor: isReadingHistory() });
     };
+    const remember = () => { try { localStorage.setItem(savedKey, JSON.stringify({ eventId, runId, token: guestToken })); } catch (_) { /* A fresh scan restores access. */ } };
     function adoptRun(value) {
-      if (value.runId === runId) return;
+      if (!value.runId || value.runId === runId) return;
       runId = value.runId;
       store = new window.CaptionsLive.CaptionStore(() => void resync()); store.eventId = eventId;
-      try { localStorage.setItem(savedKey, JSON.stringify({ eventId, runId })); } catch (_) { /* Auth remains authoritative. */ }
+      remember();
     }
+    const waitingForStart = () => { snapshot = { status: 'waiting', revision: 0, segments: [], notice: 'Captions will appear here when the speeches begin.' }; renderStatus(); renderSegments(); };
     async function resync() {
-      if (!eventId || !runId || !store || syncing) return; syncing = true;
+      if (!eventId || syncing) return; syncing = true;
       const selected = selectionEpoch;
       try { const value = await window.CaptionsLive.currentSnapshot(request, { eventId, runId, language });
         if (selected !== selectionEpoch) return;
+        if (value.waiting) { waitingForStart(); return; }
         adoptRun(value); store.merge(value); buffered.forEach(batch => store.merge(batch)); buffered = []; renderStore(value); }
-      catch (error) { if (selected === selectionEpoch) liveStatus('waiting', error.message); }
+      catch (error) { if (selected === selectionEpoch) liveStatus(error.code === 'GUEST_LINK_INVALID' ? 'ended' : 'waiting', error.message); }
       finally { if (selected === selectionEpoch) syncing = false; }
     }
     function scheduleFallback() {
@@ -367,53 +368,48 @@
     }
     function heartbeat(value) {
       if (!value || value.eventId !== eventId || value.language !== language) return;
-      if (value.runId !== runId) { void resync(); return; }
+      if (value.runId !== runId || !store) { void resync(); return; }
       if (window.CaptionsLive.heartbeatNeedsSnapshot(store, value)) void resync();
-      clearTimeout(heartbeatTimer); heartbeatTimer = setTimeout(() => liveStatus('waiting', 'The private caption heartbeat expired. Waiting for the operator to reconnect.'), 25000);
+      clearTimeout(heartbeatTimer); heartbeatTimer = setTimeout(() => liveStatus('waiting', 'The live caption connection paused. Waiting for the operator to reconnect.'), 25000);
       snapshot.status = statusFromBatch(value.status); snapshot.notice = noticeFromBatch(value.status); renderStatus();
     }
+    // Messages are checked one at a time, in arrival order, and anything not signed by the caption server is dropped.
+    const verified = (selected, handle) => envelope => { inbox = inbox.then(async () => {
+      const value = await window.CaptionsLive.openEnvelope(guestKey, envelope); if (value && selected === selectionEpoch) handle(value); }).catch(() => undefined); };
     async function selectLanguage() {
       const selected = ++selectionEpoch;
       subscription?.close(); clearTimeout(heartbeatTimer); clearTimeout(fallbackTimer); subscription = null; buffered = []; syncing = true;
-      store = new window.CaptionsLive.CaptionStore(() => void resync()); store.eventId = eventId;
+      store = runId ? new window.CaptionsLive.CaptionStore(() => void resync()) : null; if (store) store.eventId = eventId;
       const initial = await window.CaptionsLive.currentSnapshot(request, { eventId, runId, language });
       if (selected !== selectionEpoch) return;
-      adoptRun(initial);
-      if (!initial.topic) throw new Error('Private caption channel unavailable');
+      if (!initial.guestTopic || !initial.publicKey) throw new Error('Live captions are not available for this link');
+      guestKey ??= await window.CaptionsLive.importGuestKey(initial.publicKey);
+      if (initial.waiting) waitingForStart(); else adoptRun(initial);
       await new Promise((resolve, reject) => { let subscribed = false;
-        const timer = setTimeout(() => reject(new Error('Private caption channel timed out')), 5000);
-        subscription = window.CaptionsLive.subscribe(client, initial.topic,
-          batch => { if (selected !== selectionEpoch) return; if (syncing) buffered.push(batch); else if (batch.runId !== runId) { void resync(); } else { const changed = store.merge(batch); if (changed && !syncing) renderStore(batch); } },
-          state => { if (state === 'SUBSCRIBED') { if (subscribed) void resync(); else { subscribed = true; clearTimeout(timer); resolve(); } } else if (state === 'CHANNEL_ERROR') { if (!subscribed) { clearTimeout(timer); reject(new Error('Private caption channel failed')); } } }, heartbeat);
+        const timer = setTimeout(() => reject(new Error('The caption channel did not connect')), 8000);
+        subscription = window.CaptionsLive.subscribe(client, initial.guestTopic,
+          verified(selected, batch => { if (syncing || !store) buffered.push(batch); else if (batch.runId !== runId) { void resync(); } else { const changed = store.merge(batch); if (changed && !syncing) renderStore(batch); } }),
+          state => { if (state === 'SUBSCRIBED') { if (subscribed) void resync(); else { subscribed = true; clearTimeout(timer); resolve(); } } else if (state === 'CHANNEL_ERROR') { if (!subscribed) { clearTimeout(timer); reject(new Error('The caption channel failed to connect')); } } },
+          verified(selected, heartbeat), { private: false });
       });
       if (selected !== selectionEpoch) return;
-      const current = await window.CaptionsLive.currentSnapshot(request, { eventId, runId, language });
-      if (selected !== selectionEpoch) return;
-      adoptRun(current);
-      store.merge(current); buffered.forEach(batch => store.merge(batch)); buffered = []; syncing = false; renderStore(current); scheduleFallback();
+      syncing = false; await resync(); scheduleFallback();
     }
     try {
-      liveStatus('waiting', 'Checking private caption access...');
+      liveStatus('waiting', 'Opening live captions...');
       await loadScript('/api/config.js'); await loadScript('vendor/supabase.js'); await loadScript('live-captions-client.js');
       api = window.CaptionsLive.create(); const config = await api.request('config');
-      if (!config.enabled || !config.guestAuthReady) throw new Error('Live captions are not available yet');
-      client = window.CaptionsLive.createSupabase(window, 'mc-captions-guest-auth', false); if (!client) throw new Error('Private caption access is unavailable');
-      let session = (await client.auth.getSession())?.data?.session;
-      if (!session) { const result = await client.auth.signInAnonymously(); if (result.error) throw result.error; session = result.data?.session; }
-      if (!session?.access_token) throw new Error('Private caption access could not be established'); token = session.access_token;
+      if (!config.enabled || !config.guestLinksReady) throw new Error('Live captions are not available yet');
+      client = window.CaptionsLive.createSupabase(window, 'mc-captions-guest', false); if (!client) throw new Error('Live captions are unavailable');
+      try { deviceId = localStorage.getItem('mc-captions-device') || ''; if (!/^[A-Za-z0-9_-]{8,64}$/.test(deviceId)) { deviceId = (crypto.randomUUID?.() || String(Math.random()).slice(2) + Date.now()).replace(/[^A-Za-z0-9_-]/g, ''); localStorage.setItem('mc-captions-device', deviceId); } } catch (_) { deviceId = ''; }
       const query = new URLSearchParams(location.search), invite = window.CaptionsLive.fragmentToken(location.hash);
-      const fragmentEvent = query.get('event') || window.CaptionsLive.fragmentEventId(location.hash), fragmentRun = query.get('run') || window.CaptionsLive.fragmentRunId(location.hash);
-      if (invite && fragmentEvent) {
-        const redeemed = await request('redeem', { eventId: fragmentEvent, token: invite });
-        eventId = redeemed.eventId || fragmentEvent; runId = redeemed.runId || fragmentRun; window.CaptionsLive.clearFragment(history, location);
-        try { localStorage.setItem(savedKey, JSON.stringify({ eventId, runId })); } catch (_) { /* Identity remains in the auth session. */ }
-      } else {
-        try { const saved = JSON.parse(localStorage.getItem(savedKey) || '{}'); eventId = saved.eventId || ''; runId = saved.runId || ''; } catch (_) { /* A fresh invite is required. */ }
-      }
-      if (!eventId || !runId) throw new Error('Open the private guest link supplied by the operator');
+      const linkEvent = query.get('event') || window.CaptionsLive.fragmentEventId(location.hash), linkRun = query.get('run') || window.CaptionsLive.fragmentRunId(location.hash);
+      if (invite && linkEvent) { eventId = linkEvent; runId = linkRun || ''; guestToken = invite; remember(); window.CaptionsLive.clearFragment(history, location); }
+      else { try { const saved = JSON.parse(localStorage.getItem(savedKey) || '{}'); eventId = saved.eventId || ''; runId = saved.runId || ''; guestToken = saved.token || ''; } catch (_) { /* A fresh scan is required. */ } }
+      if (!eventId || !guestToken) throw new Error('Scan the live captions QR code to open this page');
       preview = { enabled: true }; $('previewBanner').hidden = true; $('sampleLink').hidden = true;
-      window.CaptionsLive.keepRealtimeAuth(client); await selectLanguage(); liveLanguageChanged = selectLanguage;
-      document.addEventListener('visibilitychange', () => { if (!document.hidden) { if (client.realtime?.setAuth) void window.CaptionsLive.accessToken(client).then(value => client.realtime.setAuth(value)); void resync(); } });
+      await selectLanguage(); liveLanguageChanged = selectLanguage;
+      document.addEventListener('visibilitychange', () => { if (!document.hidden) void resync(); });
       window.addEventListener('pagehide', event => { if (!event.persisted) { clearTimeout(heartbeatTimer); clearTimeout(fallbackTimer); subscription?.close(); } });
     } catch (error) { liveStatus('ended', error.message); $('previewBanner').hidden = false; $('previewBannerText').textContent = 'Live captions unavailable'; $('previewBannerNote').textContent = error.message; }
   }

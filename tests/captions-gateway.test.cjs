@@ -5,7 +5,9 @@ const assert = require('node:assert/strict');
 const { EventEmitter } = require('node:events');
 const { once } = require('node:events');
 const { WebSocket } = require('ws');
-const { CaptionGateway } = require('../lib/captions/gateway.cjs');
+const crypto = require('node:crypto');
+const { CaptionGateway, SupabaseBroadcastPublisher } = require('../lib/captions/gateway.cjs');
+const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
 const captionsStreamServer = require('../api/captions-stream.js');
 const { FRAME_BYTES } = require('../lib/captions/protocol.cjs');
 
@@ -517,6 +519,56 @@ test('a failure after ASR opens during authentication closes the connection and 
   assert(asr.closed >= 1, 'the opened provider is closed');
   for (const timer of ['authTimer', 'heartbeatTimer', 'leaseTimer', 'rotateTimer', 'shutdownTimer']) {
     assert(session[timer] === undefined || session[timer]._destroyed, `${timer} is not left running`);
+  }
+});
+
+test('the broadcast publisher sends a signed public guest copy in the same request, and that request failing fails the publish', async () => {
+  const signer = createGuestSigner({ CAPTIONS_GUEST_SIGNING_KEY: crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' })
+    .privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64') });
+  const requests = []; let status = 202;
+  const publisher = new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co/', serviceRoleKey: 'secret', guestSigner: signer,
+    fetchImpl: async (url, options) => { requests.push({ url, messages: JSON.parse(options.body).messages }); return { ok: status < 300, status }; } });
+  const eventId = '11111111-1111-4111-8111-111111111111';
+  for (const [event, payload] of [['caption.batch', { type: 'caption.batch', eventId, language: 'zh-CN', messageSeq: 7, updates: [] }],
+    ['heartbeat', { type: 'heartbeat', eventId, language: 'zh-CN', messageSeq: 7, status: 'live' }]]) {
+    await publisher.publish(`caption:${eventId}:zh-CN`, event, payload);
+    const { url, messages } = requests.at(-1);
+    assert.equal(url, 'https://test.supabase.co/realtime/v1/api/broadcast');
+    assert.deepEqual(messages[0], { topic: `caption:${eventId}:zh-CN`, event, payload, private: true });
+    assert.deepEqual({ ...messages[1], payload: undefined }, { topic: signer.topicFor(eventId, 'zh-CN'), event, payload: undefined, private: false });
+    assert.deepEqual(JSON.parse(messages[1].payload.data), payload);
+    const key = await crypto.webcrypto.subtle.importKey('jwk', signer.publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    assert.equal(await crypto.webcrypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key,
+      Buffer.from(messages[1].payload.sig, 'base64url'), new TextEncoder().encode(messages[1].payload.data)), true);
+  }
+  status = 500;
+  await assert.rejects(publisher.publish(`caption:${eventId}:en`, 'caption.batch', { type: 'caption.batch' }), error => error.code === 'broadcast_failed');
+  assert.equal(requests.at(-1).messages.length, 2);
+});
+
+test('without a guest signing key the publisher sends only the private message, as before', async () => {
+  const saved = process.env.CAPTIONS_GUEST_SIGNING_KEY, requests = [];
+  const fetchImpl = async (url, options) => { requests.push(JSON.parse(options.body).messages); return { ok: true, status: 202 }; };
+  try {
+    delete process.env.CAPTIONS_GUEST_SIGNING_KEY;
+    for (const publisher of [new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'secret', fetchImpl }),
+      new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'secret', fetchImpl, guestSigner: null })]) {
+      await publisher.publish('caption:event-1:en', 'heartbeat', { type: 'heartbeat' });
+      assert.deepEqual(requests.at(-1), [{ topic: 'caption:event-1:en', event: 'heartbeat', payload: { type: 'heartbeat' }, private: true }]);
+    }
+    // The signer is passed explicitly: a key in the process environment alone does not make a publisher sign.
+    const signingKey = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+    process.env.CAPTIONS_GUEST_SIGNING_KEY = signingKey;
+    await new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'secret', fetchImpl })
+      .publish('caption:event-1:en', 'heartbeat', { type: 'heartbeat' });
+    assert.deepEqual(requests.at(-1).map(message => message.private), [true]);
+    // The deployed stream server wires the signer from its own environment.
+    const runtime = env => captionsStreamServer.createRuntimeFromEnv({ CAPTIONS_ENABLED: 'true', CAPTIONS_ALLOWED_ORIGINS: 'https://wedding.example',
+      SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'secret', OPENAI_API_KEY: 'sk-test', ...env }).captionsGateway.publisher;
+    assert.equal(runtime({}).guestSigner, null);
+    assert.notEqual(runtime({ CAPTIONS_GUEST_SIGNING_KEY: signingKey }).guestSigner, null);
+  } finally {
+    if (saved === undefined) delete process.env.CAPTIONS_GUEST_SIGNING_KEY; else process.env.CAPTIONS_GUEST_SIGNING_KEY = saved;
   }
 });
 

@@ -38,7 +38,7 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
     if (take(server.refuseNext, action)) throw rejected(400, 'INVALID_REQUEST');
     await gate('before:' + action); // held on its way to the server, before any effect
     const run = payload.runId ? server.runs.get(payload.runId) : null; let result = {};
-    if (action === 'config' || action === 'preflight') result = { enabled: true, guestAuthReady: false };
+    if (action === 'config' || action === 'preflight') result = { enabled: true, guestLinksReady: false };
     else if (action === 'createEvent') { server.events += 1; result = { eventId: 'event-' + server.events }; }
     else if (action === 'start') {
       const open = [...server.runs.entries()].find(([, item]) => item.eventId === payload.eventId && OPEN.includes(item.state));

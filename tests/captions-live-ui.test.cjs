@@ -73,6 +73,24 @@ test('new runs are followed only through an authorized current-run snapshot', as
     ? { ...value, currentRunId: 'new' } : { ...value, eventId: 'other-event' }, scope), /synchronized/);
 });
 
+test('guest captions are accepted only when signed by the caption server', async () => {
+  const { generateKeyPairSync, sign, webcrypto } = require('node:crypto');
+  const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' }), other = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+  const jwk = pair.publicKey.export({ format: 'jwk' }), key = await Live.importGuestKey(jwk, webcrypto.subtle);
+  const envelope = value => { const data = JSON.stringify(value); return { data, sig: sign('sha256', Buffer.from(data), { key: pair.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }; };
+  const good = envelope({ type: 'caption.batch', text: '多謝大家' });
+  assert.deepEqual(await Live.openEnvelope(key, good, webcrypto.subtle), { type: 'caption.batch', text: '多謝大家' });
+  assert.equal(await Live.openEnvelope(key, { ...good, data: good.data.replace('多謝', '屌') }, webcrypto.subtle), null, 'altered text is rejected');
+  const forged = JSON.stringify({ type: 'caption.batch', text: 'fake' });
+  assert.equal(await Live.openEnvelope(key, { data: forged, sig: sign('sha256', Buffer.from(forged), { key: other.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }, webcrypto.subtle), null, 'another key is rejected');
+  for (const bad of [null, { data: good.data }, { data: good.data, sig: 'short' }, { data: good.data, sig: '!'.repeat(86) }, { data: 42, sig: good.sig }]) assert.equal(await Live.openEnvelope(key, bad, webcrypto.subtle), null);
+  await assert.rejects(Live.importGuestKey({ ...jwk, crv: 'P-384' }, webcrypto.subtle), /invalid/);
+  let channelOptions; Live.subscribe({ channel: (_topic, options) => { channelOptions = options; return { on() { return this; }, subscribe() {} }; } }, 'caption-guest:e:en:abc', () => {}, () => {}, () => {}, { private: false });
+  assert.deepEqual(channelOptions, { config: { private: false } });
+  Live.subscribe({ channel: (_topic, options) => { channelOptions = options; return { on() { return this; }, subscribe() {} }; } }, 'caption:e:en', () => {});
+  assert.deepEqual(channelOptions, { config: { private: true } }, 'operator channels stay private by default');
+});
+
 test('guest invite helpers keep token in the fragment and clear it after redemption', () => {
   assert.equal(Live.fragmentToken('#event=e1&token=private-token'), 'private-token');
   assert.equal(Live.fragmentEventId('#event=e1&token=private-token'), 'e1');
@@ -97,9 +115,10 @@ test('live pages remain opt-in and use isolated auth plus text-only rendering', 
   const guest = fs.readFileSync(path.join(__dirname, '..', 'live-captions-guest.js'), 'utf8');
   assert.match(admin, /get\('live'\) === '1'/);
   assert.doesNotMatch(admin, /mc-captions-admin-auth/);
-  assert.match(guest, /mc-captions-guest-auth/);
-  assert.match(guest, /mc-captions-guest-auth', false/);
-  assert.match(guest, /signInAnonymously/);
+  assert.doesNotMatch(guest, /signInAnonymously|request\('redeem'|keepRealtimeAuth/, 'guests have no account of any kind');
+  assert.match(guest, /api\.request\('guestSnapshot'/);
+  assert.match(guest, /openEnvelope\(guestKey, envelope\)/);
+  assert.match(guest, /\{ private: false \}/);
   assert.match(guest, /clearFragment\(history, location\)/);
   assert.doesNotMatch(admin + guest, /\.innerHTML\s*=/);
   assert.match(admin, /type: 'auth', ticket: ticket\.token/);

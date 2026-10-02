@@ -32,19 +32,47 @@ public assets into `dist/`. Server code, SQL, tests, `.env`, documentation and r
 are excluded. The previous `outputDirectory: "."` must not be restored for this feature.
 Build artifacts and the generated `vendor/` bundle are ignored by Git.
 
-## Account and authorization gates
+## Access
 
-Keep `CAPTIONS_ENABLED=false` until the local checks and release review are complete.
-Keep `CAPTIONS_GUEST_AUTH_AUDITED=false` until the existing project's access controls
-have been verified against a real anonymous test user.
+`CAPTIONS_ENABLED=true` switches captions on for a deployment; production keeps it off
+until the release gates below. The operator signs in with the existing admin magic link.
 
-The local legacy schema grants `authenticated` access to several personal-data views,
-including invitation and RSVP views. Their deployed definitions are unknown. Anonymous
-Supabase users also assume `authenticated`; adding a caption-only membership table does
-not by itself protect those existing objects. Run `supabase/audit_captions_auth.sql`
-read-only, review view execution permissions and SECURITY DEFINER RPCs, and test actual
-denials before enabling anonymous sign-in. This implementation does not silently change
-existing guest/RSVP permissions or project-wide Auth settings.
+### Guests: scan a QR code, no account (decided 2 October)
+
+Guests scan a QR code from the operator page and read. There is no sign-in and no Supabase
+account of any kind, so anonymous sign-in stays off for the wedding project. That matters
+because the existing schema grants several personal-data views (RSVP list, outreach list
+with phone numbers, attendance) and some guest-list functions to `authenticated`, and
+anonymous users count as `authenticated`. Supabase also limits anonymous sign-ins per IP
+address, and a hotel's guests share one.
+
+How it works: the QR link carries a private code (the invite token) in its `#` fragment.
+The guest page sends it with each snapshot request (`guestSnapshot`). The server checks it
+with `caption_guest_access` (right event, link active, not expired) and returns the captions
+so far, the event's guest broadcast channel name and the server's public signing key.
+Live captions then arrive on that public Realtime channel. Every message on it is signed
+(ECDSA P-256), and the page drops anything that does not verify, so another phone cannot
+inject text. The channel name is derived from the signing key and is only handed out after
+the code checks.
+
+What the link does and does not protect:
+
+- Anyone holding the link can read that event's captions until it expires. Share it only in
+  the room and set the expiry to the end of the day. There is no per-phone limit.
+- To withdraw a link early, set `active = false` on its `caption_invites` row. There is no
+  button for this yet.
+- Guests never hold a Supabase session, so nothing outside the caption snapshot is
+  reachable through the link.
+
+Configuration: `CAPTIONS_GUEST_LINKS=true` and `CAPTIONS_GUEST_SIGNING_KEY` (base64 of a
+PKCS#8 DER P-256 private key). Apply `supabase/migrations/2026-10-02_live_captions_guest_links.sql`
+before switching guest links on. Supabase Realtime must allow public channels (its default).
+Snapshot requests are rate-limited per phone and, generously, per IP address.
+
+The earlier design (anonymous sign-in plus invite redemption, gated by
+`CAPTIONS_GUEST_AUTH_AUDITED`) is gone from the code. Its SQL functions remain in the first
+migration, unused. `supabase/audit_captions_auth.sql` is still worth running before anyone
+ever enables anonymous sign-in for another reason.
 
 Use exact approved preview origins in `CAPTIONS_ALLOWED_ORIGINS`. Do not use a wildcard
 for all `*.vercel.app` deployments. Use separate preview event IDs and invitations.

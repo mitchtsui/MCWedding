@@ -19,10 +19,15 @@ async function main() {
     resolveDir: root }, bundle: true, platform: 'browser', format: 'iife',
     target: ['chrome120', 'safari17'], minify: true, sourcemap: false,
     outfile: path.join(root, 'vendor', 'supabase.js'), legalComments: 'eof' });
+  // The operator page draws the guest-link QR code locally; the link never leaves the browser.
+  await build({ stdin: { contents: 'import qrcode from "qrcode-generator"; window.qrcode = qrcode;',
+    resolveDir: root }, bundle: true, platform: 'browser', format: 'iife',
+    target: ['chrome120', 'safari17'], minify: true, sourcemap: false,
+    outfile: path.join(root, 'vendor', 'qr.js'), legalComments: 'eof' });
   for (const name of pages) await fs.copyFile(path.join(root, name), path.join(output, name));
   await fs.cp(path.join(root, 'photos'), path.join(output, 'photos'), { recursive: true });
   await fs.mkdir(path.join(output, 'vendor'), { recursive: true });
-  await fs.copyFile(path.join(root, 'vendor', 'supabase.js'), path.join(output, 'vendor', 'supabase.js'));
+  for (const name of ['supabase.js', 'qr.js']) await fs.copyFile(path.join(root, 'vendor', name), path.join(output, 'vendor', name));
   const allowed = new Set([...pages, 'photos', 'vendor']);
   for (const name of await fs.readdir(output)) {
     if (!allowed.has(name)) throw new Error(`Unexpected build output: ${name}. Inspect before deployment.`);

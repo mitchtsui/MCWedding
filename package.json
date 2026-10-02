@@ -2,7 +2,9 @@
   "name": "mcwedding",
   "private": true,
   "version": "0.1.0",
-  "engines": { "node": "24.x" },
+  "engines": {
+    "node": "24.x"
+  },
   "scripts": {
     "build": "node scripts/build-site.cjs",
     "test:captions": "node --test tests/captions-*.test.cjs tests/captions-*.test.mjs",
@@ -10,6 +12,7 @@
   },
   "dependencies": {
     "@supabase/supabase-js": "2.117.2",
+    "qrcode-generator": "2.0.4",
     "ws": "8.22.0"
   },
   "devDependencies": {

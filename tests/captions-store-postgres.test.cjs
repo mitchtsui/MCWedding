@@ -11,6 +11,7 @@ const { CaptionStore } = require('../lib/captions/store.cjs');
 const { CaptionGateway, GatewaySession } = require('../lib/captions/gateway.cjs');
 
 const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions.sql');
+const guestLinksPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions_guest_links.sql');
 
 async function database({ supabaseExtensions = false } = {}) {
   const db = new PGlite({ extensions: { pgcrypto } });
@@ -45,6 +46,7 @@ async function database({ supabaseExtensions = false } = {}) {
     $$;
   `);
   await db.exec(await fs.readFile(migrationPath, 'utf8'));
+  await db.exec(await fs.readFile(guestLinksPath, 'utf8'));
   return db;
 }
 
@@ -108,6 +110,52 @@ test('tickets and invites work with pgcrypto in the extensions schema, as Supaba
   await db.exec(`SELECT set_config('request.jwt.claim.sub','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',false); SELECT set_config('request.jwt.claim.email','',false);`);
   const redeemed = (await db.query(`SELECT caption_redeem_invite($1,$2) AS value`, [event.event_id, invite.token])).rows[0].value;
   assert.equal(redeemed.role, 'guest');
+});
+
+test('the guest link migration applies after the original, both re-apply cleanly, and only the service role may call it', async t => {
+  const db = await database({ supabaseExtensions: true });
+  t.after(() => db.close());
+  for (const file of [migrationPath, guestLinksPath, guestLinksPath, migrationPath]) await db.exec(await fs.readFile(file, 'utf8'));
+  const functions = await db.query(`SELECT count(*)::int AS count FROM pg_proc WHERE proname='caption_guest_access'`);
+  assert.equal(functions.rows[0].count, 1);
+  const privilege = await db.query(`SELECT has_function_privilege('anon','public.caption_guest_access(uuid,text)','EXECUTE') AS anon,
+    has_function_privilege('authenticated','public.caption_guest_access(uuid,text)','EXECUTE') AS authenticated,
+    has_function_privilege('service_role','public.caption_guest_access(uuid,text)','EXECUTE') AS service`);
+  assert.deepEqual(privilege.rows[0], { anon: false, authenticated: false, service: true });
+  for (const role of ['anon', 'authenticated']) {
+    await db.exec(`SET ROLE ${role}`);
+    try {
+      await assert.rejects(db.query(`SELECT caption_guest_access('11111111-1111-4111-8111-111111111111','token')`), /permission denied/);
+    } finally { await db.exec(`RESET ROLE`); }
+  }
+});
+
+test('guest access admits only an active, unexpired link for its own event, returns the current run and writes nothing', async t => {
+  const db = await database({ supabaseExtensions: true });
+  t.after(() => db.close());
+  await asService(db);
+  const access = async (eventId, token) => (await db.query(`SELECT caption_guest_access($1,$2) AS value`, [eventId, token])).rows[0].value;
+  const refused = (eventId, token) => assert.rejects(db.query(`SELECT caption_guest_access($1,$2)`, [eventId, token]),
+    error => error.code === '28000' && /guest link unavailable/.test(error.message));
+  const event = (await db.query(`SELECT caption_create_event('Guest links','{}') AS value`)).rows[0].value;
+  const other = (await db.query(`SELECT caption_create_event('Other wedding','{}') AS value`)).rows[0].value;
+  const invite = (await db.query(`SELECT caption_create_invite($1,now()+interval '1 day',1) AS value`, [event.event_id])).rows[0].value;
+  const otherInvite = (await db.query(`SELECT caption_create_invite($1,now()+interval '1 day',1) AS value`, [other.event_id])).rows[0].value;
+  const before = await access(event.event_id, invite.token);
+  assert.equal(before.run_id, null); assert.equal(before.event_id, event.event_id); assert.ok(before.expires_at);
+  const run = (await db.query(`SELECT caption_start_run($1,'live') AS value`, [event.event_id])).rows[0].value;
+  for (let read = 0; read < 3; read += 1) assert.equal((await access(event.event_id, invite.token)).run_id, run.run_id, 'max_uses 1 is not enforced');
+  const counted = await db.query(`SELECT use_count FROM caption_invites WHERE id=$1`, [invite.invite_id]);
+  assert.equal(counted.rows[0].use_count, 0);
+  await refused(event.event_id, 'not-the-token');
+  await refused(event.event_id, otherInvite.token);
+  await refused(other.event_id, invite.token);
+  await refused(event.event_id, null);
+  await db.query(`UPDATE caption_invites SET active=false WHERE id=$1`, [invite.invite_id]);
+  await refused(event.event_id, invite.token);
+  await db.query(`UPDATE caption_invites SET active=true, created_at=now()-interval '2 days', expires_at=now()-interval '1 second' WHERE id=$1`, [invite.invite_id]);
+  await refused(event.event_id, invite.token);
+  assert.equal((await access(other.event_id, otherInvite.token)).run_id, null);
 });
 
 test('the service role can read an event row directly for the open-run lookup, and anon cannot', async t => {

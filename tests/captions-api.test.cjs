@@ -2,8 +2,11 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
+const { randomUUID } = crypto;
 const { createHandler } = require('../api/captions.js');
-const { MAX_BODY_BYTES, parseBody, rateLimit } = require('../lib/captions/http.cjs');
+const { MAX_BODY_BYTES, parseBody, guestRateLimit } = require('../lib/captions/http.cjs');
+const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
 
 function mockReq({ method = 'GET', url = '/api/captions.js?action=config', body, origin = 'https://wedding.test', authorization = 'Bearer user-jwt' } = {}) {
   const headers = { origin, authorization, 'x-forwarded-for': `203.0.113.${Math.floor(Math.random() * 200) + 1}` };
@@ -41,7 +44,7 @@ test('feature defaults off and fails clearly without calling Supabase', async ()
   assert.equal(called, false);
 });
 
-test('config is safe before sign-in and reports guest Auth audit false by default', async () => {
+test('config is safe before sign-in and reports guest links off by default', async () => {
   let called = false;
   const handler = createHandler({ env: baseEnv, fetchImpl: async () => { called = true; } });
   const res = mockRes();
@@ -49,18 +52,9 @@ test('config is safe before sign-in and reports guest Auth audit false by defaul
   const body = JSON.parse(res.body);
   assert.equal(res.statusCode, 200);
   assert.equal(body.data.enabled, true);
-  assert.equal(body.data.guestAuthReady, false);
+  assert.equal(body.data.guestLinksReady, false);
   assert.deepEqual(body.data.supportedLanguages, ['en','ja','zh-CN']);
   assert.equal(called, false);
-});
-
-test('redeem is blocked until the explicit guest Auth audit flag is true', async () => {
-  const handler = createHandler({ env: baseEnv, fetchImpl: fetchFor() });
-  const req = mockReq({ method: 'POST', url: '/api/captions.js', body: { action: 'redeem', eventId: 'e', token: 'invite' } });
-  const res = mockRes();
-  await handler(req, res);
-  assert.equal(res.statusCode, 503);
-  assert.equal(JSON.parse(res.body).error.code, 'GUEST_AUTH_NOT_READY');
 });
 
 test('admin action requires database is_admin and does not trust request fields', async () => {
@@ -148,6 +142,95 @@ test('a normal start is unchanged and a non-UUID event id never reaches the look
   assert.equal(urls.some(url => url.includes('/rest/v1/caption_events')), false);
 });
 
+const SIGNING_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+const guestEnv = { ...baseEnv, CAPTIONS_GUEST_LINKS: 'true', CAPTIONS_GUEST_SIGNING_KEY: SIGNING_KEY };
+const OTHER_RUN = '33333333-3333-4333-8333-333333333333';
+const access = (runId = RUN_ID) => ({ status: 200, body: { event_id: EVENT_ID, run_id: runId, expires_at: '2026-11-13T04:00:00+00:00' } });
+const snapshotRow = { eventId: EVENT_ID, runId: RUN_ID, currentRunId: RUN_ID, modeGeneration: 1, channelEpoch: 'epoch', messageSeq: 4,
+  status: 'live', language: 'ja', topic: `caption:${EVENT_ID}:ja`, updates: [] };
+
+// A guest phone: no Authorization header, its own device id, one hotel IP.
+async function guestPost({ env = guestEnv, routes = {}, body = {}, calls = [], ip = '203.0.113.7' }) {
+  const fetchImpl = async (url, options) => {
+    calls.push({ url, options });
+    const [, answer] = Object.entries(routes).find(([suffix]) => url.endsWith(suffix)) || [];
+    if (!answer) throw new Error(`unexpected ${url}`);
+    return { ok: answer.status < 300, status: answer.status, text: async () => JSON.stringify(answer.body ?? {}) };
+  };
+  const req = mockReq({ method: 'POST', authorization: '', body: { action: 'guestSnapshot', eventId: EVENT_ID, token: 'qr-token', language: 'ja',
+    deviceId: `phone-${randomUUID()}`, ...body } });
+  req.headers['x-forwarded-for'] = ip;
+  const res = mockRes();
+  await createHandler({ env, fetchImpl })(req, res);
+  return { status: res.statusCode, body: JSON.parse(res.body), raw: res.body, calls };
+}
+
+test('guestSnapshot serves the snapshot, signed guest topic and public key with no Authorization header', async () => {
+  const signer = createGuestSigner(guestEnv);
+  const reply = await guestPost({ routes: { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 200, body: snapshotRow } } });
+  assert.equal(reply.status, 200);
+  assert.deepEqual(reply.body.data, { ...snapshotRow, currentRunId: RUN_ID, guestTopic: signer.topicFor(EVENT_ID, 'ja'),
+    publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00' });
+  assert.deepEqual(reply.calls.map(call => new URL(call.url).pathname), ['/rest/v1/rpc/caption_guest_access', '/rest/v1/rpc/caption_snapshot']);
+  assert(reply.calls.every(call => call.options.headers.Authorization === 'Bearer server-secret'), 'the database is asked as the service role');
+  assert.deepEqual(JSON.parse(reply.calls[0].options.body), { p_event_id: EVENT_ID, p_token: 'qr-token' });
+  assert.deepEqual(JSON.parse(reply.calls[1].options.body), { p_event_id: EVENT_ID, p_run_id: RUN_ID, p_language: 'ja' });
+  const privateJwk = crypto.createPrivateKey({ key: Buffer.from(SIGNING_KEY, 'base64'), format: 'der', type: 'pkcs8' }).export({ format: 'jwk' });
+  assert.equal(reply.raw.includes(SIGNING_KEY), false); assert.equal(reply.raw.includes(privateJwk.d), false);
+  assert.equal('d' in reply.body.data.publicKey, false);
+});
+
+test('guestSnapshot waits for a run, and refuses invalid links, foreign runs and malformed ids', async () => {
+  const signer = createGuestSigner(guestEnv);
+  const waiting = await guestPost({ routes: { '/rpc/caption_guest_access': access(null) }, body: { language: 'en' } });
+  assert.equal(waiting.status, 200);
+  assert.deepEqual(waiting.body.data, { waiting: true, eventId: EVENT_ID, language: 'en', currentRunId: null,
+    guestTopic: signer.topicFor(EVENT_ID, 'en'), publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00' });
+  assert.equal(waiting.calls.length, 1, 'no snapshot without a run');
+  for (const status of [403, 400]) {
+    const refused = await guestPost({ routes: { '/rpc/caption_guest_access': { status, body: { code: '28000', message: 'guest link unavailable' } } } });
+    assert.equal(refused.status, 403); assert.equal(refused.body.error.code, 'GUEST_LINK_INVALID');
+    assert.equal(refused.body.error.message, 'This guest link has expired or is not valid'); assert.equal(refused.calls.length, 1);
+  }
+  const foreign = await guestPost({ routes: { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 400, body: { code: 'P0002' } } },
+    body: { runId: OTHER_RUN } });
+  assert.equal(foreign.status, 404); assert.equal(foreign.body.error.code, 'NOT_FOUND');
+  assert.equal(JSON.parse(foreign.calls[1].options.body).p_run_id, OTHER_RUN);
+  for (const body of [{ eventId: 'event-1' }, { runId: 'run-1' }, { language: 'fr' }, { token: '' }, { token: 'x'.repeat(513) }]) {
+    const invalid = await guestPost({ routes: {}, body });
+    assert.equal(invalid.status, 400, JSON.stringify(body).slice(0, 40)); assert.equal(invalid.body.error.code, 'INVALID_REQUEST');
+    assert.equal(invalid.calls.length, 0);
+  }
+});
+
+test('guest links answer 503 until switched on with a valid key, and config and preflight say which', async () => {
+  for (const env of [baseEnv, { ...baseEnv, CAPTIONS_GUEST_LINKS: 'true' }, { ...guestEnv, CAPTIONS_GUEST_LINKS: 'false' },
+    { ...guestEnv, CAPTIONS_GUEST_SIGNING_KEY: 'not-a-key' }]) {
+    const disabled = await guestPost({ env });
+    assert.equal(disabled.status, 503); assert.equal(disabled.body.error.code, 'GUEST_LINKS_DISABLED'); assert.equal(disabled.calls.length, 0);
+  }
+  for (const [env, ready] of [[baseEnv, false], [guestEnv, true]]) {
+    const config = mockRes(); await createHandler({ env, fetchImpl: async () => { throw new Error('config must not call out'); } })(mockReq({ authorization: '' }), config);
+    assert.equal(JSON.parse(config.body).data.guestLinksReady, ready);
+    const preflight = mockRes();
+    await createHandler({ env, fetchImpl: fetchFor({ admin: true, rpc: { caption_health: { database: true } } }) })(mockReq({ method: 'POST', body: { action: 'preflight' } }), preflight);
+    const data = JSON.parse(preflight.body).data;
+    assert.equal(data.guestLinksReady, ready); assert.deepEqual(data.warnings, ready ? [] : ['Guest links are switched off.']);
+    assert.equal('guestAuthReady' in data, false);
+  }
+  const redeem = mockRes(); await createHandler({ env: guestEnv, fetchImpl: fetchFor() })(mockReq({ method: 'POST', body: { action: 'redeem', eventId: EVENT_ID, token: 't' } }), redeem);
+  assert.equal(redeem.statusCode, 404); assert.equal(JSON.parse(redeem.body).error.code, 'UNKNOWN_ACTION');
+});
+
+test('one guest device is limited to 60 snapshots a minute without blocking other phones on the hotel IP', async () => {
+  const routes = { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 200, body: snapshotRow } };
+  const ip = `203.0.113.${Math.floor(Math.random() * 200) + 1}`, deviceId = `phone-${randomUUID()}`;
+  for (let call = 0; call < 60; call += 1) assert.equal((await guestPost({ routes, ip, body: { deviceId } })).status, 200);
+  const limited = await guestPost({ routes, ip, body: { deviceId } });
+  assert.equal(limited.status, 429); assert.equal(limited.body.error.code, 'RATE_LIMITED'); assert.equal(limited.calls.length, 0);
+  assert.equal((await guestPost({ routes, ip })).status, 200, 'another device on the same IP');
+});
+
 test('POST rejects missing or unlisted Origin before authentication', async () => {
   let called = false;
   const handler = createHandler({ env: baseEnv, fetchImpl: async () => { called = true; } });
@@ -172,12 +255,16 @@ test('pre-parsed JSON bodies cannot bypass the payload limit', () => {
   assert.throws(() => parseBody(req), error => error.code === 'PAYLOAD_TOO_LARGE' && error.status === 413);
 });
 
-test('50 authenticated guests behind one venue IP can redeem once and poll every ten seconds', () => {
-  const ip = `198.51.100.${Math.floor(Math.random() * 100) + 100}`;
-  const now = 1770000000000;
-  for (let guest = 0; guest < 50; guest += 1) {
-    const req = { headers: { 'x-forwarded-for': ip }, socket: {} };
-    assert.doesNotThrow(() => rateLimit(req, 'redeem', `guest-${guest}`, now));
-    for (let poll = 0; poll < 6; poll += 1) assert.doesNotThrow(() => rateLimit(req, 'snapshot', `guest-${guest}`, now + poll * 10000));
+test('a hotel of guest phones behind one IP can poll every ten seconds while each device is held to its own limit', () => {
+  const ip = `198.51.100.${Math.floor(Math.random() * 100) + 100}`, run = randomUUID().slice(0, 8);
+  const now = 1770000000000, req = { headers: { 'x-forwarded-for': ip }, socket: {} };
+  for (let guest = 0; guest < 160; guest += 1) {
+    for (let poll = 0; poll < 6; poll += 1) assert.doesNotThrow(() => guestRateLimit(req, `phone-${run}-${guest}`, now + poll * 10000));
   }
+  for (let call = 0; call < 54; call += 1) guestRateLimit(req, `phone-${run}-0`, now + 1000);
+  assert.throws(() => guestRateLimit(req, `phone-${run}-0`, now + 1000), error => error.code === 'RATE_LIMITED' && error.status === 429);
+  assert.doesNotThrow(() => guestRateLimit(req, `phone-${run}-1`, now + 1000), 'another phone on the same IP is unaffected');
+  const shared = { headers: { 'x-forwarded-for': `198.51.100.${Math.floor(Math.random() * 90) + 5}` }, socket: {} };
+  for (let call = 0; call < 60; call += 1) guestRateLimit(shared, 'bad id!', now);
+  assert.throws(() => guestRateLimit(shared, undefined, now), error => error.code === 'RATE_LIMITED', 'without a valid device id the IP is the device');
 });

@@ -2,13 +2,14 @@
 
 const { CaptionStore, CaptionStoreError } = require('../lib/captions/store.cjs');
 const { CaptionDelivery } = require('../lib/captions/delivery.cjs');
-const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
+const { createGuestSigner, guestLinksReady } = require('../lib/captions/guest-link.cjs');
+const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, guestRateLimit, sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
 
 const LANGUAGES = new Set(['en', 'ja', 'zh-CN']);
 const ADMIN_ACTIONS = new Set(['preflight','createEvent','start','pause','resume','end','stop','ticket','invite','manual','review','glossary','script','health']);
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function envEnabled(env) { return env.CAPTIONS_ENABLED === 'true'; }
-function guestAuthReady(env) { return env.CAPTIONS_GUEST_AUTH_AUDITED === 'true'; }
 
 function makeStore(env, fetchImpl) {
   if (!envEnabled(env)) throw new CaptionStoreError('CAPTIONS_DISABLED', 'Live captions are disabled', 503);
@@ -29,6 +30,26 @@ function requiredText(value, name, max = 12000) {
 function requiredLanguage(value) {
   if (!LANGUAGES.has(value)) throw new CaptionStoreError('INVALID_REQUEST', 'language is invalid', 400);
   return value;
+}
+
+function requiredUuid(value, name) {
+  if (typeof value !== 'string' || !UUID.test(value)) throw new CaptionStoreError('INVALID_REQUEST', `${name} is invalid`, 400);
+  return value;
+}
+
+async function guestSnapshot({ store, signer, input }) {
+  const eventId = requiredUuid(input.eventId, 'eventId');
+  const language = requiredLanguage(input.language);
+  const token = requiredText(input.token, 'token', 512);
+  const requestedRun = input.runId == null || input.runId === '' ? null : requiredUuid(input.runId, 'runId');
+  const access = await store.guestAccess({ eventId, token }).catch(error => {
+    throw error instanceof CaptionStoreError && error.details === '28000'
+      ? new CaptionStoreError('GUEST_LINK_INVALID', 'This guest link has expired or is not valid', 403, '28000') : error;
+  });
+  const guest = { guestTopic: signer.topicFor(eventId, language), publicKey: signer.publicJwk, expiresAt: access.expiresAt };
+  const runId = requestedRun || access.runId;
+  if (!runId) return { waiting: true, eventId, language, currentRunId: null, ...guest };
+  return { ...(await store.getSnapshotAsService({ eventId, runId, language })), currentRunId: access.runId ?? null, ...guest };
 }
 
 // Postgres 22023 is the run refusing the action in its current state. The store reports it as the same
@@ -93,15 +114,29 @@ function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
         throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires POST', 405);
       }
       const store = makeStore(env, fetchImpl);
-      const delivery = new CaptionDelivery({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY, fetchImpl });
+      const delivery = new CaptionDelivery({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY, fetchImpl,
+        guestSigner: createGuestSigner(env) });
       if (action === 'config') {
         rate = rateLimit(req, action);
         const data = {
           enabled: true,
-          guestAuthReady: guestAuthReady(env),
+          guestLinksReady: guestLinksReady(env),
           supportedLanguages: [...LANGUAGES],
           maxPayloadBytes: MAX_BODY_BYTES
         };
+        sendJson(res, 200, { ok: true, requestId: id, data }, rate);
+        return;
+      }
+      // Guests hold only the link from the QR code, never a Supabase session.
+      if (action === 'guestSnapshot') {
+        if (!guestLinksReady(env)) throw new CaptionStoreError('GUEST_LINKS_DISABLED', 'Guest links are switched off', 503);
+        rate = guestRateLimit(req, input.deviceId);
+        const data = await guestSnapshot({ store, signer: createGuestSigner(env), input });
+        const origin = String(req.headers?.origin || '');
+        if (origin && allowedOrigins(env).has(origin)) {
+          res.setHeader('Access-Control-Allow-Origin', origin);
+          res.setHeader('Vary', 'Origin');
+        }
         sendJson(res, 200, { ok: true, requestId: id, data }, rate);
         return;
       }
@@ -114,9 +149,9 @@ function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
           const health = await store.health();
           data = {
             enabled: true,
-            guestAuthReady: guestAuthReady(env),
+            guestLinksReady: guestLinksReady(env),
             ...health,
-            warnings: guestAuthReady(env) ? [] : ['Guest caption access is awaiting an Auth and RLS audit.']
+            warnings: guestLinksReady(env) ? [] : ['Guest links are switched off.']
           };
           break;
         }
@@ -150,10 +185,6 @@ function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
         }
         case 'snapshot':
           data = await store.getSnapshot({ eventId: input.eventId, runId: input.runId, language: requiredLanguage(input.language), accessToken });
-          break;
-        case 'redeem':
-          if (!guestAuthReady(env)) throw new CaptionStoreError('GUEST_AUTH_NOT_READY', 'Guest caption access is not ready', 503);
-          data = await store.redeemInvite({ eventId: input.eventId, token: requiredText(input.token, 'token', 512), accessToken });
           break;
         case 'invite': {
           const expiresAt = new Date(input.expiresAt);
@@ -202,5 +233,5 @@ const handler = createHandler();
 module.exports = handler;
 module.exports.createHandler = createHandler;
 module.exports.envEnabled = envEnabled;
-module.exports.guestAuthReady = guestAuthReady;
+module.exports.guestLinksReady = guestLinksReady;
 module.exports.dispatchHttpOutbox = dispatchHttpOutbox;

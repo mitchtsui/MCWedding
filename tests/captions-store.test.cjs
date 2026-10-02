@@ -86,6 +86,23 @@ test('getEventCurrentRun reads one event row with the service role and only ever
   assert.equal(calls.length, 3);
 });
 
+test('guest access and the guest snapshot are asked of the database as the service role, never as a guest', async () => {
+  const calls = [];
+  const store = new CaptionStore({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'server-secret', fetchImpl: async (url, options) => {
+    calls.push({ url, options });
+    return response(200, url.endsWith('caption_guest_access') ? { event_id: 'e', run_id: null, expires_at: 'later' } : { eventId: 'e', updates: [] });
+  }});
+  assert.deepEqual(await store.guestAccess({ eventId: 'e', token: 'qr' }), { eventId: 'e', runId: null, expiresAt: 'later' });
+  assert.deepEqual(await store.getSnapshotAsService({ eventId: 'e', runId: 'r', language: 'ja' }), { eventId: 'e', updates: [] });
+  assert.deepEqual(calls.map(call => [call.url, call.options.headers.Authorization, JSON.parse(call.options.body)]), [
+    ['https://test.supabase.co/rest/v1/rpc/caption_guest_access', 'Bearer server-secret', { p_event_id: 'e', p_token: 'qr' }],
+    ['https://test.supabase.co/rest/v1/rpc/caption_snapshot', 'Bearer server-secret', { p_event_id: 'e', p_run_id: 'r', p_language: 'ja' }],
+  ]);
+  await assert.rejects(async () => store.guestAccess({ eventId: 'e' }), error => error.code === 'INVALID_REQUEST');
+  await assert.rejects(async () => store.getSnapshotAsService({ eventId: 'e', language: 'ja' }), error => error.code === 'INVALID_REQUEST');
+  assert.equal(calls.length, 2);
+});
+
 test('Supabase requests time out instead of hanging the caption pipeline', async () => {
   const store = new CaptionStore({
     supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'server-secret', requestTimeoutMs: 5,

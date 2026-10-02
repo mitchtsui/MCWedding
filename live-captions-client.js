@@ -141,14 +141,37 @@
     return value;
   }
 
-  function subscribe(client, topic, onBatch, onStatus, onHeartbeat) {
-    const channel = client.channel(topic, { config: { private: true } });
+  // Guest phones have no account: their channel is public, and every message on it is signed by the server.
+  function subscribe(client, topic, onBatch, onStatus, onHeartbeat, options) {
+    const channel = client.channel(topic, { config: { private: options?.private !== false } });
     channel.on('broadcast', { event: 'caption.batch' }, message => onBatch(message.payload || message));
     if (onHeartbeat) channel.on('broadcast', { event: 'heartbeat' }, message => onHeartbeat(message.payload || message));
     channel.subscribe(status => onStatus?.(status));
     return { channel, close: () => client.removeChannel(channel) };
   }
 
+  async function importGuestKey(jwk, subtle = globalThis.crypto?.subtle) {
+    if (!subtle) throw new Error('This browser cannot check caption signatures');
+    if (!jwk || jwk.kty !== 'EC' || jwk.crv !== 'P-256' || typeof jwk.x !== 'string' || typeof jwk.y !== 'string') throw new Error('Caption signing key is invalid');
+    return subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, ext: true }, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+  }
+
+  function base64UrlBytes(value) {
+    const base64 = value.replace(/-/g, '+').replace(/_/g, '/') + '='.repeat((4 - value.length % 4) % 4);
+    return Uint8Array.from(atob(base64), character => character.charCodeAt(0));
+  }
+
+  // Returns the signed payload, or null for anything not signed by the caption server.
+  async function openEnvelope(key, envelope, subtle = globalThis.crypto?.subtle) {
+    if (!key || !subtle || !envelope || typeof envelope.data !== 'string' || typeof envelope.sig !== 'string' || envelope.data.length > 262144 || !/^[A-Za-z0-9_-]{80,90}$/.test(envelope.sig)) return null;
+    let signature; try { signature = base64UrlBytes(envelope.sig); } catch { return null; }
+    if (signature.length !== 64) return null;
+    let valid = false; try { valid = await subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, signature, new TextEncoder().encode(envelope.data)); } catch { return null; }
+    if (!valid) return null;
+    try { return JSON.parse(envelope.data); } catch { return null; }
+  }
+
   return Object.freeze({ languages, CaptionStore, create, createSupabase, accessToken,
-    keepRealtimeAuth, heartbeatNeedsSnapshot, currentSnapshot, subscribe, fragmentToken, fragmentEventId, fragmentRunId, clearFragment, cleanError });
+    keepRealtimeAuth, heartbeatNeedsSnapshot, currentSnapshot, subscribe, fragmentToken, fragmentEventId, fragmentRunId, clearFragment, cleanError,
+    importGuestKey, openEnvelope });
 }));

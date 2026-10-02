@@ -164,10 +164,11 @@ The dashboard preset said Next.js; the repository says `framework: null`. Verify
 resolved preview build. Vercel's documentation describes WebSocket support as public beta
 with connections pinned to an instance; the project's actual behaviour is untested.
 
-Keep `CAPTIONS_ENABLED=false` and `CAPTIONS_GUEST_AUTH_AUDITED=false`. The existing schema
-exposes personal invitation and RSVP views to `authenticated`, and anonymous Auth users
-are `authenticated` too. Audit the deployed view, grant and RPC definitions before
-enabling sign-in. `supabase/audit_captions_auth.sql` is read-only metadata SQL; it has
+Keep `CAPTIONS_ENABLED=false` in production until the release gates pass. (Updated 2 October:
+guests no longer use anonymous Auth at all; see LIVE_CAPTIONS.md "Guests: scan a QR code". The
+flag `CAPTIONS_GUEST_AUTH_AUDITED` is gone.) The existing schema exposes personal invitation
+and RSVP views to `authenticated`, and anonymous Auth users are `authenticated` too, so
+anonymous sign-in must stay off unless those grants are audited first. `supabase/audit_captions_auth.sql` is read-only metadata SQL; it has
 not been run against the live project. A paid Supabase plan does not settle this.
 
 Codex checked only that `SUPABASE_URL` and a server-role key were present in its session

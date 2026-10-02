@@ -142,7 +142,9 @@ html:lang(ja) .caption-text, html:lang(zh-CN) .caption-text { font-family: 'Noto
 .review-copy { display: grid; grid-template-columns: minmax(90px, auto) 1fr; gap: 8px 14px; }
 .review-copy dt { color: var(--text-light); font-size: .75rem; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; }
 .review-copy dd { margin: 0; overflow-wrap: anywhere; }
-.invite-output { display: block; margin-top: 10px; overflow-wrap: anywhere; user-select: all; }
+.invite-output { display: block; margin-top: 10px; overflow-wrap: anywhere; }
+.invite-qr { display: block; width: min(100%, 240px); height: auto; margin: 12px 0; background: var(--white); border: 1px solid var(--divider); }
+.invite-link { display: block; margin-top: 10px; font-size: .75rem; user-select: all; }
 #content-tools textarea { display: block; width: 100%; margin: 7px 0 12px; }
 #content-tools input, #live-invite-panel input { display: block; width: 100%; min-height: 44px; margin: 7px 0 12px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 3px; background: var(--white); color: var(--ink); font: inherit; }
 @media (max-width: 600px) { .auth-inline { grid-template-columns: 1fr; } .review-copy { grid-template-columns: 1fr; } }

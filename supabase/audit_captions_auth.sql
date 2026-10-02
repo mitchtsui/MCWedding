@@ -30,5 +30,6 @@ where n.nspname='public' and p.prosecdef
 order by p.proname;
 
 -- Check Anonymous Auth enablement, same-IP quotas, JWT expiry and Realtime
--- project settings separately in the Dashboard. CAPTIONS_GUEST_AUTH_AUDITED
--- must remain false until existing private-data access tests also pass.
+-- project settings separately in the Dashboard. Caption guests no longer use
+-- anonymous Auth (account-free QR links, 2 October); keep anonymous sign-in off
+-- unless the grants listed above have been audited and private-data access tests pass.

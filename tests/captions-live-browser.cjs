@@ -32,6 +32,7 @@ const vendorFake = `(() => {
     channel(topic) { const entry = { topic, handlers: {} }; channels.set(topic, entry); return {
       on(_kind, filter, handler) { entry.handlers[filter.event] = handler; return this; },
       subscribe(callback) { setTimeout(() => {
+        if (topic.startsWith('caption-guest:')) { callback('SUBSCRIBED'); return; }
         const language = lang(topic); entry.handlers['caption.batch']?.({ payload: window.__makeBatch(language, 2, 'Buffered ' + language + ' <img onerror=1>') });
         entry.handlers.heartbeat?.({ payload: { type: 'heartbeat', eventId: 'event-1', runId: 'run-1', modeGeneration: 1,
           channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', language, messageSeq: 2, status: 'live', publishedAt: new Date().toISOString() } });
@@ -51,13 +52,18 @@ const audioFake = `window.CaptionsAudio = {
   }
 };`;
 
+const { generateKeyPairSync, sign } = require('node:crypto');
+const signing = generateKeyPairSync('ec', { namedCurve: 'P-256' }), publicKey = signing.publicKey.export({ format: 'jwk' });
+const envelope = value => { const data = JSON.stringify(value); return { data, sig: sign('sha256', Buffer.from(data), { key: signing.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }; };
+const guestTopic = language => `caption-guest:event-1:${language}:0123456789abcdef0123456789abcdef`;
+
 async function main() {
   const modulePath = process.env.PUPPETEER_MODULE || path.resolve(__dirname, '../../Personal - wset-atlas/node_modules/puppeteer');
   const puppeteer = require(modulePath), root = path.resolve(__dirname, '..');
   const output = process.env.CAPTIONS_SCREENSHOT_DIR || await fs.mkdtemp(path.join(os.tmpdir(), 'captions-live-'));
   await fs.mkdir(output, { recursive: true });
   const actions = [], errors = [], contractErrors = []; let forceDisabled = false, delayedAction = '', delayedSeen = '', releaseDelayed = null, currentRunId = 'run-1'; const allowed = new Set(['live-captions.html', 'live-captions-admin.html', 'live-captions.css',
-    'live-captions-preview.js', 'live-captions-guest.js', 'live-captions-admin.js', 'live-captions-client.js']);
+    'live-captions-preview.js', 'live-captions-guest.js', 'live-captions-admin.js', 'live-captions-client.js', 'vendor/qr.js']);
   const batch = (language, seq = 1, text = 'Snapshot ' + language, selectedRunId = 'run-1') => ({ eventId: 'event-1', runId: selectedRunId, modeGeneration: 1,
     channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', messageSeq: seq, status: 'active', language, topic: 'topic:' + language,
     updates: [{ segmentId: 'segment-' + language, segmentOrder: 1, sourceRevision: 1, captionRevision: seq,
@@ -71,17 +77,21 @@ async function main() {
       let body = ''; for await (const chunk of req) body += chunk; const input = req.method === 'GET' ? Object.fromEntries(url.searchParams) : JSON.parse(body || '{}'); actions.push(input);
       if (input.action === delayedAction) { delayedSeen = input.action; delayedAction = ''; await new Promise(resolve => { releaseDelayed = resolve; }); }
       const disabled = forceDisabled && input.action === 'config'; if (disabled) forceDisabled = false; let data = {};
-      if (input.action === 'config') { if (req.method !== 'GET') contractErrors.push('config_not_get'); data = { enabled: !disabled, guestAuthReady: !disabled, supportedLanguages: ['en', 'ja', 'zh-CN'] }; }
-      else if (input.action === 'preflight') data = { enabled: true, guestAuthReady: true, database: true, warnings: [] };
+      if (input.action === 'config') { if (req.method !== 'GET') contractErrors.push('config_not_get'); data = { enabled: !disabled, guestLinksReady: !disabled, supportedLanguages: ['en', 'ja', 'zh-CN'] }; }
+      else if (input.action === 'preflight') data = { enabled: true, guestLinksReady: true, database: true, warnings: [] };
       else if (input.action === 'createEvent') data = { eventId: 'event-1' };
       else if (input.action === 'start') { if (input.mode !== 'live') contractErrors.push('start_mode'); data = { eventId: 'event-1', runId: 'run-1' }; }
       else if (input.action === 'ticket') data = { token: 'single-use-ticket', runId: 'run-1', eventId: 'event-1' };
       else if (input.action === 'snapshot') data = input.runId === currentRunId
         ? batch(input.language, 1, `Snapshot ${input.language} ${currentRunId}`, currentRunId)
         : { ...batch(input.language, 1, `Snapshot ${input.language} ${input.runId}`, input.runId), currentRunId };
-      else if (input.action === 'redeem') data = { eventId: input.eventId, role: 'guest' };
+      else if (input.action === 'guestSnapshot') {
+        if (req.headers.authorization) contractErrors.push('guest_sent_authorization');
+        if (input.token !== 'invite-secret' || input.eventId !== 'event-1') { res.statusCode = 403; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: false, requestId: 'fake-request', error: { code: 'GUEST_LINK_INVALID', message: 'This guest link has expired or is not valid' } })); return; }
+        const selected = input.runId || currentRunId; data = { ...batch(input.language, 1, `Snapshot ${input.language} ${selected}`, selected), currentRunId, guestTopic: guestTopic(input.language), publicKey };
+      }
       else if (input.action === 'manual') data = { segmentId: 'manual-segment', messageSeq: 3, delivery: { attempted: true, delivered: true, queued: false } };
-      else if (input.action === 'invite') { if (!input.expiresAt || input.maxUses < 65) contractErrors.push('invite_contract'); data = { token: 'guest-invite', inviteId: 'invite-1' }; }
+      else if (input.action === 'invite') { if (!input.expiresAt || !Number.isSafeInteger(input.maxUses) || input.maxUses < 65) contractErrors.push('invite_contract'); data = { token: 'guest-invite', inviteId: 'invite-1' }; }
       else if (input.action === 'script') { if (!input.script || typeof input.script !== 'object' || !input.script.title || !input.script.content || !Number.isSafeInteger(input.script.sequence)) contractErrors.push('script_contract'); }
       else if (input.action === 'glossary') { if (!input.entry?.sourceTerm || !Object.hasOwn(input.entry, 'en') || !Object.hasOwn(input.entry, 'ja') || !Object.hasOwn(input.entry, 'zh-CN')) contractErrors.push('glossary_contract'); }
       res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: true, requestId: 'fake-request', data })); return;
@@ -156,6 +166,10 @@ async function main() {
     await admin.type('#manual-en', 'Manual <script>'); await admin.type('#manual-ja', '手動'); await admin.type('#manual-zh-cn', '手动'); await admin.click('#manual-submit'); await admin.waitForFunction(() => document.getElementById('manual-message').textContent.includes('saved'));
     await admin.type('#glossary-source', '新人'); await admin.type('#glossary-en', 'newlyweds'); await admin.type('#glossary-ja', '新郎新婦'); await admin.type('#glossary-zh-cn', '新人'); await admin.click('#save-glossary');
     await admin.type('#script-text', 'Welcome everyone.'); await admin.click('#save-script'); await admin.click('#create-invite'); await admin.waitForFunction(() => document.getElementById('invite-output').textContent.includes('guest-invite'));
+    const invite = await admin.evaluate(() => ({ qr: document.querySelector('#invite-output img.invite-qr')?.getAttribute('src') || '', save: document.querySelector('#invite-output a[download]')?.textContent || '',
+      link: document.querySelector('#invite-output .invite-link')?.textContent || '', maxUsesHidden: document.getElementById('invite-max-uses').hidden, button: document.getElementById('create-invite').textContent }));
+    assert.match(invite.qr, /^data:image\/svg\+xml/, 'the guest link is shown as a QR code'); assert.equal(invite.save, 'Save QR code'); assert.equal(invite.button, 'Create guest QR code');
+    assert.match(invite.link, /live-captions\.html\?live=1&event=event-1#token=guest-invite$/); assert.equal(invite.maxUsesHidden, true);
     await admin.click('#pause-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('paused')); assert.equal(await admin.evaluate(() => window.__capture.running), false);
     await admin.click('#resume-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('connected'));
     await admin.evaluate(() => { window.__drainDeliveryFailure = true; }); await admin.click('#end-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('pending failures'));
@@ -196,26 +210,29 @@ async function main() {
     assert((await detached.evaluate(() => window.__lastSocket.sent.find(value => value.type === 'audio').sequence)) >= 1, 'reattaching declares the audio lost while detached');
     await detached.click('#stop-button'); await detached.waitForFunction(() => document.getElementById('status-text').textContent.includes('stopped')); await detached.close();
 
-    const guest = await makePage(); await guest.goto(`${origin}/live-captions.html?live=1&event=event-1&run=run-1#token=invite-secret`, { waitUntil: 'networkidle0' });
-    await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Buffered en'));
-    assert.equal(await guest.evaluate(() => location.hash), ''); assert.match(await guest.evaluate(() => location.search), /event=event-1/); assert.equal(await guest.$eval('#latestText', item => item.children.length), 0);
-    await guest.evaluate(() => window.__captionFake.refresh('refreshed-token')); assert.deepEqual(await guest.evaluate(() => window.__captionFake.realtimeTokens), ['refreshed-token']);
-    assert.equal(await guest.evaluate(() => [...window.__captionFake.channels.values()].every(value => value.handlers['caption.batch'] && value.handlers.heartbeat)), true);
-    await guest.click('[data-language="ja"]'); await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Buffered ja'));
+    const guest = await makePage(); await guest.goto(`${origin}/live-captions.html?live=1&event=event-1#token=invite-secret`, { waitUntil: 'networkidle0' });
+    await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot en run-1'));
+    assert.equal(await guest.evaluate(() => location.hash), '', 'the code leaves the address bar'); assert.equal(await guest.evaluate(() => window.__captionFake.anonSignIns), undefined, 'no account of any kind');
+    const emitSigned = (language, event, value) => guest.evaluate((topic, name, payload) => window.__captionFake.emit(topic, name, payload), guestTopic(language), event, envelope(value));
+    await emitSigned('en', 'caption.batch', batch('en', 2, 'Signed en <img onerror=1>'));
+    await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Signed en')); assert.equal(await guest.$eval('#latestText', item => item.children.length), 0);
+    const forged = JSON.stringify(batch('en', 3, 'Forged by another guest')); await guest.evaluate((topic, payload) => window.__captionFake.emit(topic, 'caption.batch', payload), guestTopic('en'), { data: forged, sig: envelope({ other: true }).sig });
+    await guest.evaluate(() => new Promise(resolve => setTimeout(resolve, 300))); assert.match(await guest.$eval('#latestText', item => item.textContent), /^Signed en/, 'a forged caption is ignored');
+    await guest.reload({ waitUntil: 'networkidle0' }); await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot en run-1'));
+    await guest.click('[data-language="ja"]'); await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot ja'));
     assert.equal(await guest.evaluate(() => document.documentElement.lang), 'ja');
-    await guest.evaluate(() => window.__captionFake.emit('topic:ja', 'heartbeat', { type: 'heartbeat', eventId: 'event-1', runId: 'run-1', modeGeneration: 1,
-      channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', language: 'ja', messageSeq: 2, status: 'disconnected', publishedAt: new Date().toISOString() }));
+    await emitSigned('ja', 'heartbeat', { type: 'heartbeat', eventId: 'event-1', runId: 'run-1', modeGeneration: 1, channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', language: 'ja', messageSeq: 1, status: 'disconnected', publishedAt: new Date().toISOString() });
     await guest.waitForFunction(() => document.getElementById('statusLine').dataset.status === 'waiting');
-    currentRunId = 'run-2'; await guest.evaluate(() => window.__captionFake.emit('topic:ja', 'heartbeat', { type: 'heartbeat', eventId: 'event-1', runId: 'run-2', modeGeneration: 2,
-      channelEpoch: 'de7e89c0-34ad-472d-ac41-6ae8f16f24e9', language: 'ja', messageSeq: 1, status: 'live', publishedAt: new Date().toISOString() }));
-    await guest.waitForFunction(() => document.getElementById('latestText').textContent.includes('run-2'));
-    assert.equal(await guest.evaluate(() => window.__captionFake.anonSignIns), 1, 'authorized new run is followed without another sign-in'); await guest.close();
+    currentRunId = 'run-2'; await emitSigned('ja', 'heartbeat', { type: 'heartbeat', eventId: 'event-1', runId: 'run-2', modeGeneration: 2, channelEpoch: 'de7e89c0-34ad-472d-ac41-6ae8f16f24e9', language: 'ja', messageSeq: 1, status: 'live', publishedAt: new Date().toISOString() });
+    await guest.waitForFunction(() => document.getElementById('latestText').textContent.includes('run-2')); await guest.close();
+    const expired = await makePage(); await expired.goto(`${origin}/live-captions.html?live=1&event=event-1#token=old-code`, { waitUntil: 'networkidle0' });
+    await expired.waitForFunction(() => document.getElementById('previewBannerNote')?.textContent.includes('expired or is not valid')); await expired.close();
 
-    const names = actions.map(value => value.action); for (const required of ['config', 'preflight', 'createEvent', 'start', 'ticket', 'snapshot', 'manual', 'review', 'glossary', 'script', 'invite', 'pause', 'resume', 'end', 'stop', 'redeem']) assert(names.includes(required), `missing action ${required}`);
+    const names = actions.map(value => value.action); for (const required of ['config', 'preflight', 'createEvent', 'start', 'ticket', 'snapshot', 'manual', 'review', 'glossary', 'script', 'invite', 'pause', 'resume', 'end', 'stop', 'guestSnapshot']) assert(names.includes(required), `missing action ${required}`);
     const manualCalls = actions.filter(value => value.action === 'manual'); assert.equal(manualCalls.length, 3); assert.equal(manualCalls[0].segmentId, undefined); assert(manualCalls.slice(1).every(value => value.segmentId === 'manual-segment'));
     assert.deepEqual(contractErrors, []); assert.deepEqual(errors, []);
     console.log(JSON.stringify({ result: 'PASS', screenshotDirectory: output, browser: await browser.version(), actions: names,
-      checks: ['four-width live auth layout', 'config gate', 'magic-link login', 'event and audio start', 'manual and review', 'pause/resume/stop', 'fragment redeem', 'subscribe-buffer-snapshot', 'token refresh', 'locale channel change', 'plain text'] }, null, 2));
+      checks: ['four-width live auth layout', 'config gate', 'magic-link login', 'event and audio start', 'manual and review', 'pause/resume/stop', 'guest QR code', 'scan and read without an account', 'signed captions only', 'expired link', 'reload keeps access', 'locale channel change', 'plain text'] }, null, 2));
   } finally { clearTimeout(watchdog); await browser.close(); server.closeAllConnections(); server.close(); }
 }
 main().catch(error => { console.error(error.stack || error.message); process.exitCode = 1; });

@@ -6,6 +6,7 @@ const { CaptionGateway, SupabaseBroadcastPublisher } = require('../lib/captions/
 const { OpenAIRealtimeAsr } = require('../lib/captions/asr.cjs');
 const { OpenAITranslationClient } = require('../lib/captions/translation.cjs');
 const { OpenAIScriptAssistant } = require('../lib/captions/script-assist.cjs');
+const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
 
 function splitOrigins(value) {
   return String(value || '').split(',').map(item => item.trim()).filter(Boolean);
@@ -55,7 +56,8 @@ function createRuntimeFromEnv(env = process.env) {
   }
   const { CaptionStore } = require('../lib/captions/store.cjs');
   const store = new CaptionStore({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY });
-  const publisher = new SupabaseBroadcastPublisher({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY });
+  const publisher = new SupabaseBroadcastPublisher({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    guestSigner: createGuestSigner(env) });
   const translator = new OpenAITranslationClient({ apiKey: env.OPENAI_API_KEY,
     model: env.OPENAI_TRANSLATION_MODEL || 'gpt-4.1-mini' });
   const scriptAssistant = new OpenAIScriptAssistant({ apiKey: env.OPENAI_API_KEY,

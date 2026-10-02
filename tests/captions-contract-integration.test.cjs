@@ -2,6 +2,7 @@
 
 const test = require('node:test');
 const assert = require('node:assert/strict');
+const crypto = require('node:crypto');
 const fs = require('node:fs/promises');
 const path = require('node:path');
 const { PGlite } = require('@electric-sql/pglite');
@@ -12,6 +13,7 @@ const { createHandler } = require('../api/captions.js');
 const ADMIN_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const GUEST_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions.sql');
+const guestLinksPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions_guest_links.sql');
 const jsonArguments = new Set(['p_settings','p_entry','p_script','p_source_segment','p_segment','p_captions','p_payloads','p_details_safe']);
 const setFunctions = new Set(['caption_claim_http_outbox','caption_claim_outbox','caption_claim_approved_reviews']);
 
@@ -50,6 +52,7 @@ async function bootstrap() {
     $$;
   `);
   await db.exec(await fs.readFile(migrationPath, 'utf8'));
+  await db.exec(await fs.readFile(guestLinksPath, 'utf8'));
   return db;
 }
 
@@ -77,7 +80,7 @@ function rpcSql(name, args, returnsSet) {
   return { text: `SELECT ${returnsSet ? '*' : `${name}(${named.join(',')}) AS value`} FROM ${returnsSet ? `${name}(${named.join(',')})` : ''}`.replace(/ FROM $/, ''), values };
 }
 
-function makeSupabaseFetch(db, broadcasts) {
+function makeSupabaseFetch(db, broadcasts, guestBroadcasts = []) {
   return async function supabaseFetch(url, options = {}) {
     const parsed = new URL(url);
     const token = String(options.headers?.Authorization || '').replace(/^Bearer\s+/i, '');
@@ -87,10 +90,13 @@ function makeSupabaseFetch(db, broadcasts) {
         ? internalResponse(200, { id: identity.id, email: identity.email })
         : internalResponse(401, { code: 'invalid_token' });
     }
-    if (parsed.pathname.startsWith('/realtime/v1/api/broadcast/')) {
-      assert.equal(parsed.searchParams.get('private'), 'true');
-      const payload = JSON.parse(options.body);
-      broadcasts.push({ url, payload });
+    if (parsed.pathname === '/realtime/v1/api/broadcast') {
+      assert.equal(identity?.role, 'service_role');
+      for (const message of JSON.parse(options.body).messages) {
+        // Only the signed guest copy may go out on a public topic.
+        assert.equal(message.private, !message.topic.startsWith('caption-guest:'));
+        (message.private ? broadcasts : guestBroadcasts).push({ url, topic: message.topic, event: message.event, payload: message.payload });
+      }
       return internalResponse(202, { accepted: true });
     }
     const match = /^\/rest\/v1\/rpc\/([a-z_]+)$/.exec(parsed.pathname);
@@ -133,26 +139,29 @@ function makeClientFetch(handler) {
 test('browser client, API, store, real RPC SQL, Broadcast and reducer share one contract', async t => {
   const db = await bootstrap();
   t.after(() => db.close());
-  const broadcasts = [];
+  const broadcasts = [], guestBroadcasts = [];
   const env = {
-    CAPTIONS_ENABLED: 'true', CAPTIONS_GUEST_AUTH_AUDITED: 'true',
+    CAPTIONS_ENABLED: 'true', CAPTIONS_GUEST_LINKS: 'true',
+    CAPTIONS_GUEST_SIGNING_KEY: crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64'),
     CAPTIONS_ALLOWED_ORIGINS: 'https://wedding.test',
     SUPABASE_URL: 'https://local.supabase.test', SUPABASE_SERVICE_ROLE_KEY: 'server-secret'
   };
-  const handler = createHandler({ env, fetchImpl: makeSupabaseFetch(db, broadcasts) });
+  const handler = createHandler({ env, fetchImpl: makeSupabaseFetch(db, broadcasts, guestBroadcasts) });
   const api = Live.create({ fetch: makeClientFetch(handler), endpoint: '/api/captions.js' });
 
   const config = await api.request('config');
-  assert.equal(config.guestAuthReady, true);
+  assert.equal(config.guestLinksReady, true);
   const event = await api.request('createEvent', { title: 'Contract wedding', settings: { reviewRequired: true } }, 'admin-token');
-  const run = await api.request('start', { eventId: event.eventId, mode: 'live' }, 'admin-token');
-  assert.ok(event.eventId && run.runId);
-
   const expiry = new Date(Date.now() + 60 * 60 * 1000).toISOString();
   const invite = await api.request('invite', { eventId: event.eventId, expiresAt: expiry, maxUses: 50 }, 'admin-token');
   assert.ok(invite.token);
-  const redeemed = await api.request('redeem', { eventId: event.eventId, token: invite.token }, 'guest-token');
-  assert.equal(redeemed.runId, run.runId);
+  // A guest phone holds only the QR link: no Authorization header on any of its requests.
+  const guestLink = { eventId: event.eventId, token: invite.token, deviceId: 'guest-phone-0001' };
+  const waiting = await api.request('guestSnapshot', { ...guestLink, language: 'en' });
+  assert.deepEqual({ waiting: waiting.waiting, currentRunId: waiting.currentRunId }, { waiting: true, currentRunId: null });
+  const run = await api.request('start', { eventId: event.eventId, mode: 'live' }, 'admin-token');
+  assert.ok(event.eventId && run.runId);
+  await assert.rejects(api.request('guestSnapshot', { ...guestLink, token: 'not-the-link', language: 'en' }), error => error.status === 403 && error.code === 'GUEST_LINK_INVALID');
 
   const scriptShape = { title: 'Vows', content: '多謝大家今日來到。', sequence: 2, active: true };
   const glossaryShape = { sourceTerm: 'Christy', aliases: ['芷晴'], en: 'Christy', ja: 'クリスティ', 'zh-CN': '芷晴', pronunciationNote: null, priority: 10 };
@@ -162,9 +171,15 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   const saved = await db.query(`SELECT s.title,s.content,s.sequence,g.source_term,g.en,g.ja,g."zh-CN",g.priority FROM caption_scripts s CROSS JOIN caption_glossary_entries g WHERE s.id=$1 AND g.id=$2`, [script.id, glossary.id]);
   assert.deepEqual(saved.rows[0], { title:'Vows',content:scriptShape.content,sequence:2,source_term:'Christy',en:'Christy',ja:'クリスティ','zh-CN':'芷晴',priority:10 });
 
-  const empty = await api.request('snapshot', { eventId: event.eventId, runId: run.runId, language: 'en' }, 'guest-token');
+  const empty = await api.request('guestSnapshot', { ...guestLink, language: 'en' });
+  assert.equal(empty.runId, run.runId); assert.equal(empty.currentRunId, run.runId);
   assert.equal(empty.topic, `caption:${event.eventId}:en`);
+  assert.match(empty.guestTopic, new RegExp(`^caption-guest:${event.eventId}:en:[0-9a-f]{32}$`));
+  assert.deepEqual(Object.keys(empty.publicKey).sort(), ['crv', 'kty', 'x', 'y']);
   assert.deepEqual(empty.updates, []);
+  const other = await api.request('createEvent', { title: 'Other wedding' }, 'admin-token');
+  const otherRun = await api.request('start', { eventId: other.eventId, mode: 'live' }, 'admin-token');
+  await assert.rejects(api.request('guestSnapshot', { ...guestLink, runId: otherRun.runId, language: 'en' }), error => error.status === 404 && error.code === 'NOT_FOUND');
 
   const texts = { en:'Thank you for coming.', ja:'本日はお越しいただき、ありがとうございます。', 'zh-CN':'感谢大家今天到来。' };
   let segmentId;
@@ -181,16 +196,28 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
     assert.equal(stores[payload.language].merge(payload), true);
     assert.equal(stores[payload.language].segments(payload.language)[0].text, texts[payload.language]);
   }
+  // The guest copy on the public topic verifies with the key from guestSnapshot and carries the same batch.
+  assert.equal(guestBroadcasts.length, 3);
+  const guestStores = Object.fromEntries(Live.languages.map(language => [language, new Live.CaptionStore()]));
   for (const language of Live.languages) {
-    const snapshot = await api.request('snapshot', { eventId: event.eventId, runId: run.runId, language }, 'guest-token');
+    const snapshot = await api.request('guestSnapshot', { ...guestLink, language });
     stores[language].merge(snapshot);
     assert.equal(stores[language].segments(language)[0].segmentId, segmentId);
+    const key = await crypto.webcrypto.subtle.importKey('jwk', snapshot.publicKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
+    const signed = guestBroadcasts.filter(message => message.topic === snapshot.guestTopic);
+    assert.equal(signed.length, 1);
+    assert.equal(await crypto.webcrypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, Buffer.from(signed[0].payload.sig, 'base64url'),
+      new TextEncoder().encode(signed[0].payload.data)), true);
+    assert.deepEqual(JSON.parse(signed[0].payload.data), broadcasts.find(message => message.payload.language === language).payload);
+    assert.equal(guestStores[language].merge(JSON.parse(signed[0].payload.data)), true);
+    assert.equal(guestStores[language].segments(language)[0].text, texts[language]);
   }
 
   const paused = await api.request('pause', { runId: run.runId }, 'admin-token');
   assert.equal(paused.state, 'paused');
   assert.deepEqual(paused.delivery, { attempted:3, delivered:3, queued:0, errorCode:null });
   assert.equal(broadcasts.length, 6);
+  assert.deepEqual(guestBroadcasts.slice(3).map(message => JSON.parse(message.payload.data).status), ['paused', 'paused', 'paused']);
   for (const { payload } of broadcasts.slice(3)) {
     assert.equal(payload.status, 'paused');
     assert.equal(stores[payload.language].merge(payload), true);

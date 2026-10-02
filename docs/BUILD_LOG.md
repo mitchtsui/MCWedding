@@ -479,6 +479,19 @@ reproduced defects the passing tests had missed, and they were repaired the same
   a bare 400. The migration gained one line:
   `GRANT SELECT ON public.caption_events TO service_role`, for that lookup. A confirmation
   pass then verified those and found four smaller cases, also repaired.
+- **Guests scan a QR code, with no account (user's decision, 2 October).** The couple wanted
+  guests to scan and read, nothing more. The first design already hid the sign-in, but it
+  relied on Supabase anonymous sign-in, which would have had to be switched on for the whole
+  wedding project. Anonymous users count as `authenticated`, and the existing schema grants
+  the RSVP list, the outreach list with phone numbers and attendance to `authenticated`.
+  Supabase also limits anonymous sign-ins per IP, and the hotel's guests share one. So guests
+  now have no account at all. The QR link's private code is checked by the server
+  (`caption_guest_access`, migration `2026-10-02_live_captions_guest_links.sql`, applied and
+  verified the same day), and live captions arrive on a public Realtime channel where every
+  message is signed and the phone drops anything that does not verify. Anonymous sign-in
+  stays off. Trade-off accepted: anyone holding the link can read that event's captions until
+  it expires, with no per-phone limit. Detail in `docs/LIVE_CAPTIONS.md`, "Guests: scan a QR
+  code".
 - **Known shape, not a defect:** each operator page creates its own event. The two admins
   cannot share one event's captions from two pages; whoever starts is the operator, and
   guest links belong to that page's event.
