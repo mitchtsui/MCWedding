@@ -10,12 +10,14 @@
 |------|-------------|
 | `wedding-invitation.html` | Main guest site — one HTML entry (~1 MB). Photos live under `photos/` and the Supabase credentials come from `/api/config.js`; English in the DOM, 繁體中文 + 日本語 via the built-in i18n block |
 | `admin.html` | Admin hub — links to the tools below and to the live site; holds no guest data, no sign-in |
+| `live-captions.html` | Guest captions: an authorized `?live=1` invitation joins one private language channel; `?preview=1` retains sample captions; default is not connected |
+| `live-captions-admin.html` | Operator page: retained `?preview=1` samples and separately gated `?live=1` controls. See [live implementation and release gates](docs/LIVE_CAPTIONS.md) |
 | `seating-planner.html` | Drag-and-drop guest seating manager (13 tables × 12 seats = 156); magic-link sign-in |
 | `whatsapp-outreach.html` | Admin tool: per-guest WhatsApp invitation links + outreach tracker; magic-link sign-in |
 | `preview.html` | Admin preview of the invitation page (no sign-in) |
 | `wedding-day.html` + `wedding-day.js`, `wedding-day-now.js`, `wedding-day-data.js` | Read-only wedding-party rundown for the day itself — see [Wedding day rundown](#wedding-day-rundown-wedding-dayhtml). Timing tests: `tests/wedding-day-now.test.cjs`; spec: `docs/wedding-day-prototype.md` |
 | `api/config.js` | Vercel serverless function that injects `SUPABASE_URL` / `SUPABASE_ANON_KEY` into the browser at runtime — nothing is hardcoded in the HTML |
-| `vercel.json` | Vercel project config: no build step, the repo root is served as-is, `/` rewrites to `wedding-invitation.html` |
+| `vercel.json` | Vercel project config: `npm run build` creates the explicit public `dist/` output; `/` rewrites to `wedding-invitation.html` |
 | `supabase/schema_seed.sql` | Supabase schema, RLS, RPCs + the roster **snapshot as of 2026-08-31** (regenerated from the live database 2026-08-25, last edited 2026-08-31: 165 numbered guests + 2 `[PREVIEW]` rows). The database is the live truth — re-export before trusting a count |
 | `supabase/migrations/` | Standalone SQL you can run without re-seeding the roster (incl. `export_roster_as_seed.sql`, `swap_tables.sql`) |
 | `supabase/audit_rsvp_consistency.sql` | Read-only, 13-query consistency check between `guests` and `rsvp` — run as admin, one block at a time |
@@ -30,7 +32,9 @@
 
 ### 1. Deploy the website
 
-The site is a **Vercel project**, not a single-file upload. There is no build step (`vercel.json` sets `buildCommand: null` and serves the repo root), but the site is more than one file:
+The site is a **Vercel project**, not a single-file upload. Run `npm ci` and `npm run build`;
+the build copies approved public assets into `dist/` and bundles the browser Supabase SDK.
+The site includes:
 
 - the HTML pages at the repo root — `/` is rewritten to `wedding-invitation.html`;
 - `api/config.js`, a serverless function that hands the Supabase URL + anon key to the browser at runtime (step 2). A plain static host would not run it and the site would stay in demo mode;
@@ -219,6 +223,20 @@ These are the couple's **pre-invitation expectations**, seeded into `guests.rsvp
 ---
 
 ## Pending before go-live
+
+### Live captions development (2026-10-02)
+
+The live captions implementation now belongs to this repository. Its architecture,
+account/permission gates, local build, operator runbook and outstanding live tests are
+in [docs/LIVE_CAPTIONS.md](docs/LIVE_CAPTIONS.md). `?preview=1` remains the synthetic
+interface; `?live=1` uses the separately gated backend. Local tests are not a live acceptance result.
+
+Install with `npm ci`, build public assets with `npm run build`, and run the caption
+unit tests with `npm run test:captions`. A Windows sandbox that prevents child processes
+can run `node --test --test-isolation=none tests/captions-*.test.cjs tests/captions-*.test.mjs`.
+Vercel now uses the explicit `dist/` public build; never deploy repository SQL or private recordings.
+Do not enable anonymous caption guests before the existing Supabase permissions audit.
+
 
 - [x] Run `supabase/schema_seed.sql` in the Supabase SQL Editor — schema deployed (verified 2026-08-17); roster regenerated from the live DB 2026-08-25, last updated 2026-08-31
 - [x] Add `SUPABASE_URL` + `SUPABASE_ANON_KEY` to Vercel env vars — injected via `/api/config.js`, demo mode off in production (verified 2026-08-17)

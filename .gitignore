@@ -1,1 +1,10 @@
 .DS_Store
+node_modules/
+dist/
+vendor/
+.vercel/
+.env
+.env.*
+!.env.example
+private/
+*.log

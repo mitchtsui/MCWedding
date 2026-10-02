@@ -440,6 +440,74 @@ rsvp   (id, name, email, phone, attendance, plus_one_name, dietary, song_request
 
 ---
 
+## Live captions interface — 2026-10-01 (Codex)
+
+**2026-10-02 — Live implementation in MCWedding (Codex; not activated).** Added
+feature-gated admin/guest live paths, central browser PCM capture, a Vercel WebSocket
+endpoint, OpenAI adapters, operator-reviewed script suggestions, three translation
+queues, private Supabase delivery, durable final/outbox storage, manual fallback and
+snapshot recovery. The admin card now opens the gated control room; `?preview=1`
+continues to offer the synthetic demonstration. Added an explicit `dist/` build so
+server modules, migration SQL and private files are not public assets. The historical
+"no build step" entry below predates this change. Implementation, release conditions
+and actual validation are recorded in `docs/LIVE_CAPTIONS.md` and
+`docs/CAPTIONS_TEST_REPORT.md`. No production migration, deployment, paid API call or
+anonymous-Auth activation is part of this local implementation record.
+
+**2026-10-02 — Lifecycle review and repairs (Claude, continuing from Codex's handover;
+not activated).** An independent review of the operator page and the stream gateway
+reproduced defects the passing tests had missed, and they were repaired the same day:
+
+- **Operator lock-out.** Any failure after a run existed (no microphone picked, microphone
+  unplugged, a reconnect over its budget, one failed handoff, a Stop request that did not
+  arrive) left the run open on the server with only Start enabled, and Start was then
+  refused. The page now has a "detached" state: **Reconnect captions** reattaches to the
+  same run, **Emergency stop** closes it. Start no longer creates a run before a
+  microphone is chosen.
+- **Undeclared audio loss.** An unplanned reconnect restarted at sequence 0, so the server
+  recorded nothing. It now starts above 0 by the number of frames lost. Lost speech
+  recognition used to discard audio until the next handoff while the page said
+  "connected"; the gateway now closes the stream so the page reconnects.
+- **End claiming a clean finish.** End during a handoff dropped the buffered last words;
+  it now waits for the handoff. End also reports finals that were not saved or translated.
+- **Emergency stop on the wrong run** after a double click; **script suggestions swapping
+  under the Approve button** (they now queue); handoff tail ordering in the gateway.
+- **A second review of those repairs** found one regression (a Start whose reply is lost
+  left an unknown open run) and two holes. `start` now returns an already-open run with
+  `alreadyOpen` instead of only refusing, and the page offers to take it over or close it,
+  never either unasked. "Run closed" is read from the API code `RUN_NOT_OPEN`, never from
+  a bare 400. The migration gained one line:
+  `GRANT SELECT ON public.caption_events TO service_role`, for that lookup. A confirmation
+  pass then verified those and found four smaller cases, also repaired.
+- **Known shape, not a defect:** each operator page creates its own event. The two admins
+  cannot share one event's captions from two pages; whoever starts is the operator, and
+  guest links belong to that page's event.
+
+Decision recorded here because it is easy to undo by accident: the upload-backlog check
+compares queued bytes as sent (base64 JSON, about 3.3 KB a frame), not raw PCM bytes, and
+a replayed handoff buffer gets three seconds to flush. With the old raw-byte threshold a
+full replay tripped an immediate reconnect. What was and was not verified is in
+`docs/CAPTIONS_TEST_REPORT.md`; the operator-facing behaviour is in
+`docs/LIVE_CAPTIONS.md` ("When capture stops without the operator asking").
+
+- User requested the captions UI follow MCWedding and be integrated with an admin entry.
+  Added `live-captions.html`, `live-captions-admin.html`, shared CSS/preview model and
+  separate guest/operator scripts, plus the Live Captions card in `admin.html`.
+- Reuses the current invitation palette and Cormorant Garamond/Raleway typography;
+  no licensed font embed, roster, invitation data or credentials were copied.
+- Explicit `?preview=1` uses prepared samples; default routes are not connected.
+  Guest language/size/history and operator sample/manual controls are interactive.
+  Same-browser BroadcastChannel is a local demonstration, not live Supabase delivery.
+- No Auth/API/DB/provider/audio changes or deployment. The separate TypeScript
+  `wedding-live-captions` project remains the Phase 0 harness. User-confirmed paid
+  Supabase status does not establish project limits or authorize an upgrade.
+- Corrected the admin hub's stale 15-table description to the established 13 tables;
+  kept the new card's CTA at the project's 11.2 px floor.
+- Browser checks and limitations are maintained in `docs/live-captions-preview.md`.
+  The source Brief still governs live readiness; this UI does not pass those gates.
+
+---
+
 ## Tech Stack (old CLAUDE.md §9) — backs CLAUDE.md §2 (files table) and the fonts rule in §3
 
 ### 9. Tech Stack Reference

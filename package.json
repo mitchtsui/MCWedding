@@ -1,0 +1,19 @@
+{
+  "name": "mcwedding",
+  "private": true,
+  "version": "0.1.0",
+  "engines": { "node": "24.x" },
+  "scripts": {
+    "build": "node scripts/build-site.cjs",
+    "test:captions": "node --test tests/captions-*.test.cjs tests/captions-*.test.mjs",
+    "test:captions:preview": "node tests/captions-ui-check.cjs"
+  },
+  "dependencies": {
+    "@supabase/supabase-js": "2.117.2",
+    "ws": "8.22.0"
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "0.5.8",
+    "esbuild": "0.28.2"
+  }
+}

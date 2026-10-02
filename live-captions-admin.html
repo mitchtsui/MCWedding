@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Live Captions Preview — Christy &amp; Mitchell</title>
+  <meta name="description" content="Sample-only operator preview for the wedding captions interface.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,500;1,400&amp;family=Raleway:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="live-captions.css">
+</head>
+<body data-captions-role="operator">
+<div class="shell operator-shell">
+  <nav class="admin-nav" aria-label="Admin tools">
+    <a href="admin.html">← Portal</a>
+    <span aria-hidden="true">·</span>
+    <a href="seating-planner.html">Seating Planner</a>
+    <span aria-hidden="true">·</span>
+    <a href="whatsapp-outreach.html">WhatsApp Outreach</a>
+    <span aria-hidden="true">·</span>
+    <a href="preview.html">Invitation Preview</a>
+    <span aria-hidden="true">·</span>
+    <a href="live-captions-admin.html?preview=1" aria-current="page">Live Captions</a>
+  </nav>
+
+  <header class="topbar">
+    <div class="wordmark">Christy <span aria-hidden="true">&amp;</span> Mitchell</div>
+    <a class="button button-quiet" id="guest-preview-link" href="live-captions.html?preview=1" target="_blank" rel="noopener">Open guest preview ↗</a>
+  </header>
+
+  <main>
+    <section class="page-intro" aria-labelledby="captions-title">
+      <p class="eyebrow" id="operator-eyebrow">Operator interface preview</p>
+      <h1 class="page-title" id="captions-title">Live captions</h1>
+      <p class="subtitle" id="operator-subtitle">A sample control room for exploring the wedding caption experience. It does not listen, translate, broadcast or record.</p>
+
+      <div class="preview-banner" id="preview-banner" role="status">
+        <div>
+          <strong id="preview-banner-title">Prototype only</strong>
+          <p id="preview-banner-copy">This page is not connected to a microphone, translation provider or guest display.</p>
+        </div>
+        <a class="button button-primary" id="enable-preview-link" href="live-captions-admin.html?preview=1">Try operator preview</a>
+      </div>
+
+      <section class="paper live-only" id="live-auth-panel" hidden aria-labelledby="live-auth-title">
+        <p class="section-label" id="live-auth-title">Operator sign-in</p>
+        <p class="subtitle">Live controls require the existing Supabase magic-link session and a server-side admin check.</p>
+        <form class="auth-inline" id="live-auth-form">
+          <label class="field-label" for="live-auth-email">Admin email</label>
+          <input id="live-auth-email" type="email" autocomplete="email" required>
+          <button class="button button-primary" id="live-auth-submit" type="submit">Send magic link</button>
+        </form>
+        <p class="notice" id="live-auth-status" aria-live="polite">Checking session...</p>
+      </section>
+
+      <div class="operator-grid">
+        <div class="control-stack">
+          <section class="paper" aria-labelledby="controls-title">
+            <div>
+              <p class="section-label" id="controls-title">Sample controls</p>
+              <div class="status-line" aria-live="polite" aria-atomic="true">
+                <span class="status-dot" id="status-dot" data-state="waiting" aria-hidden="true"></span>
+                <span id="status-text">Not connected</span>
+              </div>
+            </div>
+
+            <div class="live-device live-only" id="live-device-panel" hidden>
+              <label class="field-label" for="audio-device">Microphone</label>
+              <div class="control-row"><select id="audio-device" disabled><option value="">Select a microphone</option></select>
+                <button class="button button-quiet" id="refresh-devices" type="button" disabled>Refresh devices</button></div>
+              <meter id="audio-meter" min="0" max="1" value="0" aria-label="Microphone level"></meter>
+              <p class="notice" id="audio-alert" aria-live="assertive"></p>
+            </div>
+
+            <div class="control-row" aria-label="Caption controls">
+              <button class="button button-primary preview-control" id="start-button" type="button" disabled>Start sample</button>
+              <button class="button preview-control" id="pause-button" type="button" disabled>Pause</button>
+              <button class="button preview-control" id="resume-button" type="button" disabled>Resume</button>
+              <button class="button preview-control" id="next-button" type="button" disabled>Next sample</button>
+              <button class="button button-quiet preview-control" id="end-button" type="button" disabled>End sample</button>
+            </div>
+
+            <div class="notice" id="capture-notice">
+              <strong>No audio is used.</strong>
+              These controls run prepared caption samples in this browser only.
+            </div>
+
+            <button class="button button-danger preview-control" id="stop-button" type="button" disabled>Emergency stop (preview)</button>
+            <p class="subtitle" id="stop-help">Stops the sample loop and keeps the current captions on screen. It does not control live audio or a live service.</p>
+            <div class="live-only" id="live-invite-panel" hidden>
+              <label class="field-label" for="invite-expiry">Guest link expiry</label>
+              <input id="invite-expiry" type="datetime-local">
+              <label class="field-label" for="invite-max-uses">Maximum guest uses</label>
+              <input id="invite-max-uses" type="number" min="1" max="500" value="65">
+              <button class="button button-quiet" id="create-invite" type="button" disabled>Create guest link</button>
+              <output class="notice invite-output" id="invite-output" aria-live="polite"></output>
+            </div>
+          </section>
+
+          <section class="paper" aria-labelledby="preflight-title">
+            <p class="section-label" id="preflight-title">Preflight</p>
+            <ul class="preflight-list">
+              <li><span>Mode</span><span id="preflight-preview">Off</span></li>
+              <li><span>Operator authorization</span><span id="preflight-auth">Not checked</span></li>
+              <li><span>Microphone</span><span id="preflight-microphone">Not requested</span></li>
+              <li><span>Speech recognition</span><span id="preflight-asr">Not connected</span></li>
+              <li><span>Translation provider</span><span id="preflight-translation">Not connected</span></li>
+              <li><span>Guest delivery</span><span id="preflight-delivery">Not connected</span></li>
+            </ul>
+          </section>
+        </div>
+
+        <div class="control-stack">
+          <section class="paper" aria-labelledby="latest-title">
+            <p class="section-label" id="latest-title">Latest sample</p>
+            <div class="empty-state" id="caption-empty">Start the preview to show prepared caption samples here.</div>
+            <div id="caption-preview" hidden>
+              <article>
+                <h3>Cantonese source sample</h3>
+                <p class="source-text" id="caption-source" lang="yue-Hant">—</p>
+              </article>
+              <div class="preview-grid">
+                <article class="language-preview" data-lang="en">
+                  <h3>English</h3>
+                  <p id="caption-en" lang="en">—</p>
+                </article>
+                <article class="language-preview" data-lang="ja">
+                  <h3>日本語</h3>
+                  <p id="caption-ja" lang="ja">—</p>
+                </article>
+                <article class="language-preview" data-lang="zh-CN">
+                  <h3>简体中文</h3>
+                  <p id="caption-zh-cn" lang="zh-CN">—</p>
+                </article>
+              </div>
+            </div>
+          </section>
+
+          <section class="paper" aria-labelledby="manual-title">
+            <p class="section-label" id="manual-title">Manual target-text preview</p>
+            <p class="subtitle">Optional sample text only. Enter the languages you want to preview; blank fields remain blank and are never auto-translated.</p>
+            <form class="manual-form" id="manual-form">
+              <label class="field-label" for="manual-en">
+                English
+                <textarea id="manual-en" name="en" rows="3" maxlength="1200" placeholder="Optional English sample" disabled></textarea>
+              </label>
+              <label class="field-label" for="manual-ja">
+                日本語
+                <textarea id="manual-ja" name="ja" rows="3" maxlength="1200" placeholder="任意の日本語サンプル" disabled></textarea>
+              </label>
+              <label class="field-label" for="manual-zh-cn">
+                简体中文
+                <textarea id="manual-zh-cn" name="zh-CN" rows="3" maxlength="1200" placeholder="可选简体中文示例" disabled></textarea>
+              </label>
+              <div class="control-row">
+                <button class="button button-primary" id="manual-submit" type="submit" disabled>Send to preview</button>
+                <button class="button button-quiet" id="manual-clear" type="button" disabled>Clear fields</button>
+              </div>
+              <p class="notice" id="manual-message" aria-live="polite"></p>
+            </form>
+          </section>
+
+          <section class="paper live-only" id="review-panel" hidden aria-labelledby="review-title">
+            <p class="section-label" id="review-title">Script suggestion review</p>
+            <p class="subtitle">Suggestions never replace the raw source automatically.</p>
+            <dl class="review-copy"><dt>Raw ASR</dt><dd id="review-raw">No pending suggestion.</dd>
+              <dt>Proposed text</dt><dd id="review-proposed">—</dd><dt>Matched cues</dt><dd id="review-cues">—</dd></dl>
+            <div class="control-row"><button class="button button-primary" id="review-approve" type="button" disabled>Approve suggestion</button>
+              <button class="button button-quiet" id="review-reject" type="button" disabled>Keep raw text</button></div>
+          </section>
+
+          <section class="paper live-only" id="content-tools" hidden aria-labelledby="content-tools-title">
+            <p class="section-label" id="content-tools-title">Prepared language support</p>
+            <label class="field-label" for="glossary-source">Glossary source term</label><input id="glossary-source" maxlength="240">
+            <label class="field-label" for="glossary-en">English</label><input id="glossary-en" maxlength="1000">
+            <label class="field-label" for="glossary-ja">日本語</label><input id="glossary-ja" maxlength="1000">
+            <label class="field-label" for="glossary-zh-cn">简体中文</label><input id="glossary-zh-cn" maxlength="1000">
+            <button class="button button-quiet" id="save-glossary" type="button" disabled>Save glossary</button>
+            <label class="field-label" for="script-title">Script title</label><input id="script-title" maxlength="240" value="Wedding advance script">
+            <label class="field-label" for="script-sequence">Sequence</label><input id="script-sequence" type="number" min="0" value="0">
+            <label class="field-label" for="script-text">Advance script</label><textarea id="script-text" rows="8" maxlength="40000"></textarea>
+            <button class="button button-quiet" id="save-script" type="button" disabled>Save script</button>
+            <p class="notice" id="content-tools-status" aria-live="polite"></p>
+          </section>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="site-footer" id="operator-footer">
+    Prototype interface · Sample captions only · No microphone or provider connection
+  </footer>
+</div>
+
+  <script src="live-captions-preview.js"></script>
+  <script src="live-captions-admin.js"></script>
+</body>
+</html>
