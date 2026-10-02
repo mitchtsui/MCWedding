@@ -1,5 +1,6 @@
 'use strict';
 
+const { createHash } = require('node:crypto');
 const { CaptionStore, CaptionStoreError } = require('../lib/captions/store.cjs');
 const { CaptionDelivery } = require('../lib/captions/delivery.cjs');
 const { createGuestSigner, guestLinksReady } = require('../lib/captions/guest-link.cjs');
@@ -37,19 +38,47 @@ function requiredUuid(value, name) {
   return value;
 }
 
-async function guestSnapshot({ store, signer, input }) {
+// A venue of phones polls the same few rows, so guest reads are kept for a few seconds and concurrent
+// requests share one database call. Like the rate-limit buckets in http.cjs, this is per serverless
+// instance: each instance keeps its own bounded copy.
+function createGuestReadCache({ max = 1000, now = Date.now } = {}) {
+  const entries = new Map();
+  return {
+    get size() { return entries.size; },
+    read(key, ttlMs, load, keepError = () => false) {
+      const at = now();
+      const hit = entries.get(key);
+      if (hit && hit.expiresAt > at) return hit.promise;
+      entries.delete(key);
+      if (entries.size >= max) {
+        for (const [candidate, entry] of entries) if (entry.expiresAt <= at) entries.delete(candidate);
+        while (entries.size >= max) entries.delete(entries.keys().next().value);
+      }
+      const entry = { promise: Promise.resolve().then(load), expiresAt: at + ttlMs };
+      entries.set(key, entry);
+      entry.promise.catch(error => { if (!keepError(error) && entries.get(key) === entry) entries.delete(key); });
+      return entry.promise;
+    }
+  };
+}
+
+async function guestSnapshot({ store, signer, input, reads, now }) {
   const eventId = requiredUuid(input.eventId, 'eventId');
   const language = requiredLanguage(input.language);
   const token = requiredText(input.token, 'token', 512);
   const requestedRun = input.runId == null || input.runId === '' ? null : requiredUuid(input.runId, 'runId');
-  const access = await store.guestAccess({ eventId, token }).catch(error => {
+  const tokenHash = createHash('sha256').update(token).digest('hex');
+  // Refusals are kept too, so a flood of one bad link does not reach the database.
+  const access = await reads.read(`access:${eventId}:${tokenHash}`, 5000, () => store.guestAccess({ eventId, token }).catch(error => {
     throw error instanceof CaptionStoreError && error.details === '28000'
       ? new CaptionStoreError('GUEST_LINK_INVALID', 'This guest link has expired or is not valid', 403, '28000') : error;
-  });
-  const guest = { guestTopic: signer.topicFor(eventId, language), publicKey: signer.publicJwk, expiresAt: access.expiresAt };
+  }), error => error.code === 'GUEST_LINK_INVALID');
   const runId = requestedRun || access.runId;
-  if (!runId) return { waiting: true, eventId, language, currentRunId: null, ...guest };
-  return { ...(await store.getSnapshotAsService({ eventId, runId, language })), currentRunId: access.runId ?? null, ...guest };
+  const snapshot = runId ? await reads.read(`snapshot:${eventId}:${runId}:${language}`, 2000,
+    () => store.getSnapshotAsService({ eventId, runId, language })) : null;
+  const guest = { guestTopic: signer.topicFor(eventId, language), publicKey: signer.publicJwk, expiresAt: access.expiresAt, serverTime: now() };
+  if (!snapshot) return { waiting: true, eventId, language, currentRunId: null, ...guest };
+  return { ...snapshot, currentRunId: access.runId ?? null, ...guest };
 }
 
 // Postgres 22023 is the run refusing the action in its current state. The store reports it as the same
@@ -90,7 +119,8 @@ async function dispatchHttpOutbox({ store, delivery, outboxIds, workerId }) {
   }
 }
 
-function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
+function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date.now } = {}) {
+  const reads = createGuestReadCache({ now });
   return async function handler(req, res) {
     const id = requestId(req);
     let rate;
@@ -114,8 +144,9 @@ function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
         throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires POST', 405);
       }
       const store = makeStore(env, fetchImpl);
+      // CAPTIONS_GUEST_LINKS=false stops every public guest broadcast, even with a signing key set.
       const delivery = new CaptionDelivery({ supabaseUrl: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY, fetchImpl,
-        guestSigner: createGuestSigner(env) });
+        guestSigner: guestLinksReady(env) ? createGuestSigner(env) : null });
       if (action === 'config') {
         rate = rateLimit(req, action);
         const data = {
@@ -131,7 +162,7 @@ function createHandler({ env = process.env, fetchImpl = global.fetch } = {}) {
       if (action === 'guestSnapshot') {
         if (!guestLinksReady(env)) throw new CaptionStoreError('GUEST_LINKS_DISABLED', 'Guest links are switched off', 503);
         rate = guestRateLimit(req, input.deviceId);
-        const data = await guestSnapshot({ store, signer: createGuestSigner(env), input });
+        const data = await guestSnapshot({ store, signer: createGuestSigner(env), input, reads, now });
         const origin = String(req.headers?.origin || '');
         if (origin && allowedOrigins(env).has(origin)) {
           res.setHeader('Access-Control-Allow-Origin', origin);
@@ -235,3 +266,4 @@ module.exports.createHandler = createHandler;
 module.exports.envEnabled = envEnabled;
 module.exports.guestLinksReady = guestLinksReady;
 module.exports.dispatchHttpOutbox = dispatchHttpOutbox;
+module.exports.createGuestReadCache = createGuestReadCache;

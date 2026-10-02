@@ -146,7 +146,9 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
     CAPTIONS_ALLOWED_ORIGINS: 'https://wedding.test',
     SUPABASE_URL: 'https://local.supabase.test', SUPABASE_SERVICE_ROLE_KEY: 'server-secret'
   };
-  const handler = createHandler({ env, fetchImpl: makeSupabaseFetch(db, broadcasts, guestBroadcasts) });
+  // The handler keeps guest reads a few seconds; the clock steps past that wherever the test needs fresh database state.
+  let clock = Date.now();
+  const handler = createHandler({ env, fetchImpl: makeSupabaseFetch(db, broadcasts, guestBroadcasts), now: () => clock });
   const api = Live.create({ fetch: makeClientFetch(handler), endpoint: '/api/captions.js' });
 
   const config = await api.request('config');
@@ -161,6 +163,9 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   assert.deepEqual({ waiting: waiting.waiting, currentRunId: waiting.currentRunId }, { waiting: true, currentRunId: null });
   const run = await api.request('start', { eventId: event.eventId, mode: 'live' }, 'admin-token');
   assert.ok(event.eventId && run.runId);
+  const cachedWaiting = await api.request('guestSnapshot', { ...guestLink, language: 'en' });
+  assert.equal(cachedWaiting.waiting, true, 'a phone may see the run up to five seconds after Start');
+  clock += 5001;
   await assert.rejects(api.request('guestSnapshot', { ...guestLink, token: 'not-the-link', language: 'en' }), error => error.status === 403 && error.code === 'GUEST_LINK_INVALID');
 
   const scriptShape = { title: 'Vows', content: '多謝大家今日來到。', sequence: 2, active: true };
@@ -172,7 +177,7 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   assert.deepEqual(saved.rows[0], { title:'Vows',content:scriptShape.content,sequence:2,source_term:'Christy',en:'Christy',ja:'クリスティ','zh-CN':'芷晴',priority:10 });
 
   const empty = await api.request('guestSnapshot', { ...guestLink, language: 'en' });
-  assert.equal(empty.runId, run.runId); assert.equal(empty.currentRunId, run.runId);
+  assert.equal(empty.runId, run.runId); assert.equal(empty.currentRunId, run.runId); assert.equal(empty.serverTime, clock);
   assert.equal(empty.topic, `caption:${event.eventId}:en`);
   assert.match(empty.guestTopic, new RegExp(`^caption-guest:${event.eventId}:en:[0-9a-f]{32}$`));
   assert.deepEqual(Object.keys(empty.publicKey).sort(), ['crv', 'kty', 'x', 'y']);
@@ -199,8 +204,10 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   // The guest copy on the public topic verifies with the key from guestSnapshot and carries the same batch.
   assert.equal(guestBroadcasts.length, 3);
   const guestStores = Object.fromEntries(Live.languages.map(language => [language, new Live.CaptionStore()]));
+  clock += 2001;
   for (const language of Live.languages) {
     const snapshot = await api.request('guestSnapshot', { ...guestLink, language });
+    assert.equal(snapshot.updates[0].text, texts[language], 'the snapshot carries the caption once the short cache has passed');
     stores[language].merge(snapshot);
     assert.equal(stores[language].segments(language)[0].segmentId, segmentId);
     const key = await crypto.webcrypto.subtle.importKey('jwk', snapshot.publicKey, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
@@ -208,8 +215,11 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
     assert.equal(signed.length, 1);
     assert.equal(await crypto.webcrypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key, Buffer.from(signed[0].payload.sig, 'base64url'),
       new TextEncoder().encode(signed[0].payload.data)), true);
-    assert.deepEqual(JSON.parse(signed[0].payload.data), broadcasts.find(message => message.payload.language === language).payload);
-    assert.equal(guestStores[language].merge(JSON.parse(signed[0].payload.data)), true);
+    const envelope = JSON.parse(signed[0].payload.data);
+    assert.equal(envelope.topic, snapshot.guestTopic, 'signed for the topic the phone subscribed to');
+    assert(Math.abs(envelope.iat - Date.now()) <= 120000, 'signed within the window the phone accepts');
+    assert.deepEqual(envelope.payload, broadcasts.find(message => message.payload.language === language).payload);
+    assert.equal(guestStores[language].merge(envelope.payload), true);
     assert.equal(guestStores[language].segments(language)[0].text, texts[language]);
   }
 
@@ -217,7 +227,7 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   assert.equal(paused.state, 'paused');
   assert.deepEqual(paused.delivery, { attempted:3, delivered:3, queued:0, errorCode:null });
   assert.equal(broadcasts.length, 6);
-  assert.deepEqual(guestBroadcasts.slice(3).map(message => JSON.parse(message.payload.data).status), ['paused', 'paused', 'paused']);
+  assert.deepEqual(guestBroadcasts.slice(3).map(message => JSON.parse(message.payload.data).payload.status), ['paused', 'paused', 'paused']);
   for (const { payload } of broadcasts.slice(3)) {
     assert.equal(payload.status, 'paused');
     assert.equal(stores[payload.language].merge(payload), true);

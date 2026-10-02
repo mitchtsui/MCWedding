@@ -91,6 +91,20 @@ test('guest captions are accepted only when signed by the caption server', async
   assert.deepEqual(channelOptions, { config: { private: true } }, 'operator channels stay private by default');
 });
 
+test('a genuine guest message is refused when replayed on another channel or long after it was signed', async () => {
+  const { generateKeyPairSync, sign, webcrypto } = require('node:crypto');
+  const pair = generateKeyPairSync('ec', { namedCurve: 'P-256' }), key = await Live.importGuestKey(pair.publicKey.export({ format: 'jwk' }), webcrypto.subtle);
+  const signed = (topic, iat, payload = { type: 'heartbeat' }) => { const data = JSON.stringify({ topic, iat, payload });
+    return { data, sig: sign('sha256', Buffer.from(data), { key: pair.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }; };
+  const now = 1_800_000_000_000, options = { topic: 'caption-guest:e:en:aa', now, subtle: webcrypto.subtle };
+  assert.deepEqual(await Live.openGuestMessage(key, signed('caption-guest:e:en:aa', now - 5000), options), { payload: { type: 'heartbeat' }, iat: now - 5000 });
+  assert.equal(await Live.openGuestMessage(key, signed('caption-guest:e:ja:bb', now), options), null, 'signed for another channel');
+  assert.equal(await Live.openGuestMessage(key, signed('caption-guest:e:en:aa', now - 121000), options), null, 'too old');
+  assert.equal(await Live.openGuestMessage(key, signed('caption-guest:e:en:aa', now + 121000), options), null, 'from the future');
+  assert.ok(await Live.openGuestMessage(key, signed('caption-guest:e:en:aa', now + 300000), { ...options, serverOffset: 300000 }), 'a phone whose clock is five minutes slow still accepts current messages');
+  assert.equal(await Live.openGuestMessage(key, signed('caption-guest:e:en:aa', now, null), options), null, 'no payload');
+});
+
 test('guest invite helpers keep token in the fragment and clear it after redemption', () => {
   assert.equal(Live.fragmentToken('#event=e1&token=private-token'), 'private-token');
   assert.equal(Live.fragmentEventId('#event=e1&token=private-token'), 'e1');
@@ -117,7 +131,7 @@ test('live pages remain opt-in and use isolated auth plus text-only rendering', 
   assert.doesNotMatch(admin, /mc-captions-admin-auth/);
   assert.doesNotMatch(guest, /signInAnonymously|request\('redeem'|keepRealtimeAuth/, 'guests have no account of any kind');
   assert.match(guest, /api\.request\('guestSnapshot'/);
-  assert.match(guest, /openEnvelope\(guestKey, envelope\)/);
+  assert.match(guest, /openGuestMessage\(guestKey, envelope, \{ topic: subscribedTopic, serverOffset \}\)/);
   assert.match(guest, /\{ private: false \}/);
   assert.match(guest, /clearFragment\(history, location\)/);
   assert.doesNotMatch(admin + guest, /\.innerHTML\s*=/);

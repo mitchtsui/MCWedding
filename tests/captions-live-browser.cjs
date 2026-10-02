@@ -54,7 +54,8 @@ const audioFake = `window.CaptionsAudio = {
 
 const { generateKeyPairSync, sign } = require('node:crypto');
 const signing = generateKeyPairSync('ec', { namedCurve: 'P-256' }), publicKey = signing.publicKey.export({ format: 'jwk' });
-const envelope = value => { const data = JSON.stringify(value); return { data, sig: sign('sha256', Buffer.from(data), { key: signing.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }; };
+// As the gateway signs: the channel it is published to, when it was signed, and the payload.
+const envelope = (topic, payload, iat = Date.now()) => { const data = JSON.stringify({ topic, iat, payload }); return { data, sig: sign('sha256', Buffer.from(data), { key: signing.privateKey, dsaEncoding: 'ieee-p1363' }).toString('base64url') }; };
 const guestTopic = language => `caption-guest:event-1:${language}:0123456789abcdef0123456789abcdef`;
 
 async function main() {
@@ -88,7 +89,7 @@ async function main() {
       else if (input.action === 'guestSnapshot') {
         if (req.headers.authorization) contractErrors.push('guest_sent_authorization');
         if (input.token !== 'invite-secret' || input.eventId !== 'event-1') { res.statusCode = 403; res.setHeader('Content-Type', 'application/json'); res.end(JSON.stringify({ ok: false, requestId: 'fake-request', error: { code: 'GUEST_LINK_INVALID', message: 'This guest link has expired or is not valid' } })); return; }
-        const selected = input.runId || currentRunId; data = { ...batch(input.language, 1, `Snapshot ${input.language} ${selected}`, selected), currentRunId, guestTopic: guestTopic(input.language), publicKey };
+        const selected = input.runId || currentRunId; data = { ...batch(input.language, 1, `Snapshot ${input.language} ${selected}`, selected), currentRunId, guestTopic: guestTopic(input.language), publicKey, serverTime: Date.now() };
       }
       else if (input.action === 'manual') data = { segmentId: 'manual-segment', messageSeq: 3, delivery: { attempted: true, delivered: true, queued: false } };
       else if (input.action === 'invite') { if (!input.expiresAt || !Number.isSafeInteger(input.maxUses) || input.maxUses < 65) contractErrors.push('invite_contract'); data = { token: 'guest-invite', inviteId: 'invite-1' }; }
@@ -213,11 +214,16 @@ async function main() {
     const guest = await makePage(); await guest.goto(`${origin}/live-captions.html?live=1&event=event-1#token=invite-secret`, { waitUntil: 'networkidle0' });
     await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot en run-1'));
     assert.equal(await guest.evaluate(() => location.hash), '', 'the code leaves the address bar'); assert.equal(await guest.evaluate(() => window.__captionFake.anonSignIns), undefined, 'no account of any kind');
-    const emitSigned = (language, event, value) => guest.evaluate((topic, name, payload) => window.__captionFake.emit(topic, name, payload), guestTopic(language), event, envelope(value));
+    const emitOn = (channelLanguage, event, value) => guest.evaluate((topic, name, payload) => window.__captionFake.emit(topic, name, payload), guestTopic(channelLanguage), event, value);
+    const emitSigned = (language, event, value) => emitOn(language, event, envelope(guestTopic(language), value));
     await emitSigned('en', 'caption.batch', batch('en', 2, 'Signed en <img onerror=1>'));
     await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Signed en')); assert.equal(await guest.$eval('#latestText', item => item.children.length), 0);
-    const forged = JSON.stringify(batch('en', 3, 'Forged by another guest')); await guest.evaluate((topic, payload) => window.__captionFake.emit(topic, 'caption.batch', payload), guestTopic('en'), { data: forged, sig: envelope({ other: true }).sig });
-    await guest.evaluate(() => new Promise(resolve => setTimeout(resolve, 300))); assert.match(await guest.$eval('#latestText', item => item.textContent), /^Signed en/, 'a forged caption is ignored');
+    const forged = JSON.stringify({ topic: guestTopic('en'), iat: Date.now(), payload: batch('en', 3, 'Forged by another guest') });
+    await emitOn('en', 'caption.batch', { data: forged, sig: envelope(guestTopic('en'), { other: true }).sig });
+    await emitOn('en', 'caption.batch', envelope(guestTopic('ja'), batch('en', 4, 'Signed for another channel')));
+    await emitOn('en', 'caption.batch', envelope(guestTopic('en'), batch('en', 5, 'Replayed ten minutes later'), Date.now() - 600000));
+    await guest.evaluate(() => new Promise(resolve => setTimeout(resolve, 300)));
+    assert.match(await guest.$eval('#latestText', item => item.textContent), /^Signed en/, 'forged, misaddressed and stale messages are all ignored');
     await guest.reload({ waitUntil: 'networkidle0' }); await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot en run-1'));
     await guest.click('[data-language="ja"]'); await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot ja'));
     assert.equal(await guest.evaluate(() => document.documentElement.lang), 'ja');

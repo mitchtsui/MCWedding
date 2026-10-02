@@ -66,7 +66,10 @@ test('with a guest signer one request carries the private message and a signed p
   assert.deepEqual({ topic:privateMessage.topic,private:privateMessage.private },{ topic:'caption:event-1:ja',private:true });
   assert.deepEqual({ topic:publicMessage.topic,event:publicMessage.event,private:publicMessage.private },
     { topic:signer.topicFor('event-1','ja'),event:'caption.batch',private:false });
-  assert.deepEqual(JSON.parse(publicMessage.payload.data),privateMessage.payload,'the guest copy is the same stripped payload');
+  const signed = JSON.parse(publicMessage.payload.data);
+  assert.deepEqual(signed.payload,privateMessage.payload,'the guest copy is the same stripped payload');
+  assert.equal(signed.topic,publicMessage.topic,'the signature covers the topic it was published to');
+  assert(Number.isInteger(signed.iat) && Math.abs(Date.now()-signed.iat) < 5000);
   const verifyKey = await crypto.webcrypto.subtle.importKey('jwk',signer.publicJwk,{name:'ECDSA',namedCurve:'P-256'},false,['verify']);
   assert.equal(await crypto.webcrypto.subtle.verify({name:'ECDSA',hash:'SHA-256'},verifyKey,Buffer.from(publicMessage.payload.sig,'base64url'),
     new TextEncoder().encode(publicMessage.payload.data)),true);
@@ -75,6 +78,27 @@ test('with a guest signer one request carries the private message and a signed p
   const [retried] = await delivery.deliverMany([{ id:'outbox-3',payload:captionPayload() }]);
   assert.equal(retried.delivered,false);
   assert.deepEqual(calls.slice(-2).map(messages => messages.map(message => message.private)),[[true,false],[true,false]],'the retry re-sends both');
+});
+
+test('CAPTIONS_GUEST_LINKS=false stops public guest broadcasts from the API even with a signing key set', async () => {
+  const key = crypto.generateKeyPairSync('ec',{namedCurve:'P-256'}).privateKey.export({format:'der',type:'pkcs8'}).toString('base64');
+  for (const [links,expected] of [['false',[true]],[undefined,[true]],['true',[true,false]]]) {
+    const sent = [];
+    const fetchImpl = async (url,options={}) => {
+      if (url.endsWith('/auth/v1/user')) return response(200,{id:'admin'});
+      if (url.endsWith('/rpc/is_admin')) return response(200,true);
+      if (url.endsWith('/rpc/caption_transition_run')) return response(200,{run_id:'run-1',state:'paused',delivery_outbox_ids:['o-en']});
+      if (url.endsWith('/rpc/caption_claim_http_outbox')) return response(200,[{id:'o-en',payload:captionPayload({status:'paused'})}]);
+      if (url.endsWith('/rpc/caption_validate_http_outbox')) return response(200,true);
+      if (url.endsWith('/rpc/caption_complete_outbox')) return response(200,{status:'sent'});
+      if (url.endsWith('/realtime/v1/api/broadcast')) { sent.push(JSON.parse(options.body).messages); return response(202); }
+      throw new Error(`unexpected ${url}`);
+    };
+    const output = res();
+    await createHandler({env:{...env,CAPTIONS_GUEST_SIGNING_KEY:key,...(links ? {CAPTIONS_GUEST_LINKS:links} : {})},fetchImpl})(req({action:'pause',runId:'run-1'}),output);
+    assert.equal(output.statusCode,200);
+    assert.deepEqual(sent.map(messages => messages.map(message => message.private)),[expected],`CAPTIONS_GUEST_LINKS=${links}`);
+  }
 });
 
 test('delivery timeout is bounded and sanitized', async () => {

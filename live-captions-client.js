@@ -171,7 +171,16 @@
     try { return JSON.parse(envelope.data); } catch { return null; }
   }
 
+  // A guest message must be signed, addressed to the channel it arrived on, and recent: a genuine message
+  // replayed later or on another channel is refused. serverOffset is the server clock minus this phone's clock.
+  async function openGuestMessage(key, envelope, { topic, serverOffset = 0, now = Date.now(), maxAgeMs = 120000, subtle = globalThis.crypto?.subtle } = {}) {
+    const message = await openEnvelope(key, envelope, subtle);
+    if (!message || typeof message !== 'object' || message.topic !== topic || !Number.isSafeInteger(message.iat)) return null;
+    if (Math.abs(now + serverOffset - message.iat) > maxAgeMs || !message.payload || typeof message.payload !== 'object') return null;
+    return { payload: message.payload, iat: message.iat };
+  }
+
   return Object.freeze({ languages, CaptionStore, create, createSupabase, accessToken,
     keepRealtimeAuth, heartbeatNeedsSnapshot, currentSnapshot, subscribe, fragmentToken, fragmentEventId, fragmentRunId, clearFragment, cleanError,
-    importGuestKey, openEnvelope });
+    importGuestKey, openEnvelope, openGuestMessage });
 }));

@@ -13,14 +13,15 @@ const { CaptionGateway, GatewaySession } = require('../lib/captions/gateway.cjs'
 const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions.sql');
 const guestLinksPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions_guest_links.sql');
 
-async function database({ supabaseExtensions = false } = {}) {
+async function database({ supabaseExtensions = false, supabaseDefaultPrivileges = false } = {}) {
   const db = new PGlite({ extensions: { pgcrypto } });
   // Supabase installs pgcrypto in its own `extensions` schema; by default it lands in public here.
   if (supabaseExtensions) await db.exec(`CREATE SCHEMA extensions; CREATE EXTENSION pgcrypto SCHEMA extensions;`);
+  // Supabase also grants EXECUTE on every new public function to its API roles, not only to PUBLIC.
+  if (supabaseDefaultPrivileges) await db.exec(`CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;
+    ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT EXECUTE ON FUNCTIONS TO anon, authenticated, service_role;`);
   await db.exec(`
-    CREATE ROLE anon;
-    CREATE ROLE authenticated;
-    CREATE ROLE service_role;
+    ${supabaseDefaultPrivileges ? '' : 'CREATE ROLE anon; CREATE ROLE authenticated; CREATE ROLE service_role;'}
     CREATE SCHEMA auth;
     CREATE OR REPLACE FUNCTION auth.uid() RETURNS uuid LANGUAGE sql STABLE AS $$
       SELECT nullif(current_setting('request.jwt.claim.sub', true), '')::uuid
@@ -113,21 +114,27 @@ test('tickets and invites work with pgcrypto in the extensions schema, as Supaba
 });
 
 test('the guest link migration applies after the original, both re-apply cleanly, and only the service role may call it', async t => {
-  const db = await database({ supabaseExtensions: true });
+  // A fresh install in the documented order is the case that matters: once the function exists, re-applying the base
+  // migration revokes it again in its own loop, and CREATE OR REPLACE keeps whatever privileges are already there.
+  const db = await database({ supabaseExtensions: true, supabaseDefaultPrivileges: true });
   t.after(() => db.close());
-  for (const file of [migrationPath, guestLinksPath, guestLinksPath, migrationPath]) await db.exec(await fs.readFile(file, 'utf8'));
+  const serviceOnly = async when => {
+    const privilege = await db.query(`SELECT has_function_privilege('anon','public.caption_guest_access(uuid,text)','EXECUTE') AS anon,
+      has_function_privilege('authenticated','public.caption_guest_access(uuid,text)','EXECUTE') AS authenticated,
+      has_function_privilege('service_role','public.caption_guest_access(uuid,text)','EXECUTE') AS service`);
+    assert.deepEqual(privilege.rows[0], { anon: false, authenticated: false, service: true }, when);
+    for (const role of ['anon', 'authenticated']) {
+      await db.exec(`SET ROLE ${role}`);
+      try {
+        await assert.rejects(db.query(`SELECT caption_guest_access('11111111-1111-4111-8111-111111111111','token')`), /permission denied/, `${role} ${when}`);
+      } finally { await db.exec(`RESET ROLE`); }
+    }
+  };
+  await serviceOnly('after a fresh install');
+  for (const file of [guestLinksPath, migrationPath, guestLinksPath]) await db.exec(await fs.readFile(file, 'utf8'));
   const functions = await db.query(`SELECT count(*)::int AS count FROM pg_proc WHERE proname='caption_guest_access'`);
   assert.equal(functions.rows[0].count, 1);
-  const privilege = await db.query(`SELECT has_function_privilege('anon','public.caption_guest_access(uuid,text)','EXECUTE') AS anon,
-    has_function_privilege('authenticated','public.caption_guest_access(uuid,text)','EXECUTE') AS authenticated,
-    has_function_privilege('service_role','public.caption_guest_access(uuid,text)','EXECUTE') AS service`);
-  assert.deepEqual(privilege.rows[0], { anon: false, authenticated: false, service: true });
-  for (const role of ['anon', 'authenticated']) {
-    await db.exec(`SET ROLE ${role}`);
-    try {
-      await assert.rejects(db.query(`SELECT caption_guest_access('11111111-1111-4111-8111-111111111111','token')`), /permission denied/);
-    } finally { await db.exec(`RESET ROLE`); }
-  }
+  await serviceOnly('after re-applying both, the documented order last');
 });
 
 test('guest access admits only an active, unexpired link for its own event, returns the current run and writes nothing', async t => {

@@ -8,6 +8,7 @@ const { WebSocket } = require('ws');
 const crypto = require('node:crypto');
 const { CaptionGateway, SupabaseBroadcastPublisher } = require('../lib/captions/gateway.cjs');
 const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
+const { guestPayload } = require('../lib/captions/delivery.cjs');
 const captionsStreamServer = require('../api/captions-stream.js');
 const { FRAME_BYTES } = require('../lib/captions/protocol.cjs');
 
@@ -529,24 +530,34 @@ test('the broadcast publisher sends a signed public guest copy in the same reque
   const publisher = new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co/', serviceRoleKey: 'secret', guestSigner: signer,
     fetchImpl: async (url, options) => { requests.push({ url, messages: JSON.parse(options.body).messages }); return { ok: status < 300, status }; } });
   const eventId = '11111111-1111-4111-8111-111111111111';
-  for (const [event, payload] of [['caption.batch', { type: 'caption.batch', eventId, language: 'zh-CN', messageSeq: 7, updates: [] }],
-    ['heartbeat', { type: 'heartbeat', eventId, language: 'zh-CN', messageSeq: 7, status: 'live' }]]) {
+  const batch = { schemaVersion: 1, type: 'caption.batch', eventId, runId: 'run-1', modeGeneration: 1, channelEpoch: 'epoch-1', messageSeq: 7,
+    language: 'zh-CN', updates: [{ segmentId: 's', segmentOrder: 0, sourceRevision: 1, captionRevision: 1, status: 'final', origin: 'ai_live',
+      text: '感谢大家', language: 'zh-CN', sourceText: 'source must stay private' }] };
+  // An outbox row as the gateway re-publishes it: the database adds the fence it was written under.
+  const outboxRow = { ...batch, status: 'live', _fencingToken: 18 };
+  const heartbeat = { type: 'heartbeat', eventId, language: 'zh-CN', messageSeq: 7, status: 'live' };
+  for (const [event, payload, guestCopy] of [['caption.batch', outboxRow, guestPayload(outboxRow)], ['heartbeat', heartbeat, heartbeat]]) {
     await publisher.publish(`caption:${eventId}:zh-CN`, event, payload);
     const { url, messages } = requests.at(-1);
     assert.equal(url, 'https://test.supabase.co/realtime/v1/api/broadcast');
     assert.deepEqual(messages[0], { topic: `caption:${eventId}:zh-CN`, event, payload, private: true });
-    assert.deepEqual({ ...messages[1], payload: undefined }, { topic: signer.topicFor(eventId, 'zh-CN'), event, payload: undefined, private: false });
-    assert.deepEqual(JSON.parse(messages[1].payload.data), payload);
+    const guestTopic = signer.topicFor(eventId, 'zh-CN');
+    assert.deepEqual({ ...messages[1], payload: undefined }, { topic: guestTopic, event, payload: undefined, private: false });
+    const signed = JSON.parse(messages[1].payload.data);
+    assert.equal(signed.topic, guestTopic); assert.deepEqual(signed.payload, guestCopy);
     const key = await crypto.webcrypto.subtle.importKey('jwk', signer.publicJwk, { name: 'ECDSA', namedCurve: 'P-256' }, false, ['verify']);
     assert.equal(await crypto.webcrypto.subtle.verify({ name: 'ECDSA', hash: 'SHA-256' }, key,
       Buffer.from(messages[1].payload.sig, 'base64url'), new TextEncoder().encode(messages[1].payload.data)), true);
   }
+  const guestBatch = JSON.parse(requests[0].messages[1].payload.data).payload;
+  assert.equal('_fencingToken' in guestBatch, false); assert.equal(JSON.stringify(guestBatch).includes('source must stay private'), false);
+  assert.equal(guestBatch.status, 'live'); assert.equal(guestBatch.updates[0].text, '感谢大家');
   status = 500;
-  await assert.rejects(publisher.publish(`caption:${eventId}:en`, 'caption.batch', { type: 'caption.batch' }), error => error.code === 'broadcast_failed');
+  await assert.rejects(publisher.publish(`caption:${eventId}:en`, 'caption.batch', { ...batch, language: 'en' }), error => error.code === 'broadcast_failed');
   assert.equal(requests.at(-1).messages.length, 2);
 });
 
-test('without a guest signing key the publisher sends only the private message, as before', async () => {
+test('without a signer, or with guest links switched off, the publisher sends only the private message', async () => {
   const saved = process.env.CAPTIONS_GUEST_SIGNING_KEY, requests = [];
   const fetchImpl = async (url, options) => { requests.push(JSON.parse(options.body).messages); return { ok: true, status: 202 }; };
   try {
@@ -562,11 +573,15 @@ test('without a guest signing key the publisher sends only the private message, 
     await new SupabaseBroadcastPublisher({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'secret', fetchImpl })
       .publish('caption:event-1:en', 'heartbeat', { type: 'heartbeat' });
     assert.deepEqual(requests.at(-1).map(message => message.private), [true]);
-    // The deployed stream server wires the signer from its own environment.
+    // The deployed stream server wires the signer from its own environment, and only while guest links are on:
+    // CAPTIONS_GUEST_LINKS=false is the kill switch for every public guest broadcast.
     const runtime = env => captionsStreamServer.createRuntimeFromEnv({ CAPTIONS_ENABLED: 'true', CAPTIONS_ALLOWED_ORIGINS: 'https://wedding.example',
       SUPABASE_URL: 'https://test.supabase.co', SUPABASE_SERVICE_ROLE_KEY: 'secret', OPENAI_API_KEY: 'sk-test', ...env }).captionsGateway.publisher;
     assert.equal(runtime({}).guestSigner, null);
-    assert.notEqual(runtime({ CAPTIONS_GUEST_SIGNING_KEY: signingKey }).guestSigner, null);
+    assert.equal(runtime({ CAPTIONS_GUEST_SIGNING_KEY: signingKey }).guestSigner, null);
+    assert.equal(runtime({ CAPTIONS_GUEST_SIGNING_KEY: signingKey, CAPTIONS_GUEST_LINKS: 'false' }).guestSigner, null);
+    assert.equal(runtime({ CAPTIONS_GUEST_SIGNING_KEY: signingKey, CAPTIONS_GUEST_LINKS: 'true' }).guestSigner,
+      createGuestSigner({ CAPTIONS_GUEST_SIGNING_KEY: signingKey }));
   } finally {
     if (saved === undefined) delete process.env.CAPTIONS_GUEST_SIGNING_KEY; else process.env.CAPTIONS_GUEST_SIGNING_KEY = saved;
   }

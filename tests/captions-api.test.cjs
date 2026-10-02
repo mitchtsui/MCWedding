@@ -4,7 +4,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { randomUUID } = crypto;
-const { createHandler } = require('../api/captions.js');
+const { createHandler, createGuestReadCache } = require('../api/captions.js');
 const { MAX_BODY_BYTES, parseBody, guestRateLimit } = require('../lib/captions/http.cjs');
 const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
 
@@ -149,20 +149,30 @@ const access = (runId = RUN_ID) => ({ status: 200, body: { event_id: EVENT_ID, r
 const snapshotRow = { eventId: EVENT_ID, runId: RUN_ID, currentRunId: RUN_ID, modeGeneration: 1, channelEpoch: 'epoch', messageSeq: 4,
   status: 'live', language: 'ja', topic: `caption:${EVENT_ID}:ja`, updates: [] };
 
-// A guest phone: no Authorization header, its own device id, one hotel IP.
-async function guestPost({ env = guestEnv, routes = {}, body = {}, calls = [], ip = '203.0.113.7' }) {
-  const fetchImpl = async (url, options) => {
+const SERVER_TIME = 1794470400000;
+
+function routedFetch(routes, calls) {
+  return async (url, options) => {
     calls.push({ url, options });
     const [, answer] = Object.entries(routes).find(([suffix]) => url.endsWith(suffix)) || [];
     if (!answer) throw new Error(`unexpected ${url}`);
     return { ok: answer.status < 300, status: answer.status, text: async () => JSON.stringify(answer.body ?? {}) };
   };
+}
+
+// A guest phone: no Authorization header, its own device id, one hotel IP.
+async function sendGuest(handler, body = {}, ip = '203.0.113.7') {
   const req = mockReq({ method: 'POST', authorization: '', body: { action: 'guestSnapshot', eventId: EVENT_ID, token: 'qr-token', language: 'ja',
     deviceId: `phone-${randomUUID()}`, ...body } });
   req.headers['x-forwarded-for'] = ip;
   const res = mockRes();
-  await createHandler({ env, fetchImpl })(req, res);
-  return { status: res.statusCode, body: JSON.parse(res.body), raw: res.body, calls };
+  await handler(req, res);
+  return { status: res.statusCode, body: JSON.parse(res.body), raw: res.body };
+}
+
+async function guestPost({ env = guestEnv, routes = {}, body = {}, calls = [], ip = '203.0.113.7' }) {
+  const reply = await sendGuest(createHandler({ env, fetchImpl: routedFetch(routes, calls), now: () => SERVER_TIME }), body, ip);
+  return { ...reply, calls };
 }
 
 test('guestSnapshot serves the snapshot, signed guest topic and public key with no Authorization header', async () => {
@@ -170,7 +180,7 @@ test('guestSnapshot serves the snapshot, signed guest topic and public key with 
   const reply = await guestPost({ routes: { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 200, body: snapshotRow } } });
   assert.equal(reply.status, 200);
   assert.deepEqual(reply.body.data, { ...snapshotRow, currentRunId: RUN_ID, guestTopic: signer.topicFor(EVENT_ID, 'ja'),
-    publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00' });
+    publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00', serverTime: SERVER_TIME });
   assert.deepEqual(reply.calls.map(call => new URL(call.url).pathname), ['/rest/v1/rpc/caption_guest_access', '/rest/v1/rpc/caption_snapshot']);
   assert(reply.calls.every(call => call.options.headers.Authorization === 'Bearer server-secret'), 'the database is asked as the service role');
   assert.deepEqual(JSON.parse(reply.calls[0].options.body), { p_event_id: EVENT_ID, p_token: 'qr-token' });
@@ -185,7 +195,7 @@ test('guestSnapshot waits for a run, and refuses invalid links, foreign runs and
   const waiting = await guestPost({ routes: { '/rpc/caption_guest_access': access(null) }, body: { language: 'en' } });
   assert.equal(waiting.status, 200);
   assert.deepEqual(waiting.body.data, { waiting: true, eventId: EVENT_ID, language: 'en', currentRunId: null,
-    guestTopic: signer.topicFor(EVENT_ID, 'en'), publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00' });
+    guestTopic: signer.topicFor(EVENT_ID, 'en'), publicKey: signer.publicJwk, expiresAt: '2026-11-13T04:00:00+00:00', serverTime: SERVER_TIME });
   assert.equal(waiting.calls.length, 1, 'no snapshot without a run');
   for (const status of [403, 400]) {
     const refused = await guestPost({ routes: { '/rpc/caption_guest_access': { status, body: { code: '28000', message: 'guest link unavailable' } } } });
@@ -229,6 +239,68 @@ test('one guest device is limited to 60 snapshots a minute without blocking othe
   const limited = await guestPost({ routes, ip, body: { deviceId } });
   assert.equal(limited.status, 429); assert.equal(limited.body.error.code, 'RATE_LIMITED'); assert.equal(limited.calls.length, 0);
   assert.equal((await guestPost({ routes, ip })).status, 200, 'another device on the same IP');
+});
+
+test('phones polling one link together cost one database read every few seconds, and concurrent requests share it', async () => {
+  const calls = [], count = name => calls.filter(call => call.url.endsWith(`/rpc/${name}`)).length;
+  let clock = SERVER_TIME;
+  const handler = createHandler({ env: guestEnv, now: () => clock, fetchImpl: routedFetch({ '/rpc/caption_guest_access': access(),
+    '/rpc/caption_snapshot': { status: 200, body: snapshotRow } }, calls) });
+  const together = await Promise.all(Array.from({ length: 20 }, () => sendGuest(handler)));
+  assert(together.every(reply => reply.status === 200 && reply.body.data.serverTime === SERVER_TIME && reply.body.data.runId === RUN_ID));
+  assert.deepEqual([count('caption_guest_access'), count('caption_snapshot')], [1, 1]);
+  clock += 2001; await sendGuest(handler);
+  assert.deepEqual([count('caption_guest_access'), count('caption_snapshot')], [1, 2], 'snapshots are kept about two seconds');
+  clock += 3000; const later = await sendGuest(handler);
+  assert.deepEqual([count('caption_guest_access'), count('caption_snapshot')], [2, 3], 'link checks are kept about five seconds');
+  assert.equal(later.body.data.serverTime, clock, 'serverTime is never cached');
+  await sendGuest(handler, { language: 'en' });
+  assert.deepEqual([count('caption_guest_access'), count('caption_snapshot')], [2, 4], 'each language has its own snapshot');
+});
+
+test('a flood of one bad guest link is answered from the cache, but a database outage is never cached', async () => {
+  const calls = []; let clock = SERVER_TIME;
+  const refusing = createHandler({ env: guestEnv, now: () => clock,
+    fetchImpl: routedFetch({ '/rpc/caption_guest_access': { status: 403, body: { code: '28000' } } }, calls) });
+  for (let attempt = 0; attempt < 10; attempt += 1) {
+    const reply = await sendGuest(refusing, { token: 'guessed-token' });
+    assert.equal(reply.status, 403); assert.equal(reply.body.error.code, 'GUEST_LINK_INVALID');
+  }
+  assert.equal(calls.length, 1);
+  clock += 5001; await sendGuest(refusing, { token: 'guessed-token' });
+  assert.equal(calls.length, 2);
+  const outage = [], down = createHandler({ env: guestEnv, fetchImpl: routedFetch({ '/rpc/caption_guest_access': { status: 503, body: {} } }, outage) });
+  for (let attempt = 0; attempt < 2; attempt += 1) assert.equal((await sendGuest(down)).status, 503);
+  assert.equal(outage.length, 2);
+});
+
+test('the guest read cache is bounded and drops expired entries before fresh ones', async () => {
+  let clock = 0, loads = 0;
+  const cache = createGuestReadCache({ max: 3, now: () => clock });
+  const read = (key, ttl = 1000) => cache.read(key, ttl, async () => { loads += 1; return key; });
+  await read('short', 10); await read('a'); await read('b');
+  clock = 20; await read('c');
+  assert.equal(cache.size, 3);
+  assert.equal(loads, 4); await read('a'); await read('b'); assert.equal(loads, 4, 'fresh entries survived; the expired one went');
+  for (const key of ['d', 'e', 'f', 'g']) await read(key);
+  assert.equal(cache.size, 3);
+});
+
+test('config never refuses a venue of phones scanning the QR code from one IP', async () => {
+  const handler = createHandler({ env: guestEnv, fetchImpl: async () => { throw new Error('config must not call out'); } });
+  const ip = `192.0.2.${Math.floor(Math.random() * 200) + 1}`;
+  for (let phone = 0; phone < 1000; phone += 1) {
+    const req = mockReq({ authorization: '' }); req.headers['x-forwarded-for'] = ip;
+    const res = mockRes(); await handler(req, res);
+    assert.equal(res.statusCode, 200, `phone ${phone}`);
+    if (phone === 0) assert.equal(res.headers['X-RateLimit-Limit'], '20000');
+  }
+});
+
+test('one client rotating device ids cannot exhaust the guest bucket of a shared hotel IP', () => {
+  const req = { headers: { 'x-forwarded-for': `198.18.0.${Math.floor(Math.random() * 200) + 1}` }, socket: {} }, now = 1770000000000;
+  for (let call = 0; call < 20000; call += 1) guestRateLimit(req, `rotated-${call}-${randomUUID().slice(0, 8)}`, now);
+  assert.throws(() => guestRateLimit(req, `rotated-last-${randomUUID().slice(0, 8)}`, now), error => error.code === 'RATE_LIMITED');
 });
 
 test('POST rejects missing or unlisted Origin before authentication', async () => {

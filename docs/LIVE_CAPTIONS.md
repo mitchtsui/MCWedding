@@ -57,12 +57,21 @@ the code checks.
 
 What the link does and does not protect:
 
-- Anyone holding the link can read that event's captions until it expires. Share it only in
-  the room and set the expiry to the end of the day. There is no per-phone limit.
-- To withdraw a link early, set `active = false` on its `caption_invites` row. There is no
-  button for this yet.
+- Anyone holding the link can read that event's captions. Share it only in the room and
+  set the expiry to the end of the day. There is no per-phone limit.
+- When a link expires, or its `caption_invites` row is set to `active = false` (there is
+  no button for this yet), the server refuses it and open guest pages close at the expiry
+  time. Someone who deliberately extracted the channel name from the page could keep
+  listening, though. What really stops listening is switching guest links off
+  (`CAPTIONS_GUEST_LINKS=false`, which also stops all guest broadcasts) or rotating
+  `CAPTIONS_GUEST_SIGNING_KEY`, which changes every channel name.
+- Signed messages carry the channel they were sent to and when they were signed. A phone
+  drops a message from another channel, or one more than two minutes old, so genuine
+  messages replayed later cannot mislead it. Message-triggered catch-ups are limited to one
+  every five seconds per phone.
 - Guests never hold a Supabase session, so nothing outside the caption snapshot is
-  reachable through the link.
+  reachable through the link. Captions are read aloud in the room anyway; the link protects
+  them from casual sharing, not from a determined guest.
 
 Configuration: `CAPTIONS_GUEST_LINKS=true` and `CAPTIONS_GUEST_SIGNING_KEY` (base64 of a
 PKCS#8 DER P-256 private key). Apply `supabase/migrations/2026-10-02_live_captions_guest_links.sql`
