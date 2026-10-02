@@ -332,7 +332,7 @@
   }
   async function initLive() {
     let client, api, guestKey = null, keyText = '', topic = '', serverOffset = 0, eventId = '', runId = '', guestToken = '', deviceId = '', subscription = null, store = null, syncing = false, buffered = [];
-    let heartbeatTimer = null, fallbackTimer = null, expiryTimer = null, resyncTimer = null, lastResyncAt = 0, lastHeartbeatAt = 0, closed = false;
+    let heartbeatTimer = null, fallbackTimer = null, expiryTimer = null, resyncTimer = null, retryTimer = null, lastResyncAt = 0, lastHeartbeatAt = 0, closed = false, pendingResync = false;
     const savedKey = 'mc-captions-guest-link';
     let selectionEpoch = 0, inbox = Promise.resolve();
     const failure = (message, retryable) => Object.assign(new Error(message), { retryable });
@@ -347,6 +347,7 @@
       snapshot = { status: statusFromBatch(value?.status), revision: value?.messageSeq || 0,
         segments: store.segments(language).map(item => ({ id: item.segmentId, order: item.segmentOrder, text: { [language]: item.text } })), notice: noticeFromBatch(value?.status) };
       renderStatus(); renderSegments({ preserveAnchor: isReadingHistory() });
+      if (['paused', 'ended'].includes(snapshot.status)) watchHeartbeat(snapshot.status);
     };
     const remember = () => { try { localStorage.setItem(savedKey, JSON.stringify({ eventId, runId, token: guestToken })); } catch (_) { /* A fresh scan restores access. */ } };
     function adoptRun(value) {
@@ -359,7 +360,7 @@
     // An expired or withdrawn link stops this page listening, not just new snapshots.
     function closeAccess(message) {
       closed = true; selectionEpoch += 1; subscription?.close(); subscription = null;
-      [heartbeatTimer, fallbackTimer, expiryTimer, resyncTimer].forEach(clearTimeout); liveStatus('ended', message);
+      [heartbeatTimer, fallbackTimer, expiryTimer, resyncTimer, retryTimer].forEach(clearTimeout); liveStatus('ended', message);
     }
     function noteResponse(value) {
       if (Number.isSafeInteger(value?.serverTime)) serverOffset = value.serverTime - Date.now();
@@ -367,16 +368,20 @@
       if (Number.isFinite(expires)) expiryTimer = setTimeout(() => closeAccess('This guest link has expired.'), Math.min(Math.max(0, expires - Date.now() - serverOffset), 2 ** 31 - 1));
     }
     async function resync() {
-      if (!eventId || syncing || closed) return; syncing = true; lastResyncAt = Date.now();
+      if (!eventId || closed) return; if (syncing) { pendingResync = true; return; } syncing = true; lastResyncAt = Date.now();
       const selected = selectionEpoch;
       try { const value = await window.CaptionsLive.currentSnapshot(request, { eventId, runId, language });
         if (selected !== selectionEpoch) return;
         noteResponse(value);
-        if ((value.guestTopic && value.guestTopic !== topic) || (value.publicKey && JSON.stringify(value.publicKey) !== keyText)) { syncing = false; void selectLanguage().catch(() => undefined); return; }
+        if ((value.guestTopic && value.guestTopic !== topic) || (value.publicKey && JSON.stringify(value.publicKey) !== keyText)) { syncing = false; void switchLanguage(); return; }
         if (value.waiting) { waitingForStart(); return; }
         adoptRun(value); store.merge(value); buffered.forEach(batch => store.merge(batch)); buffered = []; renderStore(value); }
-      catch (error) { if (selected !== selectionEpoch) return; if (error.code === 'GUEST_LINK_INVALID') closeAccess(error.message); else liveStatus('waiting', error.message); }
-      finally { if (selected === selectionEpoch) syncing = false; }
+      catch (error) { if (selected !== selectionEpoch) return; if (error.code === 'GUEST_LINK_INVALID') { closeAccess(error.message); return; }
+        // Captions that arrived during the failed catch-up are already verified; the store refuses any from another run.
+        if (store && buffered.length) { buffered.forEach(batch => store.merge(batch)); const last = buffered[buffered.length - 1]; buffered = []; renderStore(last); }
+        liveStatus('waiting', error.message); }
+      // A catch-up asked for while one was running is not lost: it runs, coalesced, once this one ends.
+      finally { if (selected === selectionEpoch) { syncing = false; if (pendingResync) { pendingResync = false; requestResync(); } } }
     }
     // Message-triggered catch-ups are coalesced, so replayed messages cannot make phones hammer the server.
     function requestResync() {
@@ -390,17 +395,24 @@
     const forThisChannel = value => value?.eventId === eventId && value.language === language;
     function onBatch(batch) {
       if (!forThisChannel(batch)) return;
-      if (syncing || !store) buffered.push(batch); else if (batch.runId !== runId) requestResync(); else { const changed = store.merge(batch); if (changed && !syncing) renderStore(batch); }
+      if (syncing || !store) { buffered.push(batch); if (!store) requestResync(); } else if (batch.runId !== runId) requestResync(); else { const changed = store.merge(batch); if (changed && !syncing) renderStore(batch); }
     }
     function heartbeat(value, iat) {
       if (!forThisChannel(value) || iat < lastHeartbeatAt) return;
       if (value.runId !== runId || !store) { requestResync(); return; }
-      // A heartbeat behind what this page has already applied is stale and cannot change the status.
-      if (Number(value.modeGeneration) < store.modeGeneration || (Number(value.modeGeneration) === store.modeGeneration && value.channelEpoch === store.channelEpoch && Number(value.messageSeq) < store.messageSeq)) return;
+      // A heartbeat from an earlier generation is stale. Its sequence is not compared: manual captions take
+      // sequence numbers from a different block than the gateway's heartbeat reports, and signing-time order already stops replays.
+      if (Number(value.modeGeneration) < store.modeGeneration) return;
       lastHeartbeatAt = iat;
       if (window.CaptionsLive.heartbeatNeedsSnapshot(store, value)) requestResync();
-      clearTimeout(heartbeatTimer); heartbeatTimer = setTimeout(() => liveStatus('waiting', 'The live caption connection paused. Waiting for the operator to reconnect.'), 25000);
       snapshot.status = statusFromBatch(value.status); snapshot.notice = noticeFromBatch(value.status); renderStatus();
+      watchHeartbeat(snapshot.status);
+    }
+    // Only a live stream is expected to keep sending heartbeats; a paused or ended one stays as it is.
+    function watchHeartbeat(status) {
+      clearTimeout(heartbeatTimer); heartbeatTimer = null;
+      if (['paused', 'ended'].includes(status)) return;
+      heartbeatTimer = setTimeout(() => liveStatus('waiting', 'The live caption connection paused. Waiting for the operator to reconnect.'), 25000);
     }
     // Messages are checked one at a time, in arrival order; anything unsigned, misaddressed or stale is dropped.
     const verified = (selected, subscribedTopic, handle) => envelope => { inbox = inbox.then(async () => {
@@ -408,6 +420,7 @@
       const message = await window.CaptionsLive.openGuestMessage(guestKey, envelope, { topic: subscribedTopic, serverOffset });
       if (message && selected === selectionEpoch && !closed) handle(message.payload, message.iat); }).catch(() => undefined); };
     async function selectLanguage() {
+      if (closed) return;
       const selected = ++selectionEpoch;
       subscription?.close(); [heartbeatTimer, fallbackTimer, resyncTimer].forEach(clearTimeout); resyncTimer = null; subscription = null; buffered = []; syncing = true; lastHeartbeatAt = 0;
       store = runId ? new window.CaptionsLive.CaptionStore(() => requestResync()) : null; if (store) store.eventId = eventId;
@@ -416,7 +429,7 @@
         if (selected !== selectionEpoch) return;
         if (!initial.guestTopic || !initial.publicKey) throw failure('Live captions are not available for this link', false);
         noteResponse(initial);
-        if (JSON.stringify(initial.publicKey) !== keyText) { guestKey = await window.CaptionsLive.importGuestKey(initial.publicKey); keyText = JSON.stringify(initial.publicKey); }
+        if (JSON.stringify(initial.publicKey) !== keyText) { guestKey = await window.CaptionsLive.importGuestKey(initial.publicKey).catch(error => { throw failure(error.message, false); }); keyText = JSON.stringify(initial.publicKey); }
         topic = initial.guestTopic;
         if (initial.waiting) waitingForStart(); else adoptRun(initial);
         await new Promise((resolve, reject) => { let subscribed = false;
@@ -430,6 +443,16 @@
         if (selected !== selectionEpoch) return;
         syncing = false; await resync(); scheduleFallback();
       } catch (error) { if (selected === selectionEpoch) throw error; }
+    }
+    // After start-up, a language switch or channel change that fails keeps the page alive: it polls, and retries the channel.
+    async function switchLanguage(attempt = 0) {
+      clearTimeout(retryTimer); retryTimer = null;
+      try { await selectLanguage(); }
+      catch (error) {
+        if (closed) return; if (error.code === 'GUEST_LINK_INVALID') { closeAccess(error.message); return; }
+        syncing = false; liveStatus('waiting', error.message); scheduleFallback();
+        if (retryable(error)) retryTimer = setTimeout(() => void switchLanguage(attempt + 1), Math.min(30000, 2000 * 2 ** attempt) * (0.5 + Math.random()));
+      }
     }
     try {
       liveStatus('waiting', 'Opening live captions...');
@@ -456,9 +479,9 @@
           await new Promise(resolve => setTimeout(resolve, Math.min(30000, 1500 * 2 ** attempt) * (0.5 + Math.random())));
         }
       }
-      liveLanguageChanged = selectLanguage;
+      liveLanguageChanged = switchLanguage;
       document.addEventListener('visibilitychange', () => { if (!document.hidden) void resync(); });
-      window.addEventListener('pagehide', event => { if (!event.persisted) { [heartbeatTimer, fallbackTimer, expiryTimer, resyncTimer].forEach(clearTimeout); subscription?.close(); } });
+      window.addEventListener('pagehide', event => { if (!event.persisted) { [heartbeatTimer, fallbackTimer, expiryTimer, resyncTimer, retryTimer].forEach(clearTimeout); subscription?.close(); } });
     } catch (error) { closed = true; liveStatus('ended', error.message); $('previewBanner').hidden = false; $('previewBannerText').textContent = 'Live captions unavailable'; $('previewBannerNote').textContent = error.message; }
   }
 

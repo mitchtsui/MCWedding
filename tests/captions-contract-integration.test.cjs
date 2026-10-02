@@ -184,7 +184,8 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   assert.deepEqual(empty.updates, []);
   const other = await api.request('createEvent', { title: 'Other wedding' }, 'admin-token');
   const otherRun = await api.request('start', { eventId: other.eventId, mode: 'live' }, 'admin-token');
-  await assert.rejects(api.request('guestSnapshot', { ...guestLink, runId: otherRun.runId, language: 'en' }), error => error.status === 404 && error.code === 'NOT_FOUND');
+  const namedOther = await api.request('guestSnapshot', { ...guestLink, runId: otherRun.runId, language: 'ja' });
+  assert.equal(namedOther.runId, run.runId, 'while the event has a current run, that run is served whatever run is named');
 
   const texts = { en:'Thank you for coming.', ja:'本日はお越しいただき、ありがとうございます。', 'zh-CN':'感谢大家今天到来。' };
   let segmentId;
@@ -233,6 +234,15 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
     assert.equal(stores[payload.language].merge(payload), true);
     assert.equal(stores[payload.language].status, 'paused');
   }
+
+  // Once stopped, the event has no current run: a phone that knew the run can still read it, while another
+  // event's run is refused by the real SQL.
+  await api.request('stop', { runId: run.runId }, 'admin-token');
+  clock += 5001;
+  const afterStop = await api.request('guestSnapshot', { ...guestLink, runId: run.runId, language: 'en' });
+  assert.equal(afterStop.runId, run.runId); assert.equal(afterStop.currentRunId, null); assert.equal(afterStop.updates[0].text, texts.en);
+  await assert.rejects(api.request('guestSnapshot', { ...guestLink, runId: otherRun.runId, language: 'en' }), error => error.status === 404 && error.code === 'NOT_FOUND');
+  assert.equal((await api.request('guestSnapshot', { ...guestLink, language: 'en' })).waiting, true);
 
   await assert.rejects(api.request('createEvent', { title:'Forbidden' }, 'guest-token'), /Operator access is required/);
 });

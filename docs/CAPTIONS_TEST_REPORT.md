@@ -19,7 +19,7 @@ these browser tools are not downloaded by `npm ci`.
 
 | Check | Actual result | Evidence boundary |
 |---|---|---|
-| `node --test --test-isolation=none tests/captions-*.test.cjs tests/captions-*.test.mjs` | 140 passed, 0 failed, 0 skipped, after the lifecycle repairs and the 2 October afternoon fixes (86 at handover + 36 operator-page + 11 gateway + 3 API + 1 store + 2 PostgreSQL + 1 audio) | Local providers mocked; real PostgreSQL migration/RPC and role tests |
+| `node --test --test-isolation=none tests/captions-*.test.cjs tests/captions-*.test.mjs` | 174 passed, 0 failed, 0 skipped, after the lifecycle repairs, the afternoon fixes and the account-free guest links (see the guest section below) | Local providers mocked; real PostgreSQL migration/RPC and role tests |
 | `node tests/captions-ui-check.cjs` | PASS at 344 / 390 / 744 / 1280 px (Claude rerun) | Retained sample UI, no service calls |
 | `node tests/captions-live-browser.cjs` | PASS on the handover artifacts once the line-174 assertion was repaired, and PASS again after the lifecycle repairs; every scenario through the guest new-run follow is reached. Now also covers the full live operator page at 344 px in the detached state (no overflow, no control under 44 px) and reattaching to the open run | All providers, sockets and the microphone are local fakes |
 | `npm run build`, then `tests/captions-build.test.cjs` | PASS; 2 passed, 0 failed | Explicit static assets; server/SQL/private files excluded |
@@ -166,6 +166,32 @@ with its built-in microphone, speaking Cantonese and English, for about 55 secon
   function limit makes necessary. That needs a run of 5 minutes or more.
 
 The user described the result as good. Still anecdotal: one speaker, under a minute.
+
+## Guests by QR code, with no account — 2 October
+
+The guest path was rebuilt so a guest scans a QR code and reads, with no Supabase account
+(see `LIVE_CAPTIONS.md`, "Guests: scan a QR code"). The user tested it on a phone against the
+public preview and found it good.
+
+An independent reviewer attacked the design with the real guest page, client and API in a
+harness. The core held throughout: no session, nothing beyond the caption snapshot
+reachable, and no forged text accepted. Two review rounds then found, and the fixes resolved:
+
+| Found | Repair |
+|---|---|
+| The first request every phone makes was limited to 90 a minute per IP; a room on one hotel connection would lose about 60 phones | 20000 a minute; the page retries busy answers with jittered backoff |
+| Genuine signed messages replayed later could trigger reload storms or a false "paused" | Signatures cover channel and signing time; phones drop misaddressed messages and anything older than two minutes; catch-ups coalesced to one per 5 s |
+| One client could fill the shared per-IP allowance and lock out the room | Only failed requests count against an IP (600 a minute); phones with a recently valid code are exempt; link checks and snapshots cached briefly |
+| An expired link stopped only new phones | Open pages close at expiry or refusal; `CAPTIONS_GUEST_LINKS=false` stops all guest broadcasts; key rotation documented as full revocation |
+| A manual caption made later heartbeats look stale, so phones showed "connection paused" on a live stream | Heartbeats are no longer compared by sequence number, only by generation and signing time |
+| A failed language switch or key change left a phone silently dead | It keeps polling and retries the channel with backoff |
+| 25 s after End or Pause, phones claimed the connection was lost | The outage timer runs only while the stream is live |
+| A caption arriving during a failed catch-up waited up to a minute | Held captions are applied when the catch-up fails |
+
+`tests/captions-guest-page.test.cjs` runs the real guest page against the real API handler
+and signer. Five of its nine tests fail on the guest page as it was before these fixes.
+Residual, accepted: someone who deliberately extracts the channel name can keep listening
+until guest links are switched off or the key is rotated; limits are per Vercel instance.
 
 ## Review and limits
 

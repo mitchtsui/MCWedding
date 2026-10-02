@@ -5,7 +5,7 @@ const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 const { randomUUID } = crypto;
 const { createHandler, createGuestReadCache } = require('../api/captions.js');
-const { MAX_BODY_BYTES, parseBody, guestRateLimit } = require('../lib/captions/http.cjs');
+const { MAX_BODY_BYTES, parseBody, guestRateLimit, GUEST_FAILURES_PER_MINUTE } = require('../lib/captions/http.cjs');
 const { createGuestSigner } = require('../lib/captions/guest-link.cjs');
 
 function mockReq({ method = 'GET', url = '/api/captions.js?action=config', body, origin = 'https://wedding.test', authorization = 'Bearer user-jwt' } = {}) {
@@ -202,7 +202,11 @@ test('guestSnapshot waits for a run, and refuses invalid links, foreign runs and
     assert.equal(refused.status, 403); assert.equal(refused.body.error.code, 'GUEST_LINK_INVALID');
     assert.equal(refused.body.error.message, 'This guest link has expired or is not valid'); assert.equal(refused.calls.length, 1);
   }
-  const foreign = await guestPost({ routes: { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 400, body: { code: 'P0002' } } },
+  const named = await guestPost({ routes: { '/rpc/caption_guest_access': access(), '/rpc/caption_snapshot': { status: 200, body: snapshotRow } },
+    body: { runId: OTHER_RUN } });
+  assert.equal(named.status, 200); assert.equal(named.body.data.runId, RUN_ID);
+  assert.equal(JSON.parse(named.calls[1].options.body).p_run_id, RUN_ID, 'with a current run, the run the phone names is not looked up');
+  const foreign = await guestPost({ routes: { '/rpc/caption_guest_access': access(null), '/rpc/caption_snapshot': { status: 400, body: { code: 'P0002' } } },
     body: { runId: OTHER_RUN } });
   assert.equal(foreign.status, 404); assert.equal(foreign.body.error.code, 'NOT_FOUND');
   assert.equal(JSON.parse(foreign.calls[1].options.body).p_run_id, OTHER_RUN);
@@ -297,10 +301,91 @@ test('config never refuses a venue of phones scanning the QR code from one IP', 
   }
 });
 
-test('one client rotating device ids cannot exhaust the guest bucket of a shared hotel IP', () => {
-  const req = { headers: { 'x-forwarded-for': `198.18.0.${Math.floor(Math.random() * 200) + 1}` }, socket: {} }, now = 1770000000000;
-  for (let call = 0; call < 20000; call += 1) guestRateLimit(req, `rotated-${call}-${randomUUID().slice(0, 8)}`, now);
-  assert.throws(() => guestRateLimit(req, `rotated-last-${randomUUID().slice(0, 8)}`, now), error => error.code === 'RATE_LIMITED');
+test('rotating device ids spend nothing the hotel IP shares: only each device has a request limit', () => {
+  const req = { headers: { 'x-forwarded-for': freshIp() }, socket: {} }, now = 1770000000000;
+  for (let call = 0; call <= 20000; call += 1) assert.doesNotThrow(() => guestRateLimit(req, `rotated-${call}-${randomUUID().slice(0, 8)}`, now));
+});
+
+let ipSequence = 0;
+function freshIp() { ipSequence += 1; return `100.64.${ipSequence >> 8}.${ipSequence & 255}`; }
+
+// Answers each RPC from its name and arguments, recording every call.
+function rpcFetch(answer, calls) {
+  return async (url, options) => {
+    const name = url.split('/').pop(), args = JSON.parse(options.body || '{}');
+    calls.push({ name, args });
+    const { status = 200, body } = answer(name, args);
+    return { ok: status < 300, status, text: async () => JSON.stringify(body ?? {}) };
+  };
+}
+
+const tally = replies => replies.reduce((counts, reply) => ({ ...counts, [reply.status]: (counts[reply.status] || 0) + 1 }), {});
+
+test('a guessed-link flood from one IP is refused once its failure budget is spent, costing at most that many database calls', async () => {
+  const calls = [], ip = freshIp();
+  const handler = createHandler({ env: guestEnv, fetchImpl: rpcFetch(() => ({ status: 403, body: { code: '28000' } }), calls) });
+  const flood = await Promise.all(Array.from({ length: 1000 }, (_, n) => sendGuest(handler, { token: `guess-${n}` }, ip)));
+  assert.deepEqual(tally(flood), { 403: GUEST_FAILURES_PER_MINUTE, 429: 1000 - GUEST_FAILURES_PER_MINUTE });
+  assert.equal(calls.length, GUEST_FAILURES_PER_MINUTE, 'parallel guesses stop at the budget too');
+  const after = await sendGuest(handler, { token: 'one-more-guess' }, ip);
+  assert.equal(after.status, 429); assert.equal(after.body.error.code, 'RATE_LIMITED'); assert.equal(calls.length, GUEST_FAILURES_PER_MINUTE);
+  assert.equal((await sendGuest(handler, { token: 'elsewhere' }, freshIp())).status, 403, 'other IPs keep their own budget');
+  const malformed = freshIp();
+  for (let n = 0; n < GUEST_FAILURES_PER_MINUTE; n += 1) assert.equal((await sendGuest(handler, { language: 'fr' }, malformed)).status, 400);
+  const called = calls.length;
+  assert.equal((await sendGuest(handler, { token: 'after-bad-input' }, malformed)).status, 429, 'bad input spends the budget');
+  assert.equal(calls.length, called);
+  const outage = [], down = createHandler({ env: guestEnv, fetchImpl: rpcFetch(() => ({ status: 503 }), outage) }), outageIp = freshIp();
+  for (let n = 0; n <= GUEST_FAILURES_PER_MINUTE; n += 1) assert.equal((await sendGuest(down, { token: `outage-${n}` }, outageIp)).status, 503);
+  assert.equal(outage.length, GUEST_FAILURES_PER_MINUTE + 1, 'server failures are not the client\'s and spend nothing');
+});
+
+test('phones holding the real link on the same IP get answers before and after a flood spends the failure budget', async () => {
+  let clock = SERVER_TIME, revoked = false; const calls = [], ip = freshIp();
+  const handler = createHandler({ env: guestEnv, now: () => clock, fetchImpl: rpcFetch((name, args) => name === 'caption_snapshot'
+    ? { status: 200, body: snapshotRow } : args.p_token === 'qr-token' && !revoked ? access() : { status: 403, body: { code: '28000' } }, calls) });
+  const linkChecks = () => calls.filter(call => call.name === 'caption_guest_access' && call.args.p_token === 'qr-token').length;
+  assert.equal((await sendGuest(handler, {}, ip)).status, 200, 'before the flood');
+  await Promise.all(Array.from({ length: 700 }, (_, n) => sendGuest(handler, { token: `guess-${n}` }, ip)));
+  assert.equal((await sendGuest(handler, { token: 'one-more-guess' }, ip)).status, 429, 'the budget is spent');
+  const during = await Promise.all(Array.from({ length: 50 }, () => sendGuest(handler, {}, ip)));
+  assert.deepEqual(tally(during), { 200: 50 });
+  clock += 5001;
+  const checked = linkChecks();
+  assert.equal((await sendGuest(handler, {}, ip)).status, 200, 'after the five-second link check expires');
+  assert.equal(linkChecks(), checked + 1, 'the link was checked against the database again, not waved through');
+  revoked = true; clock += 5001;
+  assert.equal((await sendGuest(handler, {}, ip)).status, 403, 'a link revoked since is refused on the next check');
+  assert.equal((await sendGuest(handler, {}, ip)).status, 429, 'and loses its exemption from the spent budget');
+});
+
+test('with a current run, 2000 requests naming made-up runs cost no database calls beyond the cached snapshot', async () => {
+  const calls = [];
+  const handler = createHandler({ env: guestEnv, now: () => SERVER_TIME, fetchImpl: rpcFetch(name => name === 'caption_guest_access' ? access()
+    : { status: 200, body: snapshotRow }, calls) });
+  const replies = await Promise.all(Array.from({ length: 2000 }, () => sendGuest(handler, { runId: randomUUID() }, freshIp())));
+  assert(replies.every(reply => reply.status === 200 && reply.body.data.runId === RUN_ID && reply.body.data.currentRunId === RUN_ID));
+  assert.deepEqual(calls.map(call => [call.name, call.args.p_run_id]), [['caption_guest_access', undefined], ['caption_snapshot', RUN_ID]]);
+});
+
+test('with no current run, a run of the event is served and a foreign or made-up run is 404, kept briefly and counted', async () => {
+  const calls = [], ip = freshIp();
+  const handler = createHandler({ env: guestEnv, now: () => SERVER_TIME, fetchImpl: rpcFetch((name, args) => name === 'caption_guest_access' ? access(null)
+    : args.p_run_id === RUN_ID ? { status: 200, body: { ...snapshotRow, currentRunId: null, status: 'ended' } } : { status: 400, body: { code: 'P0002' } }, calls) });
+  const lookups = runId => calls.filter(call => call.name === 'caption_snapshot' && call.args.p_run_id === runId).length;
+  const ended = await sendGuest(handler, { runId: RUN_ID }, ip);
+  assert.equal(ended.status, 200); assert.equal(ended.body.data.runId, RUN_ID); assert.equal(ended.body.data.currentRunId, null);
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    const foreign = await sendGuest(handler, { runId: OTHER_RUN }, ip);
+    assert.equal(foreign.status, 404); assert.equal(foreign.body.error.code, 'NOT_FOUND');
+  }
+  assert.equal(lookups(OTHER_RUN), 1, 'a refused run is kept for two seconds');
+  for (let n = 0; n < GUEST_FAILURES_PER_MINUTE; n += 1) await sendGuest(handler, { runId: randomUUID() }, ip);
+  const called = calls.length;
+  assert.equal((await sendGuest(handler, { runId: randomUUID() }, ip)).status, 429, 'made-up runs spend the budget even with the real link');
+  assert.equal(calls.length, called);
+  assert.equal((await sendGuest(handler, { runId: RUN_ID }, ip)).status, 200, 'the phone that knew the run still reads it');
+  assert.equal((await sendGuest(handler, {}, ip)).body.data.waiting, true);
 });
 
 test('POST rejects missing or unlisted Origin before authentication', async () => {

@@ -4,7 +4,8 @@ const { createHash } = require('node:crypto');
 const { CaptionStore, CaptionStoreError } = require('../lib/captions/store.cjs');
 const { CaptionDelivery } = require('../lib/captions/delivery.cjs');
 const { createGuestSigner, guestLinksReady } = require('../lib/captions/guest-link.cjs');
-const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, guestRateLimit, sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
+const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, guestRateLimit, takeGuestFailureSlot, returnGuestFailureSlot,
+  sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
 
 const LANGUAGES = new Set(['en', 'ja', 'zh-CN']);
 const ADMIN_ACTIONS = new Set(['preflight','createEvent','start','pause','resume','end','stop','ticket','invite','manual','review','glossary','script','health']);
@@ -45,6 +46,7 @@ function createGuestReadCache({ max = 1000, now = Date.now } = {}) {
   const entries = new Map();
   return {
     get size() { return entries.size; },
+    has(key) { const hit = entries.get(key); return Boolean(hit && hit.expiresAt > now()); },
     read(key, ttlMs, load, keepError = () => false) {
       const at = now();
       const hit = entries.get(key);
@@ -62,20 +64,67 @@ function createGuestReadCache({ max = 1000, now = Date.now } = {}) {
   };
 }
 
-async function guestSnapshot({ store, signer, input, reads, now }) {
+// Links this instance checked against the database in the last ten minutes. Holding one exempts a request
+// from its IP's failure budget, so a client spraying guessed links from the hotel IP cannot lock out phones
+// holding the real one. It is not a pass: the link is still re-checked on every read-cache miss.
+function createRecentlyValid({ max = 1000, ttlMs = 600_000, now = Date.now } = {}) {
+  const entries = new Map();
+  return {
+    has(key) { const at = entries.get(key); return at !== undefined && now() - at < ttlMs; },
+    mark(key) {
+      entries.delete(key);
+      if (entries.size >= max) entries.delete(entries.keys().next().value);
+      entries.set(key, now());
+    },
+    forget(key) { entries.delete(key); }
+  };
+}
+
+// One request's use of its IP's failure budget: a slot is held while the database is asked and kept only when
+// the client was at fault (an invalid link or a run that is not the event's).
+function guestFailureBudget(req) {
+  let held = false;
+  return {
+    hold() {
+      if (held) return;
+      if (!takeGuestFailureSlot(req)) throw new CaptionStoreError('RATE_LIMITED', 'Too many requests', 429);
+      held = true;
+    },
+    settle(error) {
+      const clientFault = ['GUEST_LINK_INVALID', 'NOT_FOUND'].includes(error?.code);
+      if (held && !clientFault) returnGuestFailureSlot(req);
+      if (!held && clientFault) takeGuestFailureSlot(req);
+    }
+  };
+}
+
+function guestRequest(input) {
   const eventId = requiredUuid(input.eventId, 'eventId');
   const language = requiredLanguage(input.language);
   const token = requiredText(input.token, 'token', 512);
   const requestedRun = input.runId == null || input.runId === '' ? null : requiredUuid(input.runId, 'runId');
-  const tokenHash = createHash('sha256').update(token).digest('hex');
+  return { eventId, language, token, requestedRun, linkKey: `${eventId}:${createHash('sha256').update(token).digest('hex')}` };
+}
+
+async function guestSnapshot({ store, signer, request, reads, valid, budget, now }) {
+  const { eventId, language, token, requestedRun, linkKey } = request;
+  if (!valid.has(linkKey)) budget.hold();
   // Refusals are kept too, so a flood of one bad link does not reach the database.
-  const access = await reads.read(`access:${eventId}:${tokenHash}`, 5000, () => store.guestAccess({ eventId, token }).catch(error => {
+  const access = await reads.read(`access:${linkKey}`, 5000, () => store.guestAccess({ eventId, token }).catch(error => {
     throw error instanceof CaptionStoreError && error.details === '28000'
       ? new CaptionStoreError('GUEST_LINK_INVALID', 'This guest link has expired or is not valid', 403, '28000') : error;
-  }), error => error.code === 'GUEST_LINK_INVALID');
-  const runId = requestedRun || access.runId;
-  const snapshot = runId ? await reads.read(`snapshot:${eventId}:${runId}:${language}`, 2000,
-    () => store.getSnapshotAsService({ eventId, runId, language })) : null;
+  }), error => error.code === 'GUEST_LINK_INVALID').then(value => { valid.mark(linkKey); return value; }, error => {
+    if (error.code === 'GUEST_LINK_INVALID') valid.forget(linkKey);
+    throw error;
+  });
+  // The current run is always the one served, whatever run the phone names: it follows currentRunId, and a
+  // made-up run id costs nothing. With no current run, a named run is looked up so a phone can still read a
+  // run after it ends; a run that is not the event's is a client failure, also kept for two seconds.
+  const runId = access.runId || requestedRun;
+  const snapshotKey = `snapshot:${eventId}:${runId}:${language}`;
+  if (!access.runId && requestedRun && !reads.has(snapshotKey)) budget.hold();
+  const snapshot = runId ? await reads.read(snapshotKey, 2000,
+    () => store.getSnapshotAsService({ eventId, runId, language }), error => error.code === 'NOT_FOUND') : null;
   const guest = { guestTopic: signer.topicFor(eventId, language), publicKey: signer.publicJwk, expiresAt: access.expiresAt, serverTime: now() };
   if (!snapshot) return { waiting: true, eventId, language, currentRunId: null, ...guest };
   return { ...snapshot, currentRunId: access.runId ?? null, ...guest };
@@ -121,6 +170,7 @@ async function dispatchHttpOutbox({ store, delivery, outboxIds, workerId }) {
 
 function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date.now } = {}) {
   const reads = createGuestReadCache({ now });
+  const valid = createRecentlyValid({ now });
   return async function handler(req, res) {
     const id = requestId(req);
     let rate;
@@ -162,7 +212,14 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
       if (action === 'guestSnapshot') {
         if (!guestLinksReady(env)) throw new CaptionStoreError('GUEST_LINKS_DISABLED', 'Guest links are switched off', 503);
         rate = guestRateLimit(req, input.deviceId);
-        const data = await guestSnapshot({ store, signer: createGuestSigner(env), input, reads, now });
+        let request;
+        try { request = guestRequest(input); } catch (error) { takeGuestFailureSlot(req); throw error; }
+        const budget = guestFailureBudget(req);
+        let data;
+        try {
+          data = await guestSnapshot({ store, signer: createGuestSigner(env), request, reads, valid, budget, now });
+          budget.settle(null);
+        } catch (error) { budget.settle(error); throw error; }
         const origin = String(req.headers?.origin || '');
         if (origin && allowedOrigins(env).has(origin)) {
           res.setHeader('Access-Control-Allow-Origin', origin);

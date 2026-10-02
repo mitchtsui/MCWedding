@@ -76,7 +76,12 @@ What the link does and does not protect:
 Configuration: `CAPTIONS_GUEST_LINKS=true` and `CAPTIONS_GUEST_SIGNING_KEY` (base64 of a
 PKCS#8 DER P-256 private key). Apply `supabase/migrations/2026-10-02_live_captions_guest_links.sql`
 before switching guest links on. Supabase Realtime must allow public channels (its default).
-Snapshot requests are rate-limited per phone and, generously, per IP address.
+Snapshot requests are limited to 60 a minute per phone. Failed requests (an invalid or
+expired code, a made-up run) also count against the internet address, at 600 a minute.
+A phone holding a code that recently checked out is exempt from that address limit, so one
+person flooding the hotel's shared connection cannot lock the other guests out. Link checks
+and snapshots are cached for a few seconds, so database load does not grow with the number
+of phones. Limits and caches are per Vercel instance.
 
 The earlier design (anonymous sign-in plus invite redemption, gated by
 `CAPTIONS_GUEST_AUTH_AUDITED`) is gone from the code. Its SQL functions remain in the first
