@@ -150,6 +150,23 @@ the downloaded public Cantonese podcast was played into Chrome as its microphone
 This is anecdotal: a dozen lines, one speaker type, no human review. It is not the
 100-phrase language gate.
 
+## Vercel preview run — 2 October
+
+Branch `codex/live-captions-ui` deployed as a Vercel preview (production untouched; caption
+variables scoped to this branch's previews; functions in `iad1`). The user ran it from a Mac
+with its built-in microphone, speaking Cantonese and English, for about 55 seconds.
+
+- The WebSocket audio stream worked on Vercel: one connection, authorised, recognised and
+  ended through End with no gap or error events.
+- 5 spoken lines recognised and translated into all three languages (15 final captions).
+  Another 11 detected segments held no words and were correctly not saved.
+- Recognition finished a median 0.49 s after each line closed (max 0.89 s); each final
+  translation call took a median 0.76 s (max 1.60 s).
+- **Not yet shown on Vercel:** the 240-second scheduled handoff, which is what the 300-second
+  function limit makes necessary. That needs a run of 5 minutes or more.
+
+The user described the result as good. Still anecdotal: one speaker, under a minute.
+
 ## Review and limits
 
 Both reviewers were independent of the authors' reasoning but shared the workspace, and
