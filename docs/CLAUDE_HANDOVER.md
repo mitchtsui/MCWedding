@@ -1,5 +1,8 @@
 # MCWedding captions — handover
 
+> **Superseded 2026-10-03:** for the current state and open items read `docs/CODEX_HANDOVER.md`
+> (Claude → Codex). This file stays as the 2 October record.
+
 Checkpoint: 2026-10-02, Claude, continuing from Codex's handover of 09:21 UTC the same day.
 Status: COMMITTED to branch `codex/live-captions-ui` and pushed for a Vercel PREVIEW only.
 Production (`main`) is untouched. The migration is applied to the wedding Supabase project.
