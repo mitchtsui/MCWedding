@@ -25,7 +25,7 @@ No new paid request, hosted six-minute run, deployment, migration or remote data
 was performed as part of these checks. Long-run handoff, venue conditions, load and human
 translation quality remain unverified.
 
-### Pause and End changes (local, not deployed)
+### Pause and End changes (published to branch preview on 3 October)
 
 User-approved behaviour: Pause stops capture immediately and drains already-captured
 speech before the paused transition. Emergency stop cancels the wait. Failed Pause keeps
@@ -49,6 +49,13 @@ No reproduced blocker remained in that scope. Review reused an existing agent co
 and shared working files, with author fix messages; it was not a fresh isolated review
 or a wedding-release sign-off. Real microphones/provider timing were not used for these
 new behaviours.
+
+Publication verification: application commit `d85654b` is on the remote preview branch.
+Vercel deployment `dpl_3EKSGmGD1dtsNN9bKzLWvYkjKe9Z` reached READY and acquired the existing
+branch alias. Admin page/script and caption configuration returned HTTP 200; the deployed
+script matched the committed source after line-ending normalization, and captions/guest
+links reported enabled. Production homepage returned 200 and its caption API returned
+404. These are deployment smoke checks, not authenticated microphone or handoff tests.
 
 ## Initial implementation session status (2 October; historical)
 

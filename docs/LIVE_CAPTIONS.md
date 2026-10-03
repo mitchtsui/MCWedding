@@ -224,7 +224,7 @@ See the evaluator's tests for a synthetic schema example; never label those resu
   already captured before changing the database state to paused. The wait is bounded;
   an unconfirmed pause leaves capture off and offers recovery. Emergency stop cancels
   this wait immediately. This behaviour was selected by the user on 3 October and is
-  currently a local change awaiting a preview deployment and real-audio verification.
+  published to the branch preview on 3 October, awaiting real-audio verification.
 - End checks persisted recognized source finals for missing target finals even when already paused.
   Blank-source manual captions with intentionally omitted languages are excluded.
   If that check fails, the operator sees that the result could not be checked.

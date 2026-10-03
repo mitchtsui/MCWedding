@@ -33,8 +33,20 @@ has been recorded. The six-minute preview run is still unverified; the user was 
 an automated replay preparation or a Mac microphone rehearsal. Do not infer approval for
 paid tests or production changes from the availability of keys.
 
-Next: complete the authorized branch-preview publication, then verify Pause/Stop and
-the six-minute handoff on the preview. Use the observer instructions in
+Publication verified on 3 October: application commit `d85654b` was pushed to
+`codex/live-captions-ui`; Vercel preview `dpl_3EKSGmGD1dtsNN9bKzLWvYkjKe9Z` reached READY.
+The branch alias returned HTTP 200 for the admin page, and the deployed admin script
+matched the committed file after line-ending normalization. Configuration reported
+captions enabled and guest links ready. Production homepage returned 200; its caption
+API returned 404. No production deployment or configuration change was made.
+
+The user asked where to provide a prepared speech: signed-in admin page, Prepared
+language support > Advance script > Save script. It currently accepts pasted text,
+not Word/PDF uploads, and Save requires an event created by Start. Pre-capture script
+preparation is a known workflow gap, not fixed by this publication.
+
+Next: verify Pause/Stop and the six-minute handoff on the preview, then longer/multi-phone
+testing and the Peninsula HK audio/network rehearsal. Use the observer instructions in
 `LIVE_CAPTIONS.md`; do not substitute local mock tests for real audio evidence. Keep the
 existing production and venue/load/quality gates.
 
