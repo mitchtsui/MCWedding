@@ -262,7 +262,24 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
           const transition = await store.transitionRun({ runId: input.runId, action }).catch(error => { throw runNotOpen(error); });
           const outboxIds = transition.deliveryOutboxIds || [];
           delete transition.deliveryOutboxIds;
-          data = { ...transition, delivery: await dispatchHttpOutbox({ store, delivery, outboxIds, workerId: `${id}:http` }) };
+          let pendingRecognizedFinals = {};
+          if (action === 'end') {
+            try {
+              const recovered = await store.recoverPending({ runId: input.runId, limit: 500 });
+              if (!recovered || !Array.isArray(recovered.finalSources)) throw new Error('Invalid pending-work response');
+              const finalSources = recovered.finalSources;
+              // Manual target-only captions intentionally have an empty source. They are not
+              // unfinished AI translation work and must not make End report a false failure.
+              const recognizedSources = finalSources.filter(source => typeof source?.text === 'string' && source.text.trim());
+              pendingRecognizedFinals = { pendingRecognizedFinalSources: recognizedSources.length,
+                pendingRecognizedFinalsTruncated: finalSources.length === 500, pendingRecognizedFinalsChecked: true };
+            } catch {
+              pendingRecognizedFinals = { pendingRecognizedFinalSources: null,
+                pendingRecognizedFinalsTruncated: false, pendingRecognizedFinalsChecked: false };
+            }
+          }
+          data = { ...transition, ...pendingRecognizedFinals,
+            delivery: await dispatchHttpOutbox({ store, delivery, outboxIds, workerId: `${id}:http` }) };
           break;
         }
         case 'ticket': {

@@ -195,6 +195,40 @@ test('normal end drains the buffered speech tail before acknowledging', async ()
   session.stop('test_complete');
 });
 
+test('pause drain waits for already-captured final translations before acknowledging', async () => {
+  const activity = [], store = fakeStore(activity);
+  let releaseJapanese, japaneseStarted = false;
+  const translator = { async translate({ language }) {
+    if (language === 'ja') {
+      japaneseStarted = true;
+      await new Promise(resolve => { releaseJapanese = resolve; });
+    }
+    return { text: `${language}-paused-tail` };
+  } };
+  const gateway = new CaptionGateway({ store, publisher: { async publish(topic, event, payload) {
+    activity.push(`publish:${payload.language}`);
+  } }, allowedOrigins: ['https://wedding.example'], asrFactory: () => new FakeAsr(), translator,
+  config: { commitMode: 'fixed', fixedCommitMs: 50, heartbeatMs: 100000, rotateAfterMs: 100000, shutdownAfterMs: 110000 } });
+  const socket = new FakeClientSocket(), session = gateway.attach(socket, { origin: 'https://wedding.example' });
+  socket.emit('message', JSON.stringify({ type: 'auth', ticket: 'ticket' }));
+  await waitFor(() => socket.sent.some(message => message.type === 'ready'));
+  const audio = Buffer.alloc(FRAME_BYTES);
+  for (let offset = 0; offset < audio.length; offset += 2) audio.writeInt16LE(4000, offset);
+  socket.emit('message', JSON.stringify({ type: 'audio', captureEpoch: 'capture', sequence: 0,
+    sampleOffset: 0, audio: audio.toString('base64') }));
+  await waitFor(() => japaneseStarted);
+  socket.emit('message', JSON.stringify({ type: 'drain', reason: 'pause' }));
+  await new Promise(resolve => setTimeout(resolve, 30));
+  assert.equal(socket.sent.some(message => message.status === 'drained'), false);
+  releaseJapanese();
+  await waitFor(() => socket.sent.some(message => message.status === 'drained'));
+  const drainedIndex = socket.sent.findIndex(message => message.status === 'drained');
+  assert.equal(socket.sent[drainedIndex].reason, 'pause');
+  assert.equal(socket.sent.slice(0, drainedIndex).filter(message => message.type === 'caption.batch').length, 3);
+  assert.equal(activity.filter(item => item.startsWith('persist:')).length, 3);
+  session.stop('test_complete');
+});
+
 test('closing during authentication never opens an orphan ASR provider', async () => {
   let releaseTicket, providerOpened = 0;
   const store = fakeStore([]);

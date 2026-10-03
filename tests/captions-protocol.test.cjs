@@ -19,8 +19,9 @@ test('the first auth message carries the ticket in the body', () => {
   assert.throws(() => decodeClientMessage('{bad'), error => error.code === 'invalid_json');
 });
 
-test('normal end uses an explicit drain message', () => {
+test('normal end and pause use explicit drain messages while emergency stop does not', () => {
   assert.deepEqual(decodeClientMessage(JSON.stringify({ type: 'drain', reason: 'end' })), { type: 'drain', reason: 'end' });
+  assert.deepEqual(decodeClientMessage(JSON.stringify({ type: 'drain', reason: 'pause' })), { type: 'drain', reason: 'pause' });
   assert.throws(() => decodeClientMessage(JSON.stringify({ type: 'drain', reason: 'stop' })),
     error => error.code === 'unsupported_message');
 });

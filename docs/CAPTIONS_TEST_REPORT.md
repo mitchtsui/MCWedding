@@ -1,6 +1,56 @@
 # Caption implementation validation — 2026-10-02
 
-## Status
+## Current status — 3 October 2026
+
+The opening implementation session below is historical. The branch preview subsequently
+ran real OpenAI/Supabase captions with a Mac microphone and a phone QR guest, as recorded
+in `CODEX_HANDOVER.md`; this is not production activation or wedding acceptance.
+
+Codex resumed on `codex/live-captions-ui` at `4a8c366`. Before new changes, the complete
+caption test command below passed **174/174**, no failures/skips (55.3 seconds).
+Read-only requests returned HTTP 200 for preview configuration and caption configuration;
+captions were enabled, and the `.env.local` Supabase URL matched that preview. The matching
+project's Auth settings still reported signups enabled and anonymous Auth disabled.
+Changing signup policy and checking the user list remain pending user actions.
+
+The new read-only observation tool has seven local tests for run scope, credential/content
+exclusion, project mismatch, local configuration, corrected source revisions, malformed
+responses and bounded pagination (including exact 500/1,000-row boundaries). These passed.
+The observer also completed a read-only query of the most recently ended hosted test
+run: six persisted source finals, six finals per language, zero source finals missing
+a current final translation, 21 sent outbox entries and one used uplink ticket. No tables
+were reported incomplete. This confirms access to the installed schema, not long-run
+handoff (only one connection) or linguistic correctness; no speech text was fetched.
+No new paid request, hosted six-minute run, deployment, migration or remote data mutation
+was performed as part of these checks. Long-run handoff, venue conditions, load and human
+translation quality remain unverified.
+
+### Pause and End changes (local, not deployed)
+
+User-approved behaviour: Pause stops capture immediately and drains already-captured
+speech before the paused transition. Emergency stop cancels the wait. Failed Pause keeps
+the run recoverable without restarting the microphone. End also checks recognized source
+finals for missing translations; blank manual sources are excluded. Failed, malformed or
+500-row-capped checks cannot produce a clean completion claim. Drain replies from a
+replaced socket cannot complete the current wait.
+
+The final complete caption regression suite passed **192/192**, no failures or skips
+(55.4 seconds), using `node --test --test-isolation=none tests/captions-*.test.cjs tests/captions-*.test.mjs`.
+`npm run build` passed. The mocked Chrome suite (`node tests/captions-live-browser.cjs`)
+passed on Chrome 153.0.8010.48, including the new pause-drain assertion and existing
+operator, QR guest, reconnect, rotation and layout checks. Its protocol fixture was
+updated to acknowledge the requested drain reason. Chrome required a sandbox exception;
+all browser service/audio providers remained mocked. `git diff --check` passed.
+
+A separate read-only reviewer reproduced and rechecked observer privacy/pagination
+issues and End unknown/truncated-result cases. It also exercised the actual admin script
+in a VM for failed Pause, Pause during rotation and Emergency stop during the wait.
+No reproduced blocker remained in that scope. Review reused an existing agent context
+and shared working files, with author fix messages; it was not a fresh isolated review
+or a wedding-release sign-off. Real microphones/provider timing were not used for these
+new behaviours.
+
+## Initial implementation session status (2 October; historical)
 
 Local implementation in MCWedding; live service NOT activated. This is not a wedding
 release candidate. Phase 0 real recognition/translation quality remains unverified for

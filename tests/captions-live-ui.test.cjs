@@ -137,7 +137,8 @@ test('live pages remain opt-in and use isolated auth plus text-only rendering', 
   assert.doesNotMatch(admin + guest, /\.innerHTML\s*=/);
   assert.match(admin, /type: 'auth', ticket: ticket\.token/);
   assert.match(admin, /captureEpoch: epoch, sequence, sampleOffset/);
-  assert.match(admin, /type: 'drain', reason: 'end'/);
+  assert.match(admin, /drainStream\('end'\)/);
+  assert.match(admin, /drainStream\('pause'\)/);
   assert.match(admin, /mode: 'live'/);
   assert.match(admin, /expiresAt: expiresAt\.toISOString\(\), maxUses/);
   assert.match(admin, /script = \{ title:.*content:.*sequence:.*active: true \}/);

@@ -28,6 +28,7 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
   // failNext: the request never reaches the server. loseReply: it is applied, then the reply is lost.
   // refuseNext: the server answers 400 for a reason that says nothing about the run (as a rate limit does).
   const server = { runs: new Map(), events: 0, calls: [], tickets: 0, failNext: new Map(), loseReply: new Map(), refuseNext: new Map(),
+    pendingRecognizedFinalSources: 0, pendingRecognizedFinalsTruncated: false, pendingRecognizedFinalsChecked: true,
     drainReply: { withGap: false, delivery: { attempted: 0, delivered: 0, failed: 0, unresolvedFailed: 0 }, failures: { captions: 0, sources: 0 } } };
   const rejected = (status, code) => Object.assign(new Error('Caption request was rejected'), { status, code });
   const notOpen = run => run ? rejected(409, 'RUN_NOT_OPEN') : rejected(404, 'NOT_FOUND');
@@ -47,7 +48,10 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
     } else if (['pause', 'resume', 'end', 'stop'].includes(action)) {
       const allowed = run && (action === 'pause' ? run.state === 'live' : action === 'resume' ? run.state === 'paused' : ['starting', 'live', 'paused', 'degraded'].includes(run.state));
       if (!allowed) { await gate(action); throw notOpen(run); }
-      run.state = { pause: 'paused', resume: 'live', end: 'ended', stop: 'stopped' }[action]; result = { runId: payload.runId, state: run.state };
+      run.state = { pause: 'paused', resume: 'live', end: 'ended', stop: 'stopped' }[action]; result = { runId: payload.runId, state: run.state,
+        ...(action === 'end' ? { pendingRecognizedFinalSources: server.pendingRecognizedFinalSources,
+          pendingRecognizedFinalsTruncated: server.pendingRecognizedFinalsTruncated,
+          pendingRecognizedFinalsChecked: server.pendingRecognizedFinalsChecked } : {}) };
     } else if (action === 'ticket') { if (!run || !['live', 'degraded'].includes(run.state)) { await gate(action); throw notOpen(run); } server.tickets += 1; result = { token: 'ticket-' + server.tickets }; }
     else if (action === 'snapshot') result = { topic: `caption:${payload.eventId}:${payload.language}`, updates: [] };
     if (take(server.loseReply, action)) throw new Error('Caption service unavailable');
@@ -64,7 +68,7 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
     send(data) { if (this.readyState !== 1) return; const message = JSON.parse(data); this.sent.push(message);
       if (keepBacklog && message.type === 'audio') this.bufferedAmount += data.length;
       if (message.type === 'auth') gate('ws-ready').then(() => this.serverSend({ type: 'ready' }));
-      if (message.type === 'drain') this.serverSend({ type: 'status', status: 'drained', reason: 'end', ...server.drainReply }); }
+      if (message.type === 'drain') gate('drain').then(() => this.serverSend({ type: 'status', status: 'drained', reason: message.reason, ...server.drainReply })); }
     close() { if (this.readyState < 2) { this.readyState = 3; setTimeout(() => this.onclose?.({}), 0); } }
     serverSend(message) { if (this.readyState === 1) this.onmessage?.({ data: JSON.stringify(message) }); }
     serverClose() { if (this.readyState < 2) { this.readyState = 3; this.onclose?.({}); } }
@@ -195,6 +199,42 @@ test('a microphone that disconnects while live does not strand the open run', as
   app.click('stop'); await app.until('Captions stopped'); assert.equal(app.runs(), 'run-1:stopped');
 });
 
+test('Pause stops the microphone immediately and waits for already-captured work before changing run state', async () => {
+  const app = await (await makeApp()).goLive(); app.frames(3); const stream = app.socket(); app.hold('drain');
+  app.click('pause'); await waitFor(() => app.held('drain') === 1, 'pause drain');
+  assert.equal(app.capture.running, false); assert.equal(app.frames(1), 0, 'no audio is captured after Pause');
+  assert.equal(app.runs(), 'run-1:live'); assert.ok(!app.server.calls.includes('pause:run-1'));
+  assert.equal(stream.types().at(-1), 'drain'); assert.equal(stream.sent.at(-1).reason, 'pause');
+  app.release('drain'); await app.until('last captured words completed');
+  assert.equal(app.runs(), 'run-1:paused'); assert.equal(app.enabled(), 'resume,end,stop');
+});
+
+test('Emergency stop cancels a pending Pause drain without restarting the microphone', async () => {
+  const app = await (await makeApp()).goLive(); app.hold('drain'); app.click('pause');
+  await waitFor(() => app.held('drain') === 1, 'pause drain'); assert.equal(app.capture.running, false);
+  assert.equal(app.click('stop'), true); await app.until('Captions stopped'); app.release('drain'); await sleep(20);
+  assert.equal(app.runs(), 'run-1:stopped'); assert.equal(app.capture.running, false);
+  assert.ok(!app.server.calls.includes('pause:run-1'), 'cancelled Pause never changes the stopped run');
+});
+
+test('a failed Pause drain keeps the open run recoverable and never claims it paused', async () => {
+  const app = await (await makeApp()).goLive(); app.hold('drain'); app.click('pause');
+  await waitFor(() => app.held('drain') === 1, 'pause drain'); app.socket().serverClose();
+  await app.until('Pause was not confirmed');
+  assert.equal(app.runs(), 'run-1:live'); assert.equal(app.capture.running, false); assert.equal(app.enabled(), 'start,stop');
+  assert.ok(!app.server.calls.includes('pause:run-1')); app.release('drain');
+});
+
+test('a late drain reply from a replaced socket cannot complete the current Pause', async () => {
+  const app = await (await makeApp()).goLive(); const old = app.socket(); old.serverClose();
+  await waitFor(() => app.socket() !== old && app.socket().readyState === 1 && app.capture.running, 'replacement stream');
+  app.hold('drain'); app.click('pause'); await waitFor(() => app.held('drain') === 1, 'current pause drain');
+  old.onmessage?.({ data: JSON.stringify({ type: 'status', status: 'drained', reason: 'pause', withGap: false,
+    delivery: { attempted: 0, delivered: 0, failed: 0, unresolvedFailed: 0 }, failures: { captions: 0, sources: 0 } }) });
+  await sleep(20); assert.equal(app.runs(), 'run-1:live'); assert.ok(!app.server.calls.includes('pause:run-1'));
+  app.release('drain'); await app.until('last captured words completed'); assert.equal(app.runs(), 'run-1:paused');
+});
+
 test('an unplanned reconnect starts a new epoch above sequence 0 so the server records the gap', async () => {
   const app = await (await makeApp()).goLive(); app.frames(5); const before = app.socket(), epoch = firstFrame(before).epoch;
   await sleep(10); before.serverClose();
@@ -287,6 +327,19 @@ test('End during a handoff uploads the buffered words before draining', async ()
   assert.equal(app.runs(), 'run-1:ended'); assert.equal(app.enabled(), 'start');
 });
 
+test('Pause during a handoff stops the microphone, replays its existing buffer, then drains', async () => {
+  const app = await (await makeApp()).goLive(); app.frames(5); const old = app.socket();
+  old.serverSend({ type: 'status', status: 'rotation.preparing' }); app.frames(10); app.hold('ticket');
+  old.serverSend({ type: 'rotate', reason: 'function_duration' }); await waitFor(() => app.held('ticket') === 1, 'handoff ticket');
+  app.click('pause'); await waitFor(() => app.capture.running === false, 'microphone stopped');
+  assert.equal(app.frames(5), 0); app.release('ticket'); await app.until('last captured words completed');
+  const current = app.socket();
+  assert.equal(old.audio().length + current.audio().length, 15, 'only audio captured before Pause is uploaded');
+  assert.equal(current.types().indexOf('drain'), current.types().lastIndexOf('audio') + 1);
+  assert.equal(app.capture.starts, 1, 'the handoff never restarts the microphone');
+  assert.equal(app.runs(), 'run-1:paused');
+});
+
 test('End after a handoff that lost audio declares the gap and does not claim a clean finish', async () => {
   const failed = await (await makeApp()).goLive(); failed.frames(5); const old = failed.socket();
   old.serverSend({ type: 'status', status: 'rotation.preparing' }); failed.frames(10); failed.server.failNext.set('ticket', 1); failed.hold('ws-ready');
@@ -319,12 +372,26 @@ test('End on a run that has closed elsewhere says so and returns to a clean Star
 test('End reports finals that were not saved or translated', async () => {
   const app = await (await makeApp()).goLive(); app.server.drainReply = { withGap: true, delivery: { attempted: 0, delivered: 0, failed: 0, unresolvedFailed: 0 }, failures: { captions: 2, sources: 1 } };
   app.click('end'); await app.until('Captions ended');
-  assert.match(app.text(), /could not be saved or translated/); assert.equal(app.runs(), 'run-1:ended');
+  assert.match(app.text(), /recognized final speech could not be saved or fully translated/); assert.equal(app.runs(), 'run-1:ended');
 });
 
 test('End while paused ends the run without a stream', async () => {
   const app = await (await makeApp()).goLive(); app.click('pause'); await app.until('Captions paused'); assert.equal(app.enabled(), 'resume,end,stop');
-  app.click('end'); await app.until('Captions ended'); assert.equal(app.runs(), 'run-1:ended'); assert.equal(app.enabled(), 'start');
+  app.server.pendingRecognizedFinalSources = 2; app.click('end'); await app.until('Captions ended');
+  assert.match(app.text(), /recognized final speech could not be saved or fully translated/); assert.equal(app.runs(), 'run-1:ended'); assert.equal(app.enabled(), 'start');
+});
+
+test('End while paused does not claim completeness when the pending-final check is unavailable', async () => {
+  const app = await (await makeApp()).goLive(); app.click('pause'); await app.until('Captions paused');
+  app.server.pendingRecognizedFinalsChecked = false; app.click('end'); await app.until('Captions ended');
+  assert.match(app.text(), /could not be fully checked/); assert.equal(app.runs(), 'run-1:ended');
+});
+
+test('a clean live drain cannot claim completion when the durable pending-final check is unavailable or truncated', async () => {
+  const unavailable = await (await makeApp()).goLive(); unavailable.server.pendingRecognizedFinalsChecked = false;
+  unavailable.click('end'); await unavailable.until('Captions ended'); assert.match(unavailable.text(), /could not be fully checked/);
+  const truncated = await (await makeApp()).goLive(); truncated.server.pendingRecognizedFinalsTruncated = true;
+  truncated.click('end'); await truncated.until('Captions ended'); assert.match(truncated.text(), /could not be fully checked/);
 });
 
 test('Resume after an intentional pause starts at sequence 0 with no declared gap', async () => {

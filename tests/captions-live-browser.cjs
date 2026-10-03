@@ -83,6 +83,7 @@ async function main() {
       else if (input.action === 'createEvent') data = { eventId: 'event-1' };
       else if (input.action === 'start') { if (input.mode !== 'live') contractErrors.push('start_mode'); data = { eventId: 'event-1', runId: 'run-1' }; }
       else if (input.action === 'ticket') data = { token: 'single-use-ticket', runId: 'run-1', eventId: 'event-1' };
+      else if (input.action === 'end') data = { pendingRecognizedFinalSources: 0, pendingRecognizedFinalsChecked: true, pendingRecognizedFinalsTruncated: false };
       else if (input.action === 'snapshot') data = input.runId === currentRunId
         ? batch(input.language, 1, `Snapshot ${input.language} ${currentRunId}`, currentRunId)
         : { ...batch(input.language, 1, `Snapshot ${input.language} ${input.runId}`, input.runId), currentRunId };
@@ -114,7 +115,7 @@ async function main() {
           status: 'final', origin: 'provider', text, language }] });
       class FakeSocket {
         static OPEN = 1; constructor() { this.readyState = 0; this.sent = []; window.__socketCount = (window.__socketCount || 0) + 1; (window.__sockets ||= []).push(this); window.__lastSocket = this; setTimeout(() => { this.readyState = 1; this.onopen?.(); }, 0); }
-        send(value) { const message = JSON.parse(value); this.sent.push(message); (window.__socketMessages ||= []).push(message); if (message.type === 'auth') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'ready', eventId: 'event-1', runId: 'run-1', modeGeneration: 1, channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', frameMs: 50, sampleRate: 24000 }) }), 0); if (message.type === 'drain') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'status', status: 'drained', reason: 'end', withGap: Boolean(window.__drainDeliveryFailure), delivery: window.__drainDeliveryFailure ? { failed: 1, unresolvedFailed: 1 } : { failed: 0, unresolvedFailed: 0 } }) }), 20); }
+        send(value) { const message = JSON.parse(value); this.sent.push(message); (window.__socketMessages ||= []).push(message); if (message.type === 'auth') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'ready', eventId: 'event-1', runId: 'run-1', modeGeneration: 1, channelEpoch: '8f87ed59-8961-4964-bcd0-03c0f80818cc', frameMs: 50, sampleRate: 24000 }) }), 0); if (message.type === 'drain') setTimeout(() => this.onmessage?.({ data: JSON.stringify({ type: 'status', status: 'drained', reason: message.reason, withGap: Boolean(window.__drainDeliveryFailure), delivery: window.__drainDeliveryFailure ? { failed: 1, unresolvedFailed: 1 } : { failed: 0, unresolvedFailed: 0 } }) }), 20); }
         close() { this.readyState = 3; this.onclose?.(); }
         emit(value) { this.onmessage?.({ data: JSON.stringify(value) }); }
       }
@@ -172,6 +173,8 @@ async function main() {
     assert.match(invite.qr, /^data:image\/svg\+xml/, 'the guest link is shown as a QR code'); assert.equal(invite.save, 'Save QR code'); assert.equal(invite.button, 'Create guest QR code');
     assert.match(invite.link, /live-captions\.html\?live=1&event=event-1#token=guest-invite$/); assert.equal(invite.maxUsesHidden, true);
     await admin.click('#pause-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('paused')); assert.equal(await admin.evaluate(() => window.__capture.running), false);
+    assert.equal(await admin.evaluate(() => window.__socketMessages.some(value => value.type === 'drain' && value.reason === 'pause')), true);
+    assert.match(await admin.$eval('#status-text', item => item.textContent), /last captured words completed/);
     await admin.click('#resume-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('connected'));
     await admin.evaluate(() => { window.__drainDeliveryFailure = true; }); await admin.click('#end-button'); await admin.waitForFunction(() => document.getElementById('status-text').textContent.includes('pending failures'));
     assert.doesNotMatch(await admin.$eval('#status-text', item => item.textContent), /final-audio gap/);

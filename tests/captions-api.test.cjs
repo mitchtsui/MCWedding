@@ -142,6 +142,48 @@ test('a normal start is unchanged and a non-UUID event id never reaches the look
   assert.equal(urls.some(url => url.includes('/rest/v1/caption_events')), false);
 });
 
+test('End reports recognized final sources still missing a target translation but excludes manual target-only captions', async () => {
+  const urls = [];
+  const ended = await post(adminFetch({
+    '/rpc/caption_transition_run': { status: 200, body: { run_id: RUN_ID, event_id: EVENT_ID, state: 'ended', delivery_outbox_ids: [] } },
+    '/rpc/caption_recover_pending': { status: 200, body: { finalSources: [
+      { segmentId:'s-1', text:'recognized one' }, { segmentId:'s-2', text:'recognized two' },
+      { segmentId:'manual-target-only', text:'' }
+    ] } }
+  }, urls), { action: 'end', runId: RUN_ID });
+  assert.equal(ended.status, 200);
+  assert.deepEqual({ pendingRecognizedFinalSources: ended.body.data.pendingRecognizedFinalSources,
+    pendingRecognizedFinalsTruncated: ended.body.data.pendingRecognizedFinalsTruncated,
+    pendingRecognizedFinalsChecked: ended.body.data.pendingRecognizedFinalsChecked },
+  { pendingRecognizedFinalSources: 2, pendingRecognizedFinalsTruncated: false, pendingRecognizedFinalsChecked: true });
+  assert(urls.findIndex(url => url.includes('caption_transition_run')) < urls.findIndex(url => url.includes('caption_recover_pending')),
+    'the ended generation is fixed before its durable pending work is counted');
+});
+
+test('End succeeds but marks pending-final completeness unknown when its durable check fails', async () => {
+  const ended = await post(adminFetch({
+    '/rpc/caption_transition_run': { status: 200, body: { run_id: RUN_ID, event_id: EVENT_ID, state: 'ended', delivery_outbox_ids: [] } },
+    '/rpc/caption_recover_pending': { status: 503, body: { code: 'database_down' } }
+  }), { action: 'end', runId: RUN_ID });
+  assert.equal(ended.status, 200);
+  assert.deepEqual({ pendingRecognizedFinalSources: ended.body.data.pendingRecognizedFinalSources,
+    pendingRecognizedFinalsTruncated: ended.body.data.pendingRecognizedFinalsTruncated,
+    pendingRecognizedFinalsChecked: ended.body.data.pendingRecognizedFinalsChecked },
+  { pendingRecognizedFinalSources: null, pendingRecognizedFinalsTruncated: false, pendingRecognizedFinalsChecked: false });
+});
+
+test('End treats a malformed pending-work response as unknown instead of claiming zero', async () => {
+  const ended = await post(adminFetch({
+    '/rpc/caption_transition_run': { status: 200, body: { run_id: RUN_ID, event_id: EVENT_ID, state: 'ended', delivery_outbox_ids: [] } },
+    '/rpc/caption_recover_pending': { status: 200, body: { finalSources: null } }
+  }), { action: 'end', runId: RUN_ID });
+  assert.equal(ended.status, 200);
+  assert.deepEqual({ count: ended.body.data.pendingRecognizedFinalSources,
+    truncated: ended.body.data.pendingRecognizedFinalsTruncated,
+    checked: ended.body.data.pendingRecognizedFinalsChecked },
+  { count: null, truncated: false, checked: false });
+});
+
 const SIGNING_KEY = crypto.generateKeyPairSync('ec', { namedCurve: 'P-256' }).privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
 const guestEnv = { ...baseEnv, CAPTIONS_GUEST_LINKS: 'true', CAPTIONS_GUEST_SIGNING_KEY: SIGNING_KEY };
 const OTHER_RUN = '33333333-3333-4333-8333-333333333333';

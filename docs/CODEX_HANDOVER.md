@@ -3,11 +3,40 @@
 Written 2026-10-03 by Claude Code on the main Windows PC. Codex holds the branch from here;
 Claude has stopped and holds nothing.
 
-**State in one paragraph.** Live captions work end to end on a public Vercel **preview** of
+**Deployed preview at Claude's handover (historical).** Live captions work end to end on a public Vercel **preview** of
 branch `codex/live-captions-ui` (HEAD `10988b5`, pushed). The operator runs captions from the
 admin portal; guests scan a QR code and read, with no account. The user tested it with the
 Mac's microphone and with a phone, and called both good. **Production (`main`, the live
 wedding site) is untouched**: no merge, no production variables, captions off there.
+
+## Codex continuation — 3 October 2026
+
+The historical handover below describes the earlier preview. Codex resumed at `4a8c366`
+on the same branch. User selected **Pause stops
+the microphone immediately and finishes already-captured words; Emergency stop aborts**.
+Implementation and regression evidence are recorded in `CAPTIONS_TEST_REPORT.md`.
+Final local validation: 192/192 caption tests, build and mocked Chrome suite passed;
+read-only review found no remaining reproduced blocker within its documented scope.
+
+New work: pause drain, truthful recognized-final coverage on End, and
+`scripts/captions-observe.cjs` for read-only one-run metadata. No applied migrations were
+edited. No paid API test or database mutation was made in this continuation. Existing
+untracked `mockups/` was preserved. On 3 October the user explicitly authorized committing,
+pushing and publishing these changes to the existing branch preview only. Production
+changes remain outside that authorization. Verify the resulting deployment against Git
+and Vercel before starting a rehearsal.
+
+Read-only checks confirmed the preview responds, captions are enabled, its Supabase
+project matches local `.env.local`, anonymous Auth is disabled and new signups remain
+enabled. The user has been asked to disable signups and check the user list; no response
+has been recorded. The six-minute preview run is still unverified; the user was offered
+an automated replay preparation or a Mac microphone rehearsal. Do not infer approval for
+paid tests or production changes from the availability of keys.
+
+Next: complete the authorized branch-preview publication, then verify Pause/Stop and
+the six-minute handoff on the preview. Use the observer instructions in
+`LIVE_CAPTIONS.md`; do not substitute local mock tests for real audio evidence. Keep the
+existing production and venue/load/quality gates.
 
 Read, in this order:
 1. This file. It says what is true now and what is open.

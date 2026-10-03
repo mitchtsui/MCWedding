@@ -12,6 +12,35 @@ do not establish Vercel WebSocket compatibility, live translation accuracy or we
 The standalone `../wedding-live-captions` folder retains private recordings and prior
 Phase 0 evidence; the deployed application must not import runtime code from that folder.
 
+As of 3 October, the branch preview has a recorded short real microphone run and
+user-reported phone QR success (see `CODEX_HANDOVER.md`). Production remains outside
+this activation. The six-minute Vercel handoff, venue/network rehearsal, sustained load
+and human-reviewed translation quality are still release gates. Guests now use signed
+account-free guest links, as described below; older anonymous-auth test evidence is historical.
+
+### Read-only long-run observation
+
+After a six-minute preview rehearsal, use the run UUID from the operator session:
+
+```powershell
+node scripts/captions-observe.cjs "https://YOUR-BRANCH-PREVIEW.vercel.app" "RUN-UUID"
+```
+
+This tool reads only that run's metadata. It explicitly loads this repository's
+`.env.local`, checks its Supabase URL against the preview's public configuration, and
+issues GET requests only. It neither starts capture nor calls OpenAI. Reports are saved
+under ignored `private/observations/`; no speech text, invite tokens, outbox payloads or
+keys are selected. Keep these files private because run identifiers and timing remain.
+
+Take one observation after End and another if delivery was pending. Look for multiple
+used uplink times spanning the 240-second handoff, persisted finals in each language,
+pending outbox rows and gap/error event counts. These are diagnostic evidence, not proof
+of gap-free audio or correct translations: compare the guest display with the recording
+and operator notices. Reads are not one transaction; capped/missing counts are labelled
+incomplete. Coverage counts also include intentionally omitted manual target languages;
+the observer does not fetch source text to distinguish those. No six-minute hosted test
+has been established by this tool's local tests.
+
 ## Deployment structure
 
 - Existing HTML/CSS pages and admin navigation remain in MCWedding.
@@ -191,6 +220,14 @@ See the evaluator's tests for a synthetic schema example; never label those resu
   event, so a second admin pressing Start begins a separate event with its own guest links.
 - End waits for a handoff that is in flight, so the buffered last words are uploaded
   before the drain. End on a paused run ends it directly; there is no stream to drain.
+- Pause stops microphone capture immediately, then asks the stream to finish words
+  already captured before changing the database state to paused. The wait is bounded;
+  an unconfirmed pause leaves capture off and offers recovery. Emergency stop cancels
+  this wait immediately. This behaviour was selected by the user on 3 October and is
+  currently a local change awaiting a preview deployment and real-audio verification.
+- End checks persisted recognized source finals for missing target finals even when already paused.
+  Blank-source manual captions with intentionally omitted languages are excluded.
+  If that check fails, the operator sees that the result could not be checked.
 - End reports separately when final captions were not delivered, when they could not be
   saved or translated, and when audio was lost just before it (a failed or overflowing
   handoff, or a reconnect, within the last ten seconds). "Ended after the final words
