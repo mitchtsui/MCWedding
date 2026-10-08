@@ -6,7 +6,6 @@
   const controls = document.querySelector('.controls');
   const moves = [
     ['personField', 'mobilePerson'],
-    ['rundownNotice', 'mobilePlanningContent'],
     ['roleNote', 'mobilePlanningContent'],
     ['clockControls', 'mobilePlanningContent'],
     ['showCurrentTime', 'mobileJump'],
@@ -61,13 +60,6 @@
       $('toggleSearch').focus({ preventScroll: true });
     }
   });
-  $('mobileSourceStatus').addEventListener('click', event => {
-    event.preventDefault();
-    const notes = $('mobilePlanningNotes');
-    notes.open = true;
-    notes.querySelector('summary').focus({ preventScroll: true });
-    notes.scrollIntoView({ block: 'start' });
-  });
   phone.addEventListener('change', applyLayout);
   applyLayout();
 })();
@@ -78,14 +70,16 @@
   const data = window.WEDDING_DAY;
   const $ = id => document.getElementById(id);
   if (!data || !Array.isArray(data.events)) {
-    $('resultCount').textContent = 'The schedule could not load. Please reload the page or open the source workbook below.';
+    $('resultCount').textContent = 'The schedule could not load. Please reload the page.';
     $('currentTask').textContent = 'The schedule could not load. Please reload the page.';
     return;
   }
+  $('updatedDate').textContent = `Updated ${data.snapshotDate}`;
   const roles = {
     overview: ['The day', '全日流程'], bride: ['Bride', '新娘'], bridesmaids: ['Bridesmaids', '姊妹'],
     groom: ['Groom', '新郎'], groomsmen: ['Groomsmen', '兄弟'],
-    brideFamily: ['Bride’s family', '女家屋企人'], groomFamily: ['Groom’s family', '男家屋企人'], vendors: ['Vendors', '各單位']
+    brideFamily: ['Bride’s family', '女家屋企人'], groomFamily: ['Groom’s family', '男家屋企人'],
+    support: ['Family support', '親友協助'], vendors: ['Family / Vendors', '親友 / 各單位']
   };
   const periods = { all: [330, 1440], morning: [330, 840], afternoon: [840, 1020], evening: [1020, 1440] };
   const timelineLayout = { scale: 2, trackHeight: 50, padding: 6 };
@@ -96,20 +90,25 @@
   const minutes = value => { const [h, m] = value.split(':').map(Number); return h * 60 + m; };
   const clock = value => `${String(Math.floor(value / 60)).padStart(2, '0')}:${String(value % 60).padStart(2, '0')}`;
   const escape = value => String(value ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-  const text = value => escape(value);
+  // Keep the source wording in data while omitting an old-workbook citation in the shared guide.
+  const text = value => escape(String(value ?? '').replaceAll('按原Rundown：', ''));
   const events = [...data.events].sort((a, b) => minutes(a.start) - minutes(b.start) || a.row - b.row);
   // Explicit participation in source titles/notes, even where a role's duty cell is blank.
   // These links add no instructions: original notes remain available in the details.
   const namedInSource = {
-    r5: ['bride'], r8: ['bride', 'bridesmaids', 'brideFamily'], r9: ['groom'],
-    r10: ['groom'], r11: ['groom', 'groomsmen'], r12: ['groomsmen'],
-    r14: ['groom'], r26: ['groom', 'brideFamily', 'groomsmen'],
-    r29: ['bride', 'brideFamily', 'groomFamily']
+    r8: ['brideFamily'], r31: ['bride', 'brideFamily', 'groomFamily']
   };
   const participates = (e, role) => Boolean(e.duties[role]?.trim()) || namedInSource[e.id]?.includes(role);
-  const instructions = (e, role) => e.duties[role]?.trim() || 'This activity names you or your team in its title or notes. Your separate duty cell is blank; open the details for the source instructions.';
+  const personParticipates = (e, person) => Boolean(e.personDuties?.[person.key]?.trim())
+    || (['bride', 'groom'].includes(person.role) && namedInSource[e.id]?.includes(person.role));
+  const inSelectedSchedule = e => {
+    const { role, person } = selected();
+    return person ? personParticipates(e, person) : role === 'all' || participates(e, role);
+  };
+  const duty = (e, role, person = selected().person) => (person ? e.personDuties?.[person.key] : e.duties[role])?.trim() || '';
+  const instructions = (e, role, person = selected().person) => duty(e, role, person) || 'See the event details for your arrangements.';
   function eventPlace(e, role) {
-    // Rundown J5 explicitly places the groom at home while D5 names the bridal venue.
+    // The groom's preparation instructions explicitly place him at home.
     if (e.id === 'r5' && role === 'groom') return 'Your location · 男家（滿名山）';
     return `Event location · ${e.location || 'To confirm · 地點待確認'}`;
   }
@@ -117,18 +116,21 @@
   const people = data.people || [];
   const group = document.createElement('optgroup');
   group.label = 'Wedding party · 按名字';
-  people.forEach((p, i) => {
-    const option = document.createElement('option'); option.value = `person-${i}`;
+  people.forEach(p => {
+    const option = document.createElement('option'); option.value = `person-${p.key}`;
     option.textContent = `${p.name} · ${roles[p.role]?.[1] || p.role}`; group.append(option);
   });
   $('person').append(group);
   // URL-selected views can be copied directly, without storing a person's choice on a shared device.
   const params = new URLSearchParams(location.search);
+  // Keep previously shared index-based links working; new links use stable person keys.
+  const legacyPerson = /^person-(\d+)$/.exec(params.get('who') || '');
+  if (legacyPerson && people[Number(legacyPerson[1])]) params.set('who', `person-${people[Number(legacyPerson[1])].key}`);
   if ([...$('person').options].some(o => o.value === params.get('who'))) $('person').value = params.get('who');
   if (params.get('view') === 'duties') view = 'duties';
   function selected() {
     const value = $('person').value;
-    const person = value.startsWith('person-') ? people[Number(value.slice(7))] : null;
+    const person = value.startsWith('person-') ? people.find(p => p.key === value.slice(7)) : null;
     return { role: person?.role || value, person };
   }
   // A reader who has scrolled past the summary panel keeps the same visual spot when a clock
@@ -155,9 +157,9 @@
     };
   })();
   const nowNext = window.WeddingDayNow.create({
-    getEvents: () => { readingAnchor.before(); return events.filter(e => selected().role === 'all' || participates(e, selected().role)); },
+    getEvents: () => { readingAnchor.before(); return events.filter(inSelectedSchedule); },
     getRole: () => selected().role,
-    getDuty: (event, role) => role === 'all' ? '' : event.duties[role]?.trim() || '',
+    getDuty: (event, role) => role === 'all' ? '' : duty(event, role),
     onClock: value => { timelineClock = value; updateTimeMarker(); readingAnchor.after(); },
     eventPlace, range
   });
@@ -165,13 +167,13 @@
     const { role } = selected(), query = $('search').value.trim().toLocaleLowerCase();
     const [start, end] = periods[period];
     return events.filter(e => minutes(e.start) < end && (e.end ? minutes(e.end) > start : minutes(e.start) >= start))
-      .filter(e => role === 'all' || participates(e, role))
-      .filter(e => !query || [e.title, e.location, e.notes, ...Object.values(e.duties)].join(' ').toLocaleLowerCase().includes(query));
+      .filter(inSelectedSchedule)
+      .filter(e => !query || [e.title, e.location, e.notes, ...Object.values(e.duties), ...Object.values(e.personDuties || {})].join(' ').toLocaleLowerCase().includes(query));
   }
   function roleNote() {
     const { role, person } = selected();
-    if (person) return `${person.name}${person.responsibility ? ' · ' + person.responsibility : ''}. Showing the ${roles[role][0].toLowerCase()} team’s duties; unnamed tasks are not individual assignments.`;
-    return role === 'all' ? 'Everyone’s schedule. Select your name or team to focus on your duties.' : `${roles[role][0]} activities and team instructions from the sheet. A blank duty cell does not mean you can skip an activity; 【一人】 / 【兩人】 need named owners.`;
+    if (person) return `${person.name}${person.responsibility ? ' · ' + person.responsibility : ''}`;
+    return role === 'all' ? 'Select your name or team to find your duties.' : `${roles[role][0]} · Team duties`;
   }
   function rememberScroll() {
     const timeline = $('timeline');
@@ -188,7 +190,7 @@
     else rememberScroll();
     const list = filtered();
     const { role, person } = selected();
-    $('taskScope').textContent = person ? `${person.name} · ${roles[role][0]} team schedule` : role === 'all' ? 'Everyone’s schedule' : `${roles[role][0]} · ${roles[role][1]}`;
+    $('taskScope').textContent = person ? `${person.name} · Your schedule` : role === 'all' ? 'Everyone’s schedule' : `${roles[role][0]} · ${roles[role][1]}`;
     nowNext.update();
     $('roleNote').textContent = roleNote();
     const periodText = period === 'all' ? '05:30–23:45' : `${clock(periods[period][0])}–${period === 'evening' ? '23:45' : clock(periods[period][1])}`;
@@ -283,22 +285,23 @@
   }
   function openEvent(id) {
     const e = events.find(item => item.id === id); if (!e) return;
-    const { role } = selected();
+    const { role, person } = selected();
     const roleOrder = Object.keys(roles).filter(r => r !== 'overview');
     if (role !== 'all') roleOrder.sort((a, b) => (b === role) - (a === role));
+    const personalDuty = person ? `<h3>Your arrangements · ${text(person.name)}</h3><p class="preline" lang="zh-Hant">${text(instructions(e, role, person))}</p>` : '';
     $('dialogEyebrow').textContent = `${range(e)} · HKT`;
-    $('dialogBody').innerHTML = `<h2 id="dialogTitle" lang="zh-Hant">${text(e.title)}</h2><p class="location">↗ ${text(eventPlace(e, role))}</p><p class="source-line">The event location may differ from an individual’s whereabouts. Follow the role instructions below.</p>${(e.issues || []).map(issue => `<p class="notice" style="margin-top:16px">${text(issue)}</p>`).join('')}<h3>Who does what · 各人安排</h3>${roleOrder.filter(r => participates(e, r)).map(r => `<div class="duty"><strong>${roles[r][0]} · ${roles[r][1]}</strong><p class="preline" lang="zh-Hant">${text(instructions(e, r))}</p></div>`).join('') || '<p class="preline">No team instructions entered in the sheet yet.</p>'}${e.notes ? `<h3>Notes &amp; things to bring · 備註 / 物資</h3><p class="preline" lang="zh-Hant">${text(e.notes)}</p>` : ''}<p class="source-line">Source: Rundown · row ${text(e.row)} · ${text(data.snapshotDate)} snapshot.<br>【一人】 / 【兩人】 mean an owner still needs to be assigned. Times are as entered in the workbook. Minimum-width timeline blocks aid tapping and do not imply a longer duration; ◆ marks an event without an end time.</p>`;
+    $('dialogBody').innerHTML = `<h2 id="dialogTitle" lang="zh-Hant">${text(e.title)}</h2><p class="location">↗ ${text(eventPlace(e, role))}</p>${(e.issues || []).map(issue => `<p class="notice" style="margin-top:16px">${text(issue)}</p>`).join('')}${personalDuty}<h3>Who does what · 各人安排</h3>${roleOrder.filter(r => participates(e, r)).map(r => `<div class="duty"><strong>${roles[r][0]} · ${roles[r][1]}</strong><p class="preline" lang="zh-Hant">${text(instructions(e, r, null))}</p></div>`).join('') || '<p class="preline">Team arrangements to be confirmed.</p>'}${e.notes ? `<h3>Notes &amp; things to bring · 備註 / 物資</h3><p class="preline" lang="zh-Hant">${text(e.notes)}</p>` : ''}`;
     $('details').showModal(); $('details').scrollTop = 0;
   }
   function showReference(key) {
-    const titles = { tea: '敬茶 · Tea order', photos: '合照 · Photo order', supplies: '物資 · Packing list' };
-    $('dialogEyebrow').textContent = 'From the workbook';
+    const titles = { tea: '敬茶 · Tea order', photos: '合照 · Photo order', supplies: '物資 · Packing list', makeup: '化妝 · Makeup order', redPackets: '利是 · Red packets', songs: '音樂 · Song list' };
+    $('dialogEyebrow').textContent = 'The little details';
     const rows = data.references?.[key] || [];
-    $('dialogBody').innerHTML = `<h2 id="dialogTitle">${titles[key]}</h2><p class="source-line">Source snapshot · ${text(data.snapshotDate)}. Statuses shown are from the sheet.</p>${rows.map(row => `<div class="reference-row" lang="zh-Hant">${text(Array.isArray(row) ? row.map(cell => cell ?? '—').join(' · ') : JSON.stringify(row))}</div>`).join('') || '<p>See the source workbook for this list.</p>'}`;
+    $('dialogBody').innerHTML = `<h2 id="dialogTitle">${titles[key]}</h2>${rows.map(row => `<div class="reference-row" lang="zh-Hant">${text(Array.isArray(row) ? row.map(cell => cell ?? '—').join(' · ') : JSON.stringify(row))}</div>`).join('') || '<p>Details to be confirmed.</p>'}`;
     $('details').showModal(); $('details').scrollTop = 0;
   }
   const flagged = events.filter(e => e.issues?.length);
-  $('issues').innerHTML = flagged.map(e => `<li><button data-event="${text(e.id)}">${text(e.start)} · ${text(e.title.split('\n')[0])}<br>${e.issues.map(text).join('<br>')} ↗</button></li>`).join('') + '<li>Named owners are still needed for duties marked 【一人】 / 【兩人】. Transport seating and several checklist details are also unfinished in the sheet.</li>';
+  $('issues').innerHTML = flagged.map(e => `<li><button data-event="${text(e.id)}">${text(e.start)} · ${text(e.title.split('\n')[0])}<br>${e.issues.map(text).join('<br>')} ↗</button></li>`).join('');
   $('person').addEventListener('change', render);
   $('search').addEventListener('input', render);
   $('timelineButton').addEventListener('click', () => { view = 'timeline'; render(); });
