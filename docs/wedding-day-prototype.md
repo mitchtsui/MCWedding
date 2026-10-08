@@ -1,4 +1,60 @@
-# Wedding day prototype — v6, 2026-09-23
+# Wedding day rundown — v7, 2026-10-08
+
+## v7 — individual assignments and sharing copy (2026-10-08)
+
+Refreshed from the linked Google workbook on 8 October 2026. Source SHA-256:
+`8d9ae97051e9f3ab3a936232278a02ed8f67bc69538ea4883673c0f9be8655d8`.
+The workbook binary and verification artifacts remain outside Git.
+
+- The source schedule is now `Rundown By Person`: 32 events, including seven
+  milestones, and 12 named people. Individual views use the named
+  person's assignments; team views retain named duties grouped by team. Empty
+  individual cells never inherit another person's instructions. Christy's ceremony
+  participation remains explicit even though her separate duty cell is blank.
+- Updated schedule rows, continuations, responsibilities, reception leads, tea and
+  photo orders, and packing statuses. Added the makeup order and song list. The
+  title-only red-packet tab has no reference button.
+- Source timings are retained. The lunch/restyling overlap at 14:30–14:40 remains
+  visible for the affected people; stale source warnings are removed.
+- Removed the prototype banner, source-row citations, technical remarks, workbook
+  link and admin-portal link from the shared page. Retained practical notes, timing
+  alerts, preview-time controls, and an updated date. The page remains a static
+  snapshot: later Sheet edits require another refresh.
+- New person links use stable keys. Previously shared numeric person links remain
+  supported through the original ordering of the first ten people.
+- Current/next uses the event's start/end interval. Any more specific call times
+  within an individual's instructions remain in that text; they are not converted
+  into invented separate events.
+- Location labels retain per-event provenance in `locationSource`. Phase headings
+  are not places: use supported hotel-level locations or leave them unknown. HUGO
+  and EDITH appear under Family support with explicit names on their grouped
+  duties; their source headers do not establish bride/groom family membership.
+  The combined Family / Vendor column retains that combined label.
+
+### v7 checks
+
+- Source refresh checker compared 1,380 source-derived fields: event cells,
+  continuation cells, people, fixed windows and reference cells. This is the
+  implementation-side check, separate from the read-only review.
+- Chromium checks passed at 344/390/744/1440px: no page overflow, visible type at
+  least 11.2px, effective controls at least 44px, no runtime errors, correct
+  individual duties for all 12 people, search and preview clock, five reference
+  dialogs, legacy and stable person links, and mobile/desktop control movement.
+  Technical/prototype remarks were absent; practical timing alerts remained.
+- The seven existing timing tests, JavaScript syntax and diff checks passed.
+  Browser automation used fallback fonts. Physical phones, Safari and assistive
+  technologies were not tested. No guest database access or writes occurred.
+- Browser checks were rerun after the location and support-role corrections and
+  passed again. The 390px screenshot was also inspected by the coordinating agent.
+- A separate read-only reviewer parsed the original XLSX independently and checked
+  all 32 event times, seven milestones, 13 continuation rows, 12 people and five
+  substantive reference lists. It verified the location/owner-label corrections,
+  ran the seven timing tests itself, and found no remaining material issue. Review
+  shared the working directory and encountered author validation claims in the
+  documentation, without using them as evidence; it was not fully isolated. The
+  reviewer used the downloaded XLSX, not a second live Sheet download.
+
+Earlier sections below are historical records of the previous workbook and UI.
 
 ## Purpose and entry point
 
