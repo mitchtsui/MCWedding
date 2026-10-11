@@ -562,9 +562,7 @@ window.WEDDING_DAY = {
         "support": "",
         "vendors": "TST"
       },
-      "issues": [
-        "14:30–14:40：午餐與換妝及 M+ 準備重疊（Christy、Mitchell、Evelyn、Joanne、Charlie、HSC、Simon）。"
-      ]
+      "issues": []
     },
     {
       "id": "r23",
@@ -599,9 +597,7 @@ window.WEDDING_DAY = {
         "support": "",
         "vendors": "MUA補妝／換妝"
       },
-      "issues": [
-        "14:30–14:40：午餐與換妝及 M+ 準備重疊（Christy、Mitchell、Evelyn、Joanne、Charlie、HSC、Simon）。"
-      ]
+      "issues": []
     },
     {
       "id": "r24",

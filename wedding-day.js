@@ -301,6 +301,8 @@
     $('details').showModal(); $('details').scrollTop = 0;
   }
   const flagged = events.filter(e => e.issues?.length);
+  $('issues').closest('.panel').hidden = !flagged.length;
+  if (!flagged.length) document.querySelector('.lower').style.gridTemplateColumns = '1fr';
   $('issues').innerHTML = flagged.map(e => `<li><button data-event="${text(e.id)}">${text(e.start)} · ${text(e.title.split('\n')[0])}<br>${e.issues.map(text).join('<br>')} ↗</button></li>`).join('');
   $('person').addEventListener('change', render);
   $('search').addEventListener('input', render);
