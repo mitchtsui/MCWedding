@@ -1,5 +1,15 @@
 # Wedding day rundown — v7, 2026-10-08
 
+## Confirmed parallel activities — 2026-10-11
+
+The couple confirmed that lunch and changing/M+ preparation intentionally happen
+at the same time. Removed the conflict flags from r21/r23, preserving all timings,
+assignments and current/next overlap behavior. When no issues remain, the empty
+Things to confirm panel is hidden. Do not reintroduce this warning on a refresh
+solely because the event intervals overlap; this supersedes the historical warning
+records below.
+
+
 ## v7 — individual assignments and sharing copy (2026-10-08)
 
 Refreshed from the linked Google workbook on 8 October 2026. Source SHA-256:
