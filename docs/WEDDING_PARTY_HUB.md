@@ -92,9 +92,21 @@ Release order:
 4. Verify live unauthenticated asset denial, both password gates, seating projection,
    direct guest viewing, and logout. Do not use a paid audio run merely to test login.
 
-At preparation time the four production secret settings were saved. The caption migration
-has not yet been applied, and live publication is not established by this document. Record
-the actual SQL and deployment results below before describing the hub as released.
+The four production secret settings were saved. On 13 October 2026, the couple explicitly
+requested live publication while they apply the SQL migration. Source revision
+`3f4518c` was deployed to [the production hub](https://mc-wedding-ten.vercel.app/wedding-party.html)
+(Vercel deployment `dpl_A4c3Zg9wTaawoPSmDSbmbuXAgR57`). The entrance uses the couple's
+revised single-sentence heading.
+
+Production checks passed: protected-route denial; correct/incorrect entrance and caption
+passwords; all 22 authenticated portraits and seven row groups; seating response field
+limits; direct guest viewer access; caption preflight; and logout clearing both cookies.
+No paid audio run was started. The SQL migration is **not yet confirmed applied**; caption
+audio operation remains pending that prerequisite even though password/preflight checks pass.
+
+Git excludes the private attachments. Hosted builds fail closed if they are missing,
+so a Git-only deployment cannot silently replace the working family guide. Use Vercel CLI
+from the authorized workspace holding those files for future releases.
 
 ## Evidence and limits
 
