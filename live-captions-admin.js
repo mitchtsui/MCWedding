@@ -1,6 +1,6 @@
 (function () {
   'use strict';
-  const params = new URLSearchParams(location.search), live = params.get('live') === '1';
+  const params = new URLSearchParams(location.search), live = params.get('live') === '1', hub = live && params.get('hub') === '1';
   const previewEnabled = params.get('preview') === '1', preview = window.CaptionsPreview, $ = id => document.getElementById(id);
   const e = { bannerTitle: $('preview-banner-title'), bannerCopy: $('preview-banner-copy'), enableLink: $('enable-preview-link'), guestLink: $('guest-preview-link'),
     statusText: $('status-text'), statusDot: $('status-dot'), mode: $('preflight-preview'), delivery: $('preflight-delivery'), auth: $('preflight-auth'),
@@ -33,6 +33,14 @@
   const load = src => new Promise((resolve, reject) => { const script = document.createElement('script'); script.src = src; script.onload = resolve; script.onerror = () => reject(new Error('Required live-caption code did not load')); document.head.append(script); });
   const websocketUrl = () => (location.protocol === 'https:' ? 'wss://' : 'ws://') + location.host + '/api/captions-stream';
   async function liveMode() {
+    if (hub) {
+      document.querySelector('.admin-nav').hidden = true;
+      document.querySelector('.operator-grid').hidden = true;
+      $('live-auth-email-label').hidden = true; $('live-auth-email').hidden = true; $('live-auth-email').required = false;
+      $('live-auth-password-label').hidden = false; $('live-auth-password').hidden = false; $('live-auth-password').disabled = false;
+      $('live-auth-submit').textContent = 'Unlock operator controls';
+      $('live-auth-copy').textContent = 'Enter the separate six-character caption operator password to run captions. Guests view captions through a link or QR code and cannot use these controls.';
+    }
     document.querySelectorAll('.live-only').forEach(node => { node.hidden = false; }); e.next.hidden = true; e.guestLink.hidden = true; e.enableLink.hidden = true; setEnabled(false);
     ['live-device-panel', 'live-invite-panel', 'review-panel', 'content-tools'].forEach(id => { $(id).hidden = true; });
     document.title = 'Live Captions Control - Christy & Mitchell'; $('operator-eyebrow').textContent = 'Operator control room';
@@ -46,18 +54,51 @@
     e.empty.textContent = 'Captions will appear here after capture starts or you send a manual caption.';
     e.form.previousElementSibling.textContent = 'Enter reviewed text for the languages you want to send. Blank languages remain blank and are never auto-translated.';
     e.bannerTitle.textContent = 'Live captions requested'; e.bannerCopy.textContent = 'Controls stay locked until server configuration and operator authorization pass.'; e.mode.textContent = 'Live requested';
-    let client, api, access = '', eventId = '', runId = '', pendingRunId = '', socket, capture, active = false, paused = false, pausing = false, reconnecting = false, intentional = false, connectionGeneration = 0, lifecycleGeneration = 0, shareGeneration = 0, drainWaiter = null, guestReady = false;
+    let client, api, access = '', eventId = '', runId = '', pendingRunId = '', socket, capture, active = false, paused = false, pausing = false, reconnecting = false, intentional = false, connectionGeneration = 0, lifecycleGeneration = 0, shareGeneration = 0, drainWaiter = null, guestReady = false, initialized = false, hubLocked = hub, hubEntranceExpired = false;
     let rotationPreparing = false, rotationDropped = 0, rotationBuffer = [], rotationWatch = 0, lastFrameAt = 0, frameWireBytes = 3400, backlogGraceUntil = 0, undeclared = 0, streamLost = 0, streamAt = 0, resumeAt = 0, phase = 'ready';
     let epoch = '', sequence = 0, sampleOffset = 0; const stores = new Map(), subscriptions = [], reviews = [], drops = [];
     const recover = ' Press Reconnect captions to continue this session, or Emergency stop to close it.';
     const status = (text, state = 'waiting') => { e.statusText.textContent = text; e.statusDot.dataset.state = state; };
+    const emitHubState = value => { if (hub && window.parent && window.parent !== window) window.parent.postMessage({ type: 'wedding-hub-caption-state', active: Boolean(value) }, location.origin); };
     const selectedSource = () => $('audio-source').value || 'microphone';
     // 'detached': the run is still open on the server but nothing is capturing. Start reattaches to it; Emergency stop closes it.
     const buttons = state => { phase = state; e.start.disabled = !['ready', 'detached'].includes(state); e.start.textContent = state === 'detached' ? 'Reconnect captions' : 'Start live captions'; e.pause.disabled = state !== 'live'; e.resume.disabled = state !== 'paused'; e.end.disabled = !['live', 'paused'].includes(state); e.stop.disabled = !['live', 'paused', 'connecting', 'detached'].includes(state) && !(state === 'sharing' && runId); manual.forEach(item => { item.disabled = !runId; }); $('create-invite').disabled = !eventId || !guestReady; $('save-glossary').disabled = !eventId; $('save-script').disabled = !eventId;
       const locked = state !== 'ready' || Boolean(runId); $('audio-source').disabled = locked; $('audio-device').disabled = locked || selectedSource() !== 'microphone'; $('refresh-devices').disabled = locked || selectedSource() !== 'microphone';
-      const mayShare = selectedSource() === 'pc' && ['ready', 'detached', 'paused'].includes(state); $('share-pc-audio').disabled = !mayShare; $('share-pc-audio').textContent = capture?.hasPreparedDisplay?.() ? 'Release PC audio' : 'Share PC audio'; };
+      const mayShare = selectedSource() === 'pc' && ['ready', 'detached', 'paused'].includes(state); $('share-pc-audio').disabled = !mayShare; $('share-pc-audio').textContent = capture?.hasPreparedDisplay?.() ? 'Release PC audio' : 'Share PC audio'; if (hub) $('hub-logout').disabled = ['connecting', 'sharing'].includes(state) || Boolean(pendingRunId); emitHubState(Boolean(runId || pendingRunId || ['connecting', 'sharing'].includes(state))); };
     const idle = () => buttons(runId ? 'detached' : 'ready');
-    const request = async (action, payload) => { access = await window.CaptionsLive.accessToken(client); if (!access) throw new Error('Operator session expired'); return api.request(action, payload, access); };
+    const lockHub = (message, entranceExpired = false, notifyParent = true) => { if (!hub || (hubLocked && (!entranceExpired || hubEntranceExpired))) return; hubLocked = true; hubEntranceExpired = entranceExpired; shareGeneration += 1; lifecycleGeneration += 1; connectionGeneration += 1; active = false; paused = false; pausing = false; clearRotation(); closeSubscriptions(); closeSocket(); if (capture) void capture.stop(); setEnabled(false); document.querySelector('.operator-grid').hidden = true; $('hub-logout').hidden = true; $('live-auth-panel').hidden = false; $('live-auth-password').value = ''; $('live-auth-form').hidden = entranceExpired; $('hub-session-retry').hidden = true; const framed = window.parent && window.parent !== window; $('hub-entrance-link').hidden = !entranceExpired || framed;
+      $('live-auth-status').textContent = entranceExpired ? message + (framed ? ' Use the wedding-party sign-in dialog; this operator page will retain an open run for recovery.' : ' Use the link below to sign in again. Reloading this standalone page cannot retain an open run.') : message; e.auth.textContent = entranceExpired ? 'Wedding-party session expired' : 'Session expired'; const captionsOpen = Boolean(runId || pendingRunId || ['connecting', 'sharing'].includes(phase)); emitHubState(captionsOpen);
+      if (entranceExpired && notifyParent && framed) window.parent.postMessage({ type: 'wedding-hub-session-expired', captionsOpen }, location.origin); };
+    const request = async (action, payload) => {
+      try {
+        if (hub) return await api.request(action, payload);
+        access = await window.CaptionsLive.accessToken(client); if (!access) throw Object.assign(new Error('Operator session expired'), { status: 401, code: 'UNAUTHENTICATED' });
+        return await api.request(action, payload, access);
+      } catch (error) {
+        if (hub && error?.status === 401 && error?.code === 'UNAUTHENTICATED') lockHub('Your caption operator session expired. Enter the caption password again. If captions were running, the server session may still be open and can be reconnected after unlock.');
+        if (hub && error?.status === 401 && error?.code === 'HUB_UNAUTHENTICATED') lockHub('Your wedding-party session expired. Local capture has stopped. Sign in to the wedding-party hub again; if captions were running, unlock the operator controls and reconnect or close that open run.', true);
+        throw error;
+      }
+    };
+    async function restoreHubSession() {
+      if (!hub || !hubEntranceExpired) return;
+      $('hub-session-retry').hidden = true; $('live-auth-status').textContent = 'Checking the restored wedding-party session...';
+      try {
+        const operator = await api.request('operatorStatus'); $('hub-entrance-link').hidden = true;
+        if (!operator.authenticated) { hubEntranceExpired = false; hubLocked = true; $('live-auth-form').hidden = false; $('live-auth-panel').hidden = false; $('live-auth-status').textContent = 'The wedding-party session is restored. Enter the separate caption operator password to recover these controls.'; e.auth.textContent = 'Caption operator password required'; emitHubState(Boolean(runId || pendingRunId)); return; }
+        hubLocked = false; $('live-auth-form').hidden = false; await initializeAuthorized(); hubEntranceExpired = false;
+      } catch (error) {
+        if (error?.status === 401 && error?.code === 'HUB_UNAUTHENTICATED') lockHub('Your wedding-party session is still locked. Local capture remains stopped.', true, false);
+        else if (error?.status === 401 && error?.code === 'UNAUTHENTICATED') return;
+        else { $('live-auth-panel').hidden = false; $('live-auth-form').hidden = true; $('hub-entrance-link').hidden = true; $('hub-session-retry').hidden = false; $('live-auth-status').textContent = window.CaptionsLive.cleanError(error.message, 'The restored session could not be checked') + '. Local capture remains stopped; retry the session check.'; }
+      }
+    }
+    if (hub) $('hub-session-retry').onclick = () => void restoreHubSession();
+    if (hub) addEventListener('message', event => {
+      if (event.origin !== location.origin || event.source !== window.parent) return;
+      if (event.data?.type === 'wedding-hub-session-lock') lockHub('The wedding-party session is locked. Local capture has stopped.', true, false);
+      if (event.data?.type === 'wedding-hub-session-restored') void restoreHubSession();
+    });
     const cancelled = () => Object.assign(new Error('Operation cancelled'), { code: 'operation_cancelled' });
     const assertCurrent = operation => { if (operation !== lifecycleGeneration) throw cancelled(); };
     // Only these two codes say the server no longer holds the run open for that action; any other failure leaves that unknown.
@@ -161,6 +202,15 @@
     function sourceChanged() { shareGeneration += 1; capture.discardPrepared(); $('audio-alert').textContent = ''; buttons(phase); e.microphone.textContent = selectedSource() === 'pc' ? 'PC audio has not been shared' : needsPermission ? 'Microphone access needed' : 'Device selection ready'; status(selectedSource() === 'pc' ? 'Ready - share PC audio, then start' : 'Ready - select a microphone, then start'); }
     const renderLanguage = language => { const values = stores.get(language)?.segments(language) || [], latest = values[values.length - 1], target = language === 'en' ? e.en : language === 'ja' ? e.ja : e.zh; if (latest) { show(target, latest.text); e.empty.hidden = true; e.captions.hidden = false; } };
     async function subscribe(language, scope, operation) {
+      if (hub) {
+        let closed = false, polling = false, timer = 0;
+        const store = new window.CaptionsLive.CaptionStore(() => { if (!polling) void poll(); }); stores.set(language, store);
+        const poll = async () => { if (closed || polling || operation !== lifecycleGeneration) return; polling = true;
+          try { const value = await request('snapshot', { ...scope, language }); assertCurrent(operation); store.merge(value); renderLanguage(language); }
+          catch (error) { if (operation === lifecycleGeneration && error.code !== 'operation_cancelled' && error.code !== 'UNAUTHENTICATED') status('Caption refresh failed; retrying shortly.'); }
+          finally { polling = false; if (!closed && operation === lifecycleGeneration && !hubLocked) timer = setTimeout(poll, 2000); } };
+        const subscription = { close() { closed = true; clearTimeout(timer); } }; subscriptions.push(subscription); await poll(); assertCurrent(operation); return;
+      }
       let syncing = true, buffered = []; const store = new window.CaptionsLive.CaptionStore(() => void resync()); stores.set(language, store);
       async function resync() { if (syncing || operation !== lifecycleGeneration) return; syncing = true; try { const value = await request('snapshot', { ...scope, language }); assertCurrent(operation); store.merge(value); buffered.forEach(batch => store.merge(batch)); buffered = []; renderLanguage(language); } catch (error) { if (operation === lifecycleGeneration && error.code !== 'operation_cancelled') status('Caption resync failed; retrying on the next update.'); } finally { syncing = false; } }
       const initial = await request('snapshot', { ...scope, language }); assertCurrent(operation); if (!initial.topic) throw new Error('Private caption channel unavailable');
@@ -245,12 +295,11 @@
         // Unless the server said the run is not paused, a failed resume request leaves it paused.
         if (!resumed && !runClosed(error)) { active = paused = true; buttons('paused'); status('Resume failed: ' + error.message, 'paused'); return; }
         active = paused = false; idle(); status(error.message + '.' + recover, 'ended'); } }
-    try {
-      await load('/api/config.js'); await load('vendor/supabase.js'); await load('live-captions-client.js'); await load('live-captions-audio.js'); api = window.CaptionsLive.create(); const config = await api.request('config'); if (!config.enabled) throw new Error('Live captions are disabled by server configuration'); guestReady = config.guestLinksReady === true;
-      client = window.CaptionsLive.createSupabase(window); if (!client) throw new Error('Operator authentication is unavailable'); access = await window.CaptionsLive.accessToken(client);
-      $('live-auth-form').onsubmit = async event => { event.preventDefault(); $('live-auth-status').textContent = 'Sending secure sign-in link...'; try { const result = await client.auth.signInWithOtp({ email: $('live-auth-email').value.trim(), options: { emailRedirectTo: location.href } }); if (result.error) throw result.error; $('live-auth-status').textContent = 'Check your email for the sign-in link.'; } catch (error) { $('live-auth-status').textContent = window.CaptionsLive.cleanError(error.message, 'Sign-in failed'); } };
-      if (!access) { $('live-auth-panel').hidden = false; $('live-auth-status').textContent = 'Sign in with your existing admin account.'; throw new Error('Operator sign-in required'); }
+    async function initializeAuthorized() {
       const preflight = await request('preflight'); $('live-auth-panel').hidden = true; if (!preflight.enabled) throw new Error('Live preflight is disabled'); ['live-device-panel', 'live-invite-panel', 'review-panel', 'content-tools'].forEach(id => { $(id).hidden = false; }); guestReady = preflight.guestLinksReady === true; e.auth.textContent = 'Authorized by server'; e.asr.textContent = 'Available after start'; e.translation.textContent = 'Available after start'; e.delivery.textContent = guestReady ? 'Guest QR links on (no guest sign-in)' : 'Guest links switched off'; e.bannerTitle.textContent = 'Live operator controls'; e.bannerCopy.textContent = guestReady ? 'Choose a microphone or explicitly share PC audio before Start. Capture begins only after the selected source is ready.' : 'Operator capture is available; guest links are switched off on this server.';
+      if (hub) { hubLocked = false; document.querySelector('.operator-grid').hidden = false; $('hub-logout').hidden = false; }
+      if (initialized) { idle(); status(runId ? 'Operator session restored. Reconnect or close the open caption session.' : 'Operator session restored. Ready to start captions.'); return; }
+      initialized = true;
       capture = new window.CaptionsAudio.Capture({ onFrame, onMeter: value => { $('audio-meter').value = value; }, onPrepared: () => { if (capture) buttons(phase); }, onDeviceEnded: info => {
         if (info?.active === false && phase !== 'connecting') { shareGeneration += 1; buttons(phase); e.microphone.textContent = 'PC audio sharing stopped'; $('audio-alert').textContent = 'PC audio sharing stopped. Share it again before starting or continuing captions.'; return; }
         shareGeneration += 1; lifecycleGeneration += 1; connectionGeneration += 1; adoptPending(); active = false; paused = false; pausing = false; clearRotation(); closeSubscriptions(); closeSocket(); idle(); const pc = info?.source === 'pc'; e.microphone.textContent = pc ? 'PC audio sharing stopped' : 'Selected device disconnected'; status(pc ? 'PC audio sharing stopped; capture stopped.' + (runId ? recover : '') : 'The selected microphone disconnected; capture stopped.' + (runId ? recover : ''), 'ended'); $('audio-alert').textContent = pc ? 'PC audio sharing stopped. Capture stopped.' : 'The selected microphone disconnected. Capture stopped.'; }, onState: state => { if (state === 'stopped') $('audio-meter').value = 0; } });
@@ -269,10 +318,35 @@
         output.append(code); };
       $('create-invite').onclick = async () => { try { const expiresAt = new Date($('invite-expiry').value); if (!Number.isFinite(expiresAt.getTime()) || expiresAt <= new Date()) throw new Error('Enter a future expiry time for the guest link');
         if (typeof window.qrcode !== 'function') await load('vendor/qr.js').catch(() => undefined);
-        const invite = await request('invite', { eventId, expiresAt: expiresAt.toISOString(), maxUses }), link = new URL('live-captions.html', location.href); link.search = new URLSearchParams({ live: '1', event: eventId }); link.hash = new URLSearchParams({ token: invite.token }); showInvite(link.href, expiresAt); } catch (error) { $('invite-output').textContent = error.message; } }; window.CaptionsLive.keepRealtimeAuth(client);
+        const invite = await request('invite', { eventId, expiresAt: expiresAt.toISOString(), maxUses }), link = new URL('live-captions.html', location.href); link.search = new URLSearchParams({ live: '1', event: eventId }); link.hash = new URLSearchParams({ token: invite.token });
+        if (hub && window.parent && window.parent !== window) window.parent.postMessage({ type: 'wedding-hub-caption-invite', eventId, token: invite.token }, location.origin);
+        showInvite(link.href, expiresAt); } catch (error) { $('invite-output').textContent = error.message; } }; if (!hub) window.CaptionsLive.keepRealtimeAuth(client);
       // A page restored from the back/forward cache must not still claim to be capturing.
       addEventListener('pagehide', () => { shareGeneration += 1; lifecycleGeneration += 1; connectionGeneration += 1; adoptPending(); pausing = false; clearRotation(); void capture.stop(); closeSocket(); closeSubscriptions(); if (paused) { buttons('paused'); status('Captions paused', 'paused'); return; } active = false; idle(); if (runId) status('Capture stopped because this page was left.' + recover, 'ended'); });
-    } catch (error) { setEnabled(false); status(error.message, 'ended'); e.delivery.textContent = 'Unavailable'; }
+    }
+    try {
+      if (!hub) { await load('/api/config.js'); await load('vendor/supabase.js'); }
+      await load('live-captions-client.js'); await load('live-captions-audio.js'); api = window.CaptionsLive.create(); const config = await api.request('config'); if (!config.enabled) throw new Error('Live captions are disabled by server configuration'); guestReady = config.guestLinksReady === true;
+      if (hub) {
+        $('live-auth-form').onsubmit = async event => { event.preventDefault(); const submit = $('live-auth-submit'); submit.disabled = true; $('live-auth-status').textContent = 'Checking password...'; try {
+          await api.request('operatorLogin', { password: $('live-auth-password').value }); hubLocked = false; hubEntranceExpired = false; $('live-auth-password').value = ''; await initializeAuthorized();
+        } catch (error) { hubLocked = true; $('live-auth-status').textContent = error.code === 'INVALID_CREDENTIALS' ? 'That password was not accepted. Try again.' : window.CaptionsLive.cleanError(error.message, 'Operator sign-in failed'); }
+        finally { submit.disabled = false; } };
+        $('hub-logout').onclick = async () => { const button = $('hub-logout'); if (['connecting', 'sharing'].includes(phase) || pendingRunId) { button.disabled = true; $('audio-alert').textContent = 'Wait for the current caption action to finish before logging out.'; return; } button.disabled = true; try {
+          if (runId || pendingRunId) { await control('stop'); if (runId || pendingRunId) throw new Error('The caption session could not be closed. Use Emergency stop before logging out.'); }
+          await api.request('operatorLogout'); lockHub('Logged out. Enter the password to operate captions again.'); e.auth.textContent = 'Logged out'; emitHubState(false);
+        } catch (error) { $('live-auth-status').textContent = window.CaptionsLive.cleanError(error.message, 'Logout failed'); }
+        finally { button.disabled = ['connecting', 'sharing'].includes(phase) || Boolean(pendingRunId); } };
+        const operator = await api.request('operatorStatus');
+        if (!operator.authenticated) { $('live-auth-panel').hidden = false; $('live-auth-status').textContent = 'Enter the operator password to unlock controls.'; status('Operator password required'); e.delivery.textContent = 'Locked'; emitHubState(false); return; }
+        hubLocked = false;
+      } else {
+        client = window.CaptionsLive.createSupabase(window); if (!client) throw new Error('Operator authentication is unavailable'); access = await window.CaptionsLive.accessToken(client);
+        $('live-auth-form').onsubmit = async event => { event.preventDefault(); $('live-auth-status').textContent = 'Sending secure sign-in link...'; try { const result = await client.auth.signInWithOtp({ email: $('live-auth-email').value.trim(), options: { emailRedirectTo: location.href } }); if (result.error) throw result.error; $('live-auth-status').textContent = 'Check your email for the sign-in link.'; } catch (error) { $('live-auth-status').textContent = window.CaptionsLive.cleanError(error.message, 'Sign-in failed'); } };
+        if (!access) { $('live-auth-panel').hidden = false; $('live-auth-status').textContent = 'Sign in with your existing admin account.'; throw new Error('Operator sign-in required'); }
+      }
+      await initializeAuthorized();
+    } catch (error) { if (hub && error?.status === 401 && error?.code === 'HUB_UNAUTHENTICATED') lockHub('Your wedding-party session expired. Local capture has stopped. Sign in to the wedding-party hub again; if captions were running, unlock the operator controls and reconnect or close that open run.', true); else { setEnabled(false); status(error.message, 'ended'); e.delivery.textContent = 'Unavailable'; } }
   }
   if (live) void liveMode(); else previewMode();
 }());

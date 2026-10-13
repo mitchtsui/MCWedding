@@ -4,6 +4,8 @@ const { createHash } = require('node:crypto');
 const { CaptionStore, CaptionStoreError } = require('../lib/captions/store.cjs');
 const { CaptionDelivery } = require('../lib/captions/delivery.cjs');
 const { createGuestSigner, guestLinksReady } = require('../lib/captions/guest-link.cjs');
+const { createOperatorAuth, assertSameOrigin } = require('../lib/captions/operator-auth.cjs');
+const { HubAuthError, verifyHubSession } = require('../lib/hub-auth.cjs');
 const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, guestRateLimit, takeGuestFailureSlot, returnGuestFailureSlot,
   sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
 
@@ -171,6 +173,17 @@ async function dispatchHttpOutbox({ store, delivery, outboxIds, workerId }) {
 function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date.now } = {}) {
   const reads = createGuestReadCache({ now });
   const valid = createRecentlyValid({ now });
+  const operatorAuth = createOperatorAuth({ env, now });
+  const requireHub = req => {
+    let session;
+    try { session = verifyHubSession(req, { env, now }); }
+    catch (error) {
+      if (error instanceof HubAuthError) throw new CaptionStoreError(error.code, error.message, error.status);
+      throw error;
+    }
+    if (!session.authenticated) throw new CaptionStoreError('HUB_UNAUTHENTICATED', 'Wedding hub authentication is required', 401);
+    return session;
+  };
   return async function handler(req, res) {
     const id = requestId(req);
     let rate;
@@ -187,11 +200,37 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
         res.end();
         return;
       }
-      assertOrigin(req, env);
       const input = req.method === 'GET' ? queryBody(req) : parseBody(req);
       const action = requiredText(input.action, 'action', 40);
-      if (req.method === 'GET' && !['config','snapshot','health'].includes(action)) {
+      if (action !== 'operatorLogout') assertOrigin(req, env);
+      if (req.method === 'GET' && !['config','snapshot','health','operatorStatus'].includes(action)) {
         throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires POST', 405);
+      }
+      if (action === 'operatorLogout') {
+        if (req.method !== 'POST') throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires POST', 405);
+        assertSameOrigin(req);
+        res.setHeader('Set-Cookie', operatorAuth.clearCookie());
+        sendJson(res, 200, { ok: true, requestId: id, data: { authenticated: false, expiresAt: null } });
+        return;
+      }
+      if (!envEnabled(env)) throw new CaptionStoreError('CAPTIONS_DISABLED', 'Live captions are disabled', 503);
+      if (action === 'operatorStatus') {
+        if (req.method !== 'GET') throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires GET', 405);
+        requireHub(req);
+        operatorAuth.ready();
+        const session = operatorAuth.inspect(req);
+        if (session.present && !session.authenticated) res.setHeader('Set-Cookie', operatorAuth.clearCookie());
+        sendJson(res, 200, { ok: true, requestId: id, data: { authenticated: session.authenticated, expiresAt: session.expiresAt } });
+        return;
+      }
+      if (action === 'operatorLogin') {
+        if (req.method !== 'POST') throw new CaptionStoreError('METHOD_NOT_ALLOWED', 'Action requires POST', 405);
+        assertSameOrigin(req);
+        requireHub(req);
+        const login = operatorAuth.login(req, input.password);
+        res.setHeader('Set-Cookie', login.cookie);
+        sendJson(res, 200, { ok: true, requestId: id, data: { authenticated: true, expiresAt: login.expiresAt } });
+        return;
       }
       const store = makeStore(env, fetchImpl);
       // CAPTIONS_GUEST_LINKS=false stops every public guest broadcast, even with a signing key set.
@@ -228,9 +267,17 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
         sendJson(res, 200, { ok: true, requestId: id, data }, rate);
         return;
       }
-      const accessToken = bearerToken(req);
-      const user = ADMIN_ACTIONS.has(action) ? await store.verifyAdmin(accessToken) : await store.verifyUser(accessToken);
-      rate = rateLimit(req, action, user.id);
+      const operatorSession = operatorAuth.inspect(req);
+      if (operatorSession.present && !operatorSession.authenticated) res.setHeader('Set-Cookie', operatorAuth.clearCookie());
+      const bearerSupplied = Boolean(String(req.headers?.authorization || '').trim());
+      const passwordOperator = !bearerSupplied && operatorSession.authenticated && (ADMIN_ACTIONS.has(action) || action === 'snapshot');
+      if (passwordOperator && req.method === 'POST') assertSameOrigin(req);
+      if (passwordOperator) requireHub(req);
+      const accessToken = passwordOperator ? null : bearerToken(req);
+      const user = passwordOperator ? operatorSession
+        : ADMIN_ACTIONS.has(action) ? await store.verifyAdmin(accessToken) : await store.verifyUser(accessToken);
+      const rateIdentity = passwordOperator && action === 'snapshot' ? operatorSession.snapshotRateIdentity : user.id;
+      rate = rateLimit(req, action, rateIdentity);
       let data;
       switch (action) {
         case 'preflight': {
@@ -285,11 +332,14 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
         case 'ticket': {
           const requestOrigin = String(req.headers.origin || '');
           if (input.origin && input.origin !== requestOrigin) throw new CaptionStoreError('ORIGIN_FORBIDDEN', 'Ticket origin does not match request origin', 403);
-          data = await store.issueUplinkTicket({ runId: input.runId, origin: requestOrigin, accessToken }).catch(error => { throw runNotOpen(error); });
+          data = await store.issueUplinkTicket({ runId: input.runId, origin: requestOrigin,
+            accessToken: passwordOperator ? env.SUPABASE_SERVICE_ROLE_KEY : accessToken }).catch(error => { throw runNotOpen(error); });
           break;
         }
         case 'snapshot':
-          data = await store.getSnapshot({ eventId: input.eventId, runId: input.runId, language: requiredLanguage(input.language), accessToken });
+          data = passwordOperator
+            ? await store.getSnapshotAsService({ eventId: input.eventId, runId: input.runId, language: requiredLanguage(input.language) })
+            : await store.getSnapshot({ eventId: input.eventId, runId: input.runId, language: requiredLanguage(input.language), accessToken });
           break;
         case 'invite': {
           const expiresAt = new Date(input.expiresAt);

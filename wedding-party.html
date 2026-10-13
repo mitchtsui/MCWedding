@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="theme-color" content="#EAE5DB">
+  <title>The Wedding Party · Christy &amp; Mitchell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&family=Raleway:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="wedding-party.css">
+  <script src="wedding-party.js" defer></script>
+</head>
+<body>
+  <header class="hub-header">
+    <div><p class="couple">Christy &amp; Mitchell</p><h1>The Wedding Party</h1></div>
+    <div class="occasion"><span>12 November 2026</span><span class="venue">The Salisbury Room at The Peninsula Hong Kong</span><span id="captionSession" class="session-note" hidden>Caption session open</span></div>
+    <button type="button" id="hubLogout" class="hub-logout">Log out</button>
+  </header>
+  <nav class="hub-tabs" role="tablist" aria-label="Wedding party guide">
+    <button id="tab-day" role="tab" aria-controls="panel-day" aria-selected="true" data-tab="day"><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="4" y="5" width="16" height="16" rx="2"/><path d="M8 3v4m8-4v4M4 10h16m-12 4h3m2 3h3"/></svg><span>Wedding Day</span></button>
+    <button id="tab-vips" role="tab" aria-controls="panel-vips" aria-selected="false" tabindex="-1" data-tab="vips"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.5"/><path d="M2 21v-2a7 7 0 0 1 14 0v2m1-15a3 3 0 0 1 0 6m2 2a6 6 0 0 1 3 5v2"/></svg><span>VIPs</span></button>
+    <button id="tab-seating" role="tab" aria-controls="panel-seating" aria-selected="false" tabindex="-1" data-tab="seating"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="6"/><path d="M10 2h4m-4 20h4M2 10v4m20-4v4"/></svg><span>Seating Plan</span></button>
+    <button id="tab-captions" role="tab" aria-controls="panel-captions" aria-selected="false" tabindex="-1" data-tab="captions"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 4h18v13H9l-5 4v-4H3zM7 9h4m2 0h4M7 13h10"/></svg><span>Live Captions</span></button>
+  </nav>
+  <main class="hub-content">
+    <section class="hub-panel" id="panel-day" role="tabpanel" aria-labelledby="tab-day">
+      <iframe id="dayFrame" title="Wedding day rundown" data-src="wedding-day.html?hub=1"></iframe>
+    </section>
+    <section class="hub-panel" id="panel-vips" role="tabpanel" aria-labelledby="tab-vips" hidden>
+      <iframe id="vipsFrame" title="VIP portrait and relationship guide" data-src="vip-guide.html?hub=1"></iframe>
+    </section>
+    <section class="hub-panel" id="panel-seating" role="tabpanel" aria-labelledby="tab-seating" hidden>
+      <iframe id="seatingFrame" title="Read-only seating plan" data-src="seating-view.html?hub=1"></iframe>
+    </section>
+    <section class="hub-panel captions-panel" id="panel-captions" role="tabpanel" aria-labelledby="tab-captions" hidden>
+      <div class="caption-modes" role="group" aria-label="Caption access">
+        <button id="watchButton" type="button" aria-pressed="true">Watch captions</button>
+        <button id="operateButton" type="button" aria-pressed="false">Operate · password required</button>
+      </div>
+      <div id="watchPanel" class="caption-pane">
+        <div id="captionWelcome" class="caption-welcome">
+          <p class="eyebrow">Every word, together</p>
+          <h2>Follow the celebration.</h2>
+          <p>Open the viewing link shared by the caption operator, or scan their QR code. No sign-in is needed to watch.</p>
+          <form id="captionLinkForm">
+            <label for="captionLink">Have a caption viewing link?</label>
+            <div class="link-entry"><input id="captionLink" type="url" required autocomplete="off" spellcheck="false" placeholder="Paste the shared link" aria-describedby="captionLinkError"><button type="submit">Open captions</button></div>
+            <p id="captionLinkError" role="alert"></p>
+          </form>
+          <p class="operator-hint">Helping with the sound? Choose <strong>Operate</strong> and enter the operator password.</p>
+        </div>
+        <iframe id="viewerFrame" title="Live captions viewer" hidden></iframe>
+      </div>
+      <div id="operatePanel" class="caption-pane" hidden>
+        <iframe id="operatorFrame" title="Password-protected caption controls" data-src="live-captions-admin.html?hub=1&amp;live=1" allow="microphone; display-capture; autoplay"></iframe>
+      </div>
+    </section>
+  </main>
+  <dialog id="hubReauth" aria-labelledby="reauthTitle">
+    <form id="hubReauthForm">
+      <p class="couple">Welcome back</p><h2 id="reauthTitle">Unlock the hub</h2>
+      <p>Your session has ended. Enter the wedding party password to continue where you left off.</p>
+      <label for="hubReauthPassword">Wedding party password</label>
+      <input id="hubReauthPassword" type="password" autocomplete="current-password" required minlength="4" maxlength="1024">
+      <button type="submit" id="hubReauthButton">Continue</button>
+      <p id="hubReauthStatus" role="status" aria-live="polite"></p>
+    </form>
+  </dialog>
+  <noscript>This guide needs JavaScript. You can open the <a href="wedding-day.html">wedding day rundown</a> directly.</noscript>
+</body>
+</html>

@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow, noarchive">
+  <title>Seating Plan · Christy &amp; Mitchell</title>
+  <link rel="stylesheet" href="seating-view.css">
+</head>
+<body>
+  <header class="standalone-header">
+    <p class="eyebrow">Christy &amp; Mitchell · 12 November 2026</p>
+  </header>
+
+  <main>
+    <section class="intro" aria-labelledby="page-title">
+      <div>
+        <p class="eyebrow">The Salisbury Room at The Peninsula Hong Kong</p>
+        <h1 id="page-title">Seating plan</h1>
+        <p class="lede">Search for a name or choose a table. This view shows table assignments only; people who have not been assigned do not appear yet.</p>
+      </div>
+      <label class="search-field" for="guest-search">
+        <span>Find a guest</span>
+        <input id="guest-search" type="search" autocomplete="off" inputmode="search" placeholder="Type a name or table number">
+      </label>
+    </section>
+
+    <div id="status" class="status" role="status" aria-live="polite">Loading seating plan…</div>
+
+    <section id="seating-app" class="seating-app" hidden aria-label="Read-only seating plan">
+      <div class="plan-region">
+        <p class="scroll-hint">Scroll across the floor plan on a small screen.</p>
+        <div class="plan-scroll" tabindex="0" aria-label="Scrollable floor plan">
+          <div class="venue-plan" id="venue-plan">
+            <div class="room-name">Salisbury Room</div>
+            <div class="stage">Stage</div>
+            <div id="room-tables" class="table-layer"></div>
+            <div class="room-divider" aria-hidden="true"></div>
+            <div class="foyer-name">Salisbury Foyer</div>
+            <div id="foyer-tables" class="table-layer"></div>
+          </div>
+        </div>
+      </div>
+
+      <aside class="guest-panel" aria-labelledby="panel-title">
+        <div class="panel-heading">
+          <p class="eyebrow" id="panel-eyebrow">Selected table</p>
+          <h2 id="panel-title">Table</h2>
+        </div>
+        <div id="guest-results"></div>
+      </aside>
+    </section>
+
+    <div id="error-actions" class="error-actions" hidden>
+      <button type="button" id="retry-button">Try again</button>
+    </div>
+  </main>
+
+  <script src="seating-view.js"></script>
+</body>
+</html>

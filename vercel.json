@@ -3,6 +3,7 @@
   "outputDirectory": "dist",
   "framework": null,
   "functions": {
+    "api/vip-assets.js": { "includeFiles": "{hub-private/vip-data.json,photos/vip/**}" },
     "api/captions-stream.js": { "maxDuration": 300 },
     "api/captions.js": { "maxDuration": 60 }
   },

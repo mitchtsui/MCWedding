@@ -29,6 +29,7 @@
   <header class="topbar">
     <div class="wordmark">Christy <span aria-hidden="true">&amp;</span> Mitchell</div>
     <a class="button button-quiet" id="guest-preview-link" href="live-captions.html?preview=1" target="_blank" rel="noopener">Open guest preview ↗</a>
+    <button class="button button-quiet" id="hub-logout" type="button" hidden>Log out</button>
   </header>
 
   <main>
@@ -47,13 +48,17 @@
 
       <section class="paper live-only" id="live-auth-panel" hidden aria-labelledby="live-auth-title">
         <p class="section-label" id="live-auth-title">Operator sign-in</p>
-        <p class="subtitle">Live controls require the existing Supabase magic-link session and a server-side admin check.</p>
+        <p class="subtitle" id="live-auth-copy">Live controls require the existing Supabase magic-link session and a server-side admin check.</p>
         <form class="auth-inline" id="live-auth-form">
-          <label class="field-label" for="live-auth-email">Admin email</label>
+          <label class="field-label" id="live-auth-email-label" for="live-auth-email">Admin email</label>
           <input id="live-auth-email" type="email" autocomplete="email" required>
+          <label class="field-label" id="live-auth-password-label" for="live-auth-password" hidden>Operator password</label>
+          <input id="live-auth-password" type="password" autocomplete="current-password" minlength="6" required disabled hidden>
           <button class="button button-primary" id="live-auth-submit" type="submit">Send magic link</button>
         </form>
         <p class="notice" id="live-auth-status" aria-live="polite">Checking session...</p>
+        <button class="button button-primary" id="hub-session-retry" type="button" hidden>Retry session check</button>
+        <a class="button button-primary" id="hub-entrance-link" href="/wedding-party-login.html?return=%2Fwedding-party.html%23captions" target="_top" hidden>Return to wedding-party sign-in</a>
       </section>
 
       <div class="operator-grid">

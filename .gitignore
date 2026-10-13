@@ -7,4 +7,7 @@ vendor/
 .env.*
 !.env.example
 private/
+.cache/
+hub-private/
+photos/vip/
 *.log

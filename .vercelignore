@@ -2,6 +2,7 @@
 .env
 .env.*
 private/
+.cache/
 supabase/
 tests/
 docs/

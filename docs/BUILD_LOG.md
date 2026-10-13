@@ -277,6 +277,15 @@ Three fixed-position pop-up instances triggered by IntersectionObserver:
 
 ### 4b. Admin Portal (`admin.html`)
 
+**2026-10-13 — Meet the Family / 認人 and wedding-party hub integration (prepared locally; live publication not established).**
+
+- User requested a VIP face/name guide using `Downloads/認人.pdf`. The guide now sits in the password-protected wedding-party hub. `vip-guide.html`, `vip-guide.js` and `vip-guide-data.js` form the public shell and loader; the explicit public build includes those files but excludes the private roster and portraits. Existing rundown edits were preserved.
+- Circular portraits grouped by family, source names/relationship labels, family filters and bilingual search. No family tree: the source does not establish a complete chart. All 22 labelled subjects included (18 Christy, 4 Mitchell); unnamed bystanders omitted. No personal names invented. 表哥/表姐/表弟 translated as cousin without assuming a maternal branch.
+- PDF page clips preserve the supplied faces; source resolution limits detail. Where source arrows overlaid portraits, the original embedded photos were used without retouching faces. Original PDF is not copied to public output. Local extraction/QA scripts and screenshots are in ignored `.cache/`.
+- Browser QA: 344, 390, 744, 1280 px, zero document overflow, all 22 portraits load, no page errors, visible text >=11.2px and controls >=44px. Verified English/Chinese search, empty state, clear, both family filters, keyboard filter activation and portal navigation. JavaScript syntax and public asset build pass.
+- Fresh-context read-only reviewer visually compared all 22 portraits against all three source pages, confirmed assignments/counts, and caught unsupported maternal-cousin wording (corrected). Shared filesystem is an isolation limitation. This is source/layout review, not the couple's approval of names or photo choices.
+- Private metadata now lives in ignored `hub-private/vip-data.json` and portraits in ignored `photos/vip/`. The hub-authenticated `api/vip-assets.js` serves both with private/no-store responses; `noindex,nofollow` remains indexing guidance only. `vercel.json` attaches the ignored files to that function during a Vercel CLI deployment from the authorized machine, while `dist/` contains neither private path. At this update the caption migration has not been applied and live publication is not established.
+
 **2026-09-01, per user request** ("combine the seating planner, preview, whatsapp outreach pages into one admin portal... instead I can open one webpage, and it will direct me to different pages").
 
 - `admin.html` is a new, standalone hub page — three cards linking to `seating-planner.html`, `whatsapp-outreach.html`, and `preview.html`, plus a "View Live Site" link to `wedding-invitation.html`. Uses the shared admin-tool palette (`--bg #EAE5DB`, `--bg-card #F2EDE5`, `--accent #7A4F5A`, `--olive #686B38`, Cormorant Garamond + Raleway) already used by the three tools it links to.

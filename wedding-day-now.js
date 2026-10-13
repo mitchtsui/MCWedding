@@ -104,7 +104,7 @@
     const duty = escapeHtml(safeCall(getDuty, '', event, role));
     const context = duty
       ? `<span class="summary-context" lang="zh-Hant">During: ${title}</span>`
-      : role && role !== 'all' ? '<span class="summary-context">Separate duty not entered; see the event notes.</span>' : '';
+      : role && role !== 'all' ? '<span class="summary-context">See the event details for your arrangements.</span>' : '';
     return `<button type="button" class="summary-event" data-event="${id}"><span class="summary-time">${time}</span><strong class="summary-duty" lang="zh-Hant">${duty || title}</strong>${context}<span class="summary-place">${place}</span></button>`;
   }
 

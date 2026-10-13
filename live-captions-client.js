@@ -82,14 +82,14 @@
     const endpoint = options?.endpoint || '/api/captions.js';
     if (!fetchImpl) throw new Error('Fetch unavailable');
     async function request(action, payload, accessToken) {
-      const isPublicConfig = action === 'config';
-      const headers = isPublicConfig ? {} : { 'Content-Type': 'application/json' };
+      const isGet = action === 'config' || action === 'operatorStatus';
+      const headers = isGet ? {} : { 'Content-Type': 'application/json' };
       if (accessToken) headers.Authorization = 'Bearer ' + accessToken;
       let response;
       try {
-        response = await fetchImpl(isPublicConfig ? endpoint + (endpoint.includes('?') ? '&' : '?') + 'action=config' : endpoint,
-          { method: isPublicConfig ? 'GET' : 'POST', headers, credentials: 'same-origin',
-            ...(isPublicConfig ? {} : { body: JSON.stringify({ action, ...(payload || {}) }) }) });
+        response = await fetchImpl(isGet ? endpoint + (endpoint.includes('?') ? '&' : '?') + 'action=' + encodeURIComponent(action) : endpoint,
+          { method: isGet ? 'GET' : 'POST', headers, credentials: 'same-origin',
+            ...(isGet ? {} : { body: JSON.stringify({ action, ...(payload || {}) }) }) });
       } catch { throw new Error('Caption service unavailable'); }
       let body;
       try { body = await response.json(); } catch { throw new Error('Caption service returned invalid data'); }
