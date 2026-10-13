@@ -1,7 +1,11 @@
 {
-  "buildCommand": null,
-  "outputDirectory": ".",
+  "buildCommand": "npm run build",
+  "outputDirectory": "dist",
   "framework": null,
+  "functions": {
+    "api/captions-stream.js": { "maxDuration": 300 },
+    "api/captions.js": { "maxDuration": 60 }
+  },
   "rewrites": [
     { "source": "/", "destination": "/wedding-invitation.html" }
   ]

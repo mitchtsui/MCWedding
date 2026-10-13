@@ -1,0 +1,15 @@
+# Deployment source does not need private data, SQL, tests or local evidence.
+.env
+.env.*
+private/
+supabase/
+tests/
+docs/
+mockups/
+.claude/
+CLAUDE.md
+README.md
+*.log
+node_modules/
+dist/
+vendor/

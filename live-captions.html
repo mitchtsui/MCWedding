@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="robots" content="noindex,nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Wedding Captions · Christy &amp; Mitchell</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@400;500;600&amp;family=Raleway:wght@400;500;600&amp;display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="live-captions.css">
+</head>
+<body>
+  <div class="shell">
+    <nav class="topbar" id="pageNavigation" aria-label="Page navigation">
+      <span class="wordmark">Christy &amp; Mitchell</span>
+      <a class="back-link" id="backLink" href="wedding-invitation.html">← Wedding website</a>
+    </nav>
+
+    <header class="page-intro">
+      <p class="eyebrow" id="pageEyebrow">Wedding captions</p>
+      <h1 class="page-title" id="pageTitle">Follow every word.</h1>
+      <p class="subtitle" id="pageSubtitle">Readable captions in English, Japanese and Simplified Chinese.</p>
+    </header>
+
+    <div class="preview-banner" id="previewBanner" hidden>
+      <strong id="previewBannerText">Preview · sample captions</strong>
+      <span id="previewBannerNote">Sample text only. This is not a live connection.</span>
+    </div>
+
+    <section class="toolbar" id="captionToolbar" aria-label="Caption preferences">
+      <div>
+        <span class="field-label" id="languageLabel">Language</span>
+        <div class="segmented" id="languageControls" role="group" aria-labelledby="languageLabel">
+          <button type="button" class="button button-quiet" data-language="en" lang="en" aria-pressed="true">EN</button>
+          <button type="button" class="button button-quiet" data-language="ja" lang="ja" aria-pressed="false">日本語</button>
+          <button type="button" class="button button-quiet" data-language="zh-CN" lang="zh-CN" aria-pressed="false">简体中文</button>
+        </div>
+      </div>
+
+      <div class="reading-controls">
+        <span class="field-label" id="textSizeLabel">Text size</span>
+        <div class="segmented" role="group" aria-labelledby="textSizeLabel">
+          <button type="button" class="button button-quiet" id="decreaseText" aria-label="Make text smaller">A−</button>
+          <button type="button" class="button button-quiet" id="resetText">Medium</button>
+          <button type="button" class="button button-quiet" id="increaseText" aria-label="Make text larger">A+</button>
+        </div>
+      </div>
+    </section>
+
+    <div class="status-line" id="statusLine">
+      <span class="status-dot" id="statusDot" aria-hidden="true"></span>
+      <strong id="statusLabel">Waiting for captions</strong>
+      <span id="statusNotice" hidden></span>
+    </div>
+
+    <main>
+      <section aria-labelledby="latestHeading">
+        <p class="section-label" id="latestHeading">Latest caption</p>
+        <article class="paper caption-latest" id="latestCaption">
+          <p class="caption-text" id="latestText"></p>
+          <div class="empty-state" id="latestEmpty">
+            <p id="emptyTitle">Captions will appear here when they begin.</p>
+            <a class="button button-primary" id="sampleLink" href="?preview=1">Explore a sample</a>
+          </div>
+        </article>
+      </section>
+
+      <section class="caption-history" aria-labelledby="historyHeading">
+        <p class="section-label" id="historyHeading">Earlier captions</p>
+        <div id="historyList"></div>
+        <p class="empty-state" id="historyEmpty">Earlier captions will collect here.</p>
+      </section>
+    </main>
+
+    <button type="button" class="button button-primary follow-latest" id="followLatest" hidden>Return to latest caption</button>
+
+    <footer class="site-footer">
+      <span>Christy &amp; Mitchell</span>
+      <span id="footerDate">12 November 2026 · Hong Kong</span>
+    </footer>
+  </div>
+
+  <noscript>This page needs JavaScript to display captions.</noscript>
+  <script src="live-captions-preview.js"></script>
+  <script src="live-captions-guest.js"></script>
+</body>
+</html>
