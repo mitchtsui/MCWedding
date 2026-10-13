@@ -47,8 +47,12 @@ const audioFake = `window.CaptionsAudio = {
   bytesToBase64() { return 'AAAAAAAA'; },
   Capture: class { constructor(options) { this.options = options; window.__capture = this; }
     async devices() { return [{ id: 'mic-1', label: 'Lectern microphone' }]; }
-    async start(id) { if (!id) throw new Error('Select a microphone first'); this.starts = (this.starts || 0) + 1; this.running = true; this.options.onState?.('capturing'); this.options.onMeter?.(.4); this.options.onFrame?.(new ArrayBuffer(2400), 1200); }
-    async stop() { this.running = false; this.options.onMeter?.(0); this.options.onState?.('stopped'); }
+    async prepareDisplay() { this.shares = (this.shares || 0) + 1; if (window.__rejectShare) throw new Error('PC audio sharing cancelled'); this.prepared = true; }
+    hasPreparedDisplay() { return Boolean(this.prepared); }
+    discardPrepared() { this.prepared = false; }
+    active() { return Boolean(this.running); }
+    async start(source, id) { if (source === 'pc') { if (!this.prepared) throw new Error('Share PC audio first'); this.prepared = false; } else if (!id) throw new Error('Select a microphone first'); this.source = source; this.starts = (this.starts || 0) + 1; this.running = true; this.options.onState?.('capturing'); this.options.onMeter?.(.4); this.options.onFrame?.(new ArrayBuffer(2400), 1200); }
+    async stop() { this.running = false; this.prepared = false; this.options.onMeter?.(0); this.options.onState?.('stopped'); }
   }
 };`;
 
@@ -214,6 +218,43 @@ async function main() {
     assert((await detached.evaluate(() => window.__lastSocket.sent.find(value => value.type === 'audio').sequence)) >= 1, 'reattaching declares the audio lost while detached');
     await detached.click('#stop-button'); await detached.waitForFunction(() => document.getElementById('status-text').textContent.includes('stopped')); await detached.close();
 
+    const pc = await makePage(); await pc.goto(`${origin}/live-captions-admin.html?live=1`, { waitUntil: 'networkidle0' });
+    await pc.waitForFunction(() => !document.getElementById('audio-source').disabled);
+    await pc.select('#audio-source', 'pc');
+    for (const width of [344, 390, 744, 1280]) {
+      await pc.setViewport({ width, height: 900 });
+      const layout = await pc.evaluate(() => ({ width: document.documentElement.scrollWidth,
+        small: [...document.querySelectorAll('button,input,select,a')].filter(item => item.getClientRects().length && item.getBoundingClientRect().height < 43.9).map(item => item.id),
+        tiny: [...document.querySelectorAll('label,button,select,p')].filter(item => item.getClientRects().length && parseFloat(getComputedStyle(item).fontSize) < 11).map(item => item.id) }));
+      assert(layout.width <= width + 1, `PC input layout overflow at ${width}`); assert.deepEqual(layout.small, []); assert.deepEqual(layout.tiny, []);
+      if ([390, 1280].includes(width)) await pc.screenshot({ path: path.join(output, `live-admin-pc-${width}.png`), fullPage: true });
+    }
+    let pcActions = actions.length;
+    await pc.click('#start-button');
+    assert.equal(actions.slice(pcActions).some(item => ['createEvent', 'start', 'ticket'].includes(item.action)), false, 'unshared PC input never starts a paid session');
+    await pc.evaluate(() => { window.__rejectShare = true; }); await pc.click('#share-pc-audio');
+    await pc.waitForFunction(() => window.__capture.shares === 1 && !document.getElementById('share-pc-audio').disabled);
+    assert.equal(actions.slice(pcActions).some(item => ['createEvent', 'start', 'ticket'].includes(item.action)), false, 'cancelled sharing never starts a session');
+    await pc.evaluate(() => { window.__rejectShare = false; }); await pc.click('#share-pc-audio');
+    await pc.waitForFunction(() => window.__capture.prepared);
+    await pc.click('#share-pc-audio'); await pc.waitForFunction(() => !window.__capture.prepared);
+    await pc.click('#share-pc-audio'); await pc.waitForFunction(() => window.__capture.prepared);
+    await pc.click('#start-button'); await pc.waitForFunction(() => window.__capture.running && window.__socketMessages?.some(item => item.type === 'audio'));
+    assert.equal(await pc.$eval('#audio-source', item => item.disabled), true);
+    assert.equal(await pc.evaluate(() => window.__capture.source), 'pc');
+    await pc.click('#pause-button'); await pc.waitForFunction(() => !document.getElementById('resume-button').disabled);
+    assert.equal(await pc.evaluate(() => Boolean(window.__capture.running || window.__capture.prepared)), false);
+    pcActions = actions.length; await pc.click('#resume-button');
+    assert.equal(actions.slice(pcActions).some(item => item.action === 'resume'), false, 'Resume requires fresh sharing before server transition');
+    await pc.click('#share-pc-audio'); await pc.waitForFunction(() => window.__capture.prepared);
+    await pc.click('#resume-button'); await pc.waitForFunction(() => window.__capture.running && !document.getElementById('pause-button').disabled);
+    await pc.evaluate(() => { window.__capture.running = false; window.__capture.options.onDeviceEnded(); });
+    await pc.waitForFunction(() => document.getElementById('start-button').textContent === 'Reconnect captions');
+    await pc.click('#share-pc-audio'); await pc.waitForFunction(() => window.__capture.prepared);
+    await pc.click('#start-button'); await pc.waitForFunction(() => window.__capture.running && !document.getElementById('pause-button').disabled);
+    await pc.click('#stop-button'); await pc.waitForFunction(() => document.getElementById('status-text').textContent.includes('stopped'));
+    assert.equal(await pc.evaluate(() => Boolean(window.__capture.running || window.__capture.prepared)), false); await pc.close();
+
     const guest = await makePage(); await guest.goto(`${origin}/live-captions.html?live=1&event=event-1#token=invite-secret`, { waitUntil: 'networkidle0' });
     await guest.waitForFunction(() => document.getElementById('latestText').textContent.startsWith('Snapshot en run-1'));
     assert.equal(await guest.evaluate(() => location.hash), '', 'the code leaves the address bar'); assert.equal(await guest.evaluate(() => window.__captionFake.anonSignIns), undefined, 'no account of any kind');
@@ -241,7 +282,7 @@ async function main() {
     const manualCalls = actions.filter(value => value.action === 'manual'); assert.equal(manualCalls.length, 3); assert.equal(manualCalls[0].segmentId, undefined); assert(manualCalls.slice(1).every(value => value.segmentId === 'manual-segment'));
     assert.deepEqual(contractErrors, []); assert.deepEqual(errors, []);
     console.log(JSON.stringify({ result: 'PASS', screenshotDirectory: output, browser: await browser.version(), actions: names,
-      checks: ['four-width live auth layout', 'config gate', 'magic-link login', 'event and audio start', 'manual and review', 'pause/resume/stop', 'guest QR code', 'scan and read without an account', 'signed captions only', 'expired link', 'reload keeps access', 'locale channel change', 'plain text'] }, null, 2));
+      checks: ['four-width live auth layout', 'four-width PC input layout', 'PC share/release/cancel', 'PC Start/Resume require sharing', 'PC share-ended recovery', 'config gate', 'magic-link login', 'event and audio start', 'manual and review', 'pause/resume/stop', 'guest QR code', 'scan and read without an account', 'signed captions only', 'expired link', 'reload keeps access', 'locale channel change', 'plain text'] }, null, 2));
   } finally { clearTimeout(watchdog); await browser.close(); server.closeAllConnections(); server.close(); }
 }
 main().catch(error => { console.error(error.stack || error.message); process.exitCode = 1; });

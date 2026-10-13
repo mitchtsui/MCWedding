@@ -6,11 +6,15 @@
   'use strict';
   class Capture {
     constructor(options) {
-      this.options = options || {}; this.stream = null; this.context = null; this.node = null; this.source = null;
+      this.options = options || {}; this.stream = null; this.preparedStream = null; this.context = null; this.node = null; this.source = null; this.kind = '';
       this.generation = 0;
     }
+    media() { return this.options.mediaDevices || navigator.mediaDevices; }
+    tracks(stream) { return stream?.getTracks?.() || []; }
+    stopStream(stream) { this.tracks(stream).forEach(track => track.stop()); }
+    liveAudio(stream) { return (stream?.getAudioTracks?.() || []).find(track => track.readyState !== 'ended'); }
     async devices() {
-      const media = this.options.mediaDevices || navigator.mediaDevices;
+      const media = this.media();
       if (!media?.enumerateDevices) return [];
       return (await media.enumerateDevices()).filter(device => device.kind === 'audioinput')
         .map(device => ({ id: device.deviceId, label: device.label || 'Microphone' }));
@@ -18,32 +22,78 @@
     // Browsers hide device ids and names until the page has microphone permission. This asks for it and
     // releases the stream at once; capture itself still opens only the device the operator chose.
     async permit() {
-      const media = this.options.mediaDevices || navigator.mediaDevices;
+      const media = this.media();
       if (!media?.getUserMedia) throw new Error('Microphone capture is unavailable');
       const stream = await media.getUserMedia({ audio: true, video: false });
-      stream.getTracks().forEach(track => track.stop());
+      this.stopStream(stream);
     }
-    async start(deviceId) {
-      if (!deviceId) throw new Error('Select a microphone first');
-      await this.stop();
+
+    // This method deliberately calls getDisplayMedia before its first await. Call it directly from a
+    // click handler: browsers reject a screen/system-audio picker that is opened after async work.
+    async prepareDisplay() {
+      const media = this.media();
+      if (!media?.getDisplayMedia) throw new Error('PC audio sharing is unavailable in this browser');
+      const old = this.preparedStream; this.preparedStream = null; this.stopStream(old);
       const generation = ++this.generation;
-      const media = this.options.mediaDevices || navigator.mediaDevices;
+      const pending = media.getDisplayMedia({ video: true, audio: true, systemAudio: 'include', surfaceSwitching: 'exclude', selfBrowserSurface: 'exclude' });
+      let stream;
+      try { stream = await pending; }
+      catch (error) { if (generation === this.generation) this.preparedStream = null; throw error; }
+      if (generation !== this.generation) { this.stopStream(stream); throw new Error('PC audio sharing was cancelled'); }
+      if (!this.liveAudio(stream)) { this.stopStream(stream); throw new Error('The selected share has no audio. Choose a browser tab and enable Share tab audio, or choose an entire screen with system audio when offered.'); }
+      this.preparedStream = stream;
+      this.watchEnded(stream, generation, false);
+      this.options.onPrepared?.('pc');
+      return stream;
+    }
+    hasPreparedDisplay() { return Boolean(this.preparedStream && this.liveAudio(this.preparedStream)); }
+    discardPrepared() {
+      const stream = this.preparedStream; this.preparedStream = null; this.generation += 1; this.stopStream(stream);
+      this.options.onPrepared?.('');
+    }
+    watchEnded(stream, generation, active) {
+      const ended = () => {
+        if (generation !== this.generation) return;
+        if (active && this.stream !== stream) return;
+        if (!active && this.preparedStream !== stream) return;
+        if (!active) { this.preparedStream = null; this.generation += 1; this.stopStream(stream); }
+        this.options.onDeviceEnded?.({ source: this.kind || 'pc', active });
+        if (active) void this.stop();
+      };
+      this.tracks(stream).forEach(track => track.addEventListener?.('ended', ended, { once: true }));
+    }
+    async start(kind, deviceId) {
+      kind = kind || 'microphone';
+      // Keep the original start(deviceId) form for existing microphone callers.
+      if (kind !== 'microphone' && kind !== 'pc') { deviceId = kind; kind = 'microphone'; }
+      if (kind === 'microphone' && !deviceId) throw new Error('Select a microphone first');
+      if (kind === 'pc' && !this.hasPreparedDisplay()) throw new Error('Share PC audio before starting captions');
+      const prepared = kind === 'pc' ? this.preparedStream : null;
+      if (kind === 'microphone') this.stopStream(this.preparedStream);
+      this.preparedStream = null;
+      // stop() invalidates prior work synchronously. Remember that token before waiting for its context to close,
+      // so a concurrent Stop cannot be followed by a late capture start.
+      const stopping = this.stop(false), generation = this.generation;
+      await stopping;
+      const cancelledMessage = kind === 'pc' ? 'PC audio start was cancelled' : 'Microphone start was cancelled';
+      if (generation !== this.generation) { this.stopStream(prepared); throw new Error(cancelledMessage); }
+      const media = this.media();
       const AudioContextClass = this.options.AudioContext || globalThis.AudioContext || globalThis.webkitAudioContext;
-      if (!media?.getUserMedia || !AudioContextClass) throw new Error('Microphone capture is unavailable');
-      const stream = await media.getUserMedia({ audio: { deviceId: { exact: deviceId }, channelCount: 1,
-        echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
-      if (generation !== this.generation) { stream.getTracks().forEach(item => item.stop()); throw new Error('Microphone start was cancelled'); }
-      const track = stream.getAudioTracks()[0];
-      if (!track) { stream.getTracks().forEach(item => item.stop()); throw new Error('Selected microphone is unavailable'); }
-      this.stream = stream;
-      track.addEventListener('ended', () => { if (generation !== this.generation) return; this.options.onDeviceEnded?.(); void this.stop(); }, { once: true });
-      const context = new AudioContextClass({ latencyHint: 'interactive' });
-      this.context = context;
+      if (!AudioContextClass || (kind === 'microphone' && !media?.getUserMedia)) { this.stopStream(prepared); throw new Error(kind === 'pc' ? 'PC audio capture is unavailable' : 'Microphone capture is unavailable'); }
+      let stream = prepared, context = null;
       try {
+        stream ||= await media.getUserMedia({ audio: { deviceId: { exact: deviceId }, channelCount: 1,
+          echoCancellation: false, noiseSuppression: false, autoGainControl: false }, video: false });
+        if (generation !== this.generation) throw new Error(cancelledMessage);
+        const track = this.liveAudio(stream);
+        if (!track) throw new Error(kind === 'pc' ? 'The shared PC audio is no longer available' : 'Selected microphone is unavailable');
+        this.stream = stream; this.kind = kind;
+        this.watchEnded(stream, generation, true);
+        context = new AudioContextClass({ latencyHint: 'interactive' }); this.context = context;
         await context.audioWorklet.addModule(this.options.workletUrl || 'live-captions-worklet.js');
-        if (generation !== this.generation) throw new Error('Microphone start was cancelled');
+        if (generation !== this.generation) throw new Error(cancelledMessage);
         if (context.state === 'suspended') await context.resume();
-        if (generation !== this.generation) throw new Error('Microphone start was cancelled');
+        if (generation !== this.generation) throw new Error(cancelledMessage);
         const node = new AudioWorkletNode(context, 'caption-pcm-processor');
         node.port.onmessage = event => {
           if (generation !== this.generation || this.node !== node) return;
@@ -59,16 +109,17 @@
         if (this.stream === stream) this.stream = null;
         if (this.context === context) this.context = null;
         this.node = null; this.source = null;
-        stream.getTracks().forEach(item => item.stop()); await context.close().catch(() => {}); throw error;
+        this.kind = ''; this.stopStream(stream); await Promise.resolve(context?.close?.()).catch(() => {}); throw error;
       }
     }
-    async stop() {
+    async stop(includePrepared = true) {
       this.generation += 1;
-      const stream = this.stream, context = this.context, node = this.node;
-      this.stream = null; this.context = null; this.node = null; this.source = null;
+      const stream = this.stream, prepared = includePrepared ? this.preparedStream : null, context = this.context, node = this.node;
+      this.stream = null; if (includePrepared) this.preparedStream = null; this.context = null; this.node = null; this.source = null; this.kind = '';
       try { node?.port.postMessage({ type: 'reset' }); node?.disconnect(); } catch {}
-      stream?.getTracks().forEach(track => track.stop());
+      this.stopStream(stream); this.stopStream(prepared);
       if (context && context.state !== 'closed') await context.close().catch(() => {});
+      if (includePrepared && prepared) this.options.onPrepared?.('');
       this.options.onMeter?.(0); this.options.onState?.('stopped');
     }
     active() { return Boolean(this.stream && this.context); }

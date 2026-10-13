@@ -178,8 +178,10 @@ See the evaluator's tests for a synthetic schema example; never label those resu
 ## Operator runbook
 
 1. Confirm the approved event, admin access, quota/spending scope and current glossary/script.
-2. Select the intended USB/hotel audio input explicitly and test levels. Never silently
-   switch to a built-in microphone when the selected device disconnects.
+2. Select the intended input explicitly and test levels. A microphone/audio interface uses
+   the device list. For audio already playing on the operator PC, select **PC audio**, press
+   **Share PC audio**, then use the browser picker as described below. Never silently switch
+   to a built-in microphone or another source when the selected input disconnects.
 3. Start one publisher. Check source recognition and all three target-language panels.
 4. Share only the caption invitation with test guests. Open one phone in each language.
 5. Review script suggestions against what was spoken. Reject a suggestion that replaces
@@ -191,9 +193,53 @@ See the evaluator's tests for a synthetic schema example; never label those resu
 8. End capture and provider sessions. Keep evidence private. No automated retention
    deletion runs until its scope and timing are separately confirmed.
 
+### Capturing what the operator PC is playing
+
+PC audio uses the browser's screen-share permission because browsers do not expose a general
+loopback input to a web page. It is a separate, explicit step before Start, Resume or a manual
+Reconnect. Cancelling the picker, denying permission, or choosing a share with no live audio
+track does not create a caption run and never falls back to the microphone.
+
+- For YouTube or WhatsApp Web, choose the browser tab that is playing the audio and enable
+  **Share tab audio** in the picker.
+- For the desktop WhatsApp app, choose **Entire screen** and enable system audio if the browser
+  and operating system offer it. Availability and picker wording vary by browser and OS.
+- Entire-screen/system audio may include notification sounds and other PC audio. Silence or
+  mute notifications that must not enter the captions.
+- Some browsers require a video track even when sharing audio. The page keeps that track only
+  to keep the browser share alive; it never renders, transmits or records video. Release PC
+  audio, Pause, End, Emergency stop, leaving the page, any setup failure, and browser
+  stop-sharing all stop every audio and video track held by the page.
+
+A scheduled server handoff keeps the existing PC share alive. An unexpected stream disconnect
+cannot reopen the picker automatically because `getDisplayMedia` requires a fresh user gesture.
+The page therefore stops the share and leaves the run open: press **Share PC audio**, then
+**Reconnect captions**. Pause also releases the share; share it again before Resume.
+
+This implementation does not establish that every target browser/OS can capture desktop-app
+audio. A real YouTube/WhatsApp rehearsal, notification isolation, sustained capture and venue
+acceptance remain required. The browser picker itself cannot be automated by the local tests.
+
+Validation on 13 October 2026: 60 audio/lifecycle tests passed in the staged change
+using `node --test --test-isolation=none tests/captions-audio.test.cjs
+tests/captions-admin-lifecycle.test.cjs`. Chrome 154.0.8037.93 passed the local
+fake-provider browser suite, including PC share/release/cancel, Start/Resume gates,
+stop-sharing recovery and layouts at 344/390/744/1280 px. The 390px screenshot was
+visually inspected. `node tests/captions-pc-audio-browser.cjs` separately exercised
+the real AudioContext/worklet with a synthetic shared tone and video track: click
+activation, no PCM before Start, 24 kHz PCM frames, no microphone fallback and
+all-track cleanup passed. This is not a native sharing-dialog or real media-site
+acceptance test. No paid API calls or deployment were performed by these checks.
+The two startup-cancellation regressions also failed with the pre-fix branch
+restored in memory. A separate reviewer completed read-only static review and
+found no remaining P1/P2 blocker after that fix. Review used the shared filesystem;
+the reviewer did not independently execute successful tests, and this is not
+live-audio acceptance.
+
 ### When capture stops without the operator asking (added 2026-10-02)
 
-- Start does nothing until a microphone is selected; no event or run is created first.
+- Start does nothing until a microphone is selected or a PC share with a live audio track has
+  been prepared; no event or run is created first.
 - A dropped stream, an upload more than three seconds behind, or lost speech recognition
   triggers one reconnect with a three-second budget. A scheduled handoff that fails falls
   back to that same reconnect. The new stream starts above sequence 0, which is how the
@@ -202,7 +248,7 @@ See the evaluator's tests for a synthetic schema example; never label those resu
   sends one silent frame first, so the declaration still reaches the server.
 - After three automatic reconnects inside a minute the page stops retrying and leaves the
   choice to the operator. Reconnect captions is never limited.
-- If that reconnect fails, the microphone disconnects, the page is left, or a Pause, End
+- If that reconnect fails, the selected input disconnects, the page is left, or a Pause, End
   or Emergency stop is not confirmed by the server, the run is **still open on the
   server**. The page then shows **Reconnect captions** and **Emergency stop**. Reconnect
   continues the same run, so guests keep their session; Emergency stop closes it.
@@ -220,7 +266,7 @@ See the evaluator's tests for a synthetic schema example; never label those resu
   event, so a second admin pressing Start begins a separate event with its own guest links.
 - End waits for a handoff that is in flight, so the buffered last words are uploaded
   before the drain. End on a paused run ends it directly; there is no stream to drain.
-- Pause stops microphone capture immediately, then asks the stream to finish words
+- Pause stops local audio capture immediately, then asks the stream to finish words
   already captured before changing the database state to paused. The wait is bounded;
   an unconfirmed pause leaves capture off and offers recovery. Emergency stop cancels
   this wait immediately. This behaviour was selected by the user on 3 October and is

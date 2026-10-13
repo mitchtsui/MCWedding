@@ -135,7 +135,8 @@ html:lang(ja) .caption-text, html:lang(zh-CN) .caption-text { font-family: 'Noto
 
 .live-device { margin: 18px 0; }
 .live-device select, .auth-inline input { min-height: 44px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 3px; background: var(--white); color: var(--ink); font: inherit; }
-.live-device select { flex: 1 1 190px; }
+.live-device select { flex: 1 1 190px; min-width: 0; max-width: 100%; }
+#audio-source { width: 100%; margin-bottom: 12px; }
 .live-device meter { width: 100%; height: 12px; margin-top: 10px; accent-color: var(--olive); }
 .auth-inline { display: grid; grid-template-columns: minmax(180px, 1fr) auto; gap: 10px; align-items: end; }
 .auth-inline .field-label { grid-column: 1 / -1; }

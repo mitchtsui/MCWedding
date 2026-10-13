@@ -68,10 +68,17 @@
             </div>
 
             <div class="live-device live-only" id="live-device-panel" hidden>
+              <label class="field-label" for="audio-source">Audio source</label>
+              <select id="audio-source">
+                <option value="microphone">Microphone or audio interface</option>
+                <option value="pc">PC audio - what this computer is playing</option>
+              </select>
               <label class="field-label" for="audio-device">Microphone</label>
               <div class="control-row"><select id="audio-device" disabled><option value="">Select a microphone</option></select>
                 <button class="button button-quiet" id="refresh-devices" type="button" disabled>Refresh devices</button></div>
-              <meter id="audio-meter" min="0" max="1" value="0" aria-label="Microphone level"></meter>
+              <button class="button button-quiet" id="share-pc-audio" type="button" disabled>Share PC audio</button>
+              <p class="subtitle" id="pc-audio-help">For YouTube or WhatsApp Web, choose that browser tab and enable <strong>Share tab audio</strong>. For the desktop WhatsApp app, choose <strong>Entire screen</strong> and enable system audio if your browser offers it. System audio can also include notification sounds.</p>
+              <meter id="audio-meter" min="0" max="1" value="0" aria-label="Captured audio level"></meter>
               <p class="notice" id="audio-alert" aria-live="assertive"></p>
             </div>
 
@@ -105,7 +112,7 @@
             <ul class="preflight-list">
               <li><span>Mode</span><span id="preflight-preview">Off</span></li>
               <li><span>Operator authorization</span><span id="preflight-auth">Not checked</span></li>
-              <li><span>Microphone</span><span id="preflight-microphone">Not requested</span></li>
+              <li><span>Audio input</span><span id="preflight-microphone">Not requested</span></li>
               <li><span>Speech recognition</span><span id="preflight-asr">Not connected</span></li>
               <li><span>Translation provider</span><span id="preflight-translation">Not connected</span></li>
               <li><span>Guest delivery</span><span id="preflight-delivery">Not connected</span></li>

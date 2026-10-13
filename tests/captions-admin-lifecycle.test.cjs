@@ -22,7 +22,7 @@ async function waitFor(predicate, label, timeoutMs = 4000) {
   while (!predicate()) { if (realNow() >= deadline) throw new Error('Timed out waiting for ' + label); await sleep(2); }
 }
 
-async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
+async function makeApp({ keepBacklog = false, permission = 'granted', display = 'ok' } = {}) {
   const gates = new Map();
   const gate = name => gates.has(name) ? new Promise(resolve => gates.get(name).push(resolve)) : Promise.resolve();
   // failNext: the request never reaches the server. loseReply: it is applied, then the reply is lost.
@@ -78,12 +78,15 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
   FakeSocket.OPEN = 1;
   let capture = null;
   class FakeCapture {
-    constructor(options) { this.options = options; this.running = false; this.starts = 0; this.permits = 0; capture = this; }
+    constructor(options) { this.options = options; this.running = false; this.prepared = false; this.source = ''; this.starts = 0; this.permits = 0; this.displayRequests = 0; capture = this; }
     // Like Chrome: until access is granted, one input is listed with no id and a generic name.
     async devices() { return permission === 'granted' ? [{ id: 'mic-1', label: 'Lectern microphone' }] : [{ id: '', label: 'Microphone' }]; }
     async permit() { this.permits += 1; if (permission === 'deny') throw Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }); permission = 'granted'; }
-    async start(deviceId) { if (!deviceId) throw new Error('Select a microphone first'); await gate('capture.start'); this.running = true; this.starts += 1; }
-    async stop() { this.running = false; }
+    async prepareDisplay() { this.displayRequests += 1; await gate('display'); if (display === 'deny') throw Object.assign(new Error('Permission denied'), { name: 'NotAllowedError' }); if (display === 'no-audio') throw new Error('The selected share has no audio'); this.prepared = true; this.options.onPrepared?.('pc'); }
+    hasPreparedDisplay() { return this.prepared; }
+    discardPrepared() { this.prepared = false; this.options.onPrepared?.(''); }
+    async start(source, deviceId) { if (source !== 'pc' && source !== 'microphone') { deviceId = source; source = 'microphone'; } if (source === 'microphone' && !deviceId) throw new Error('Select a microphone first'); if (source === 'pc' && !this.prepared) throw new Error('Share PC audio before starting captions'); await gate('capture.start'); this.prepared = false; this.source = source; this.running = true; this.starts += 1; }
+    async stop() { this.running = false; this.prepared = false; this.source = ''; }
     frame() { if (this.running) this.options.onFrame(new ArrayBuffer(2400), 1200); return this.running; }
   }
   const context = { console, clearTimeout, URLSearchParams, URL, Date: ScaledDate, setTimeout: (handler, ms = 0, ...args) => setTimeout(handler, ms / SCALE, ...args),
@@ -110,6 +113,7 @@ async function makeApp({ keepBacklog = false, permission = 'granted' } = {}) {
     socket() { return sockets[sockets.length - 1]; },
     pagehide() { listeners.pagehide(); },
     frames(count) { let produced = 0; for (let index = 0; index < count; index += 1) if (capture.frame()) produced += 1; return produced; },
+    async sharePc() { $('audio-source').value = 'pc'; $('audio-source').onchange(); $('share-pc-audio').onclick(); await waitFor(() => capture.prepared || $('audio-alert').textContent, 'PC audio share result'); },
     until: (expected, timeoutMs) => waitFor(() => text().includes(expected), `status "${expected}" (now "${text()}")`, timeoutMs),
     live: () => waitFor(() => text() === 'Live microphone connected', `live (now "${text()}")`),
     async goLive() { $('audio-device').value = 'mic-1'; assert.equal(app.click('start'), true); await app.live(); return app; } };
@@ -124,6 +128,43 @@ test('Start without a microphone creates no event or run', async () => {
   assert.equal(app.click('start'), true); await sleep(20);
   assert.equal(app.text(), 'Select a microphone first'); assert.deepEqual(app.server.calls.filter(call => /^(createEvent|start)/.test(call)), []);
   assert.equal(app.enabled(), 'start');
+});
+
+test('PC audio must be shared before Start, and cancel or no-audio selection never starts a paid run', async () => {
+  const missing = await makeApp(); missing.$('audio-source').value = 'pc'; missing.$('audio-source').onchange();
+  missing.click('start'); await sleep(10); assert.match(missing.text(), /Share PC audio before starting/); assert.deepEqual(missing.server.calls.filter(call => /^(createEvent|start)/.test(call)), []);
+  const denied = await makeApp({ display: 'deny' }); await denied.sharePc(); assert.match(denied.$('audio-alert').textContent, /cancelled or refused/); assert.equal(denied.capture.displayRequests, 1); assert.deepEqual(denied.server.calls.filter(call => /^(createEvent|start)/.test(call)), []);
+  const silent = await makeApp({ display: 'no-audio' }); await silent.sharePc(); assert.match(silent.$('audio-alert').textContent, /has no audio/); assert.deepEqual(silent.server.calls.filter(call => /^(createEvent|start)/.test(call)), []);
+});
+
+test('PC audio frames follow Start and Pause, Resume and Reconnect require a fresh explicit share', async () => {
+  const app = await makeApp(); await app.sharePc(); assert.equal(app.capture.running, false); assert.equal(app.$('share-pc-audio').textContent, 'Release PC audio');
+  app.click('start'); await app.until('Live PC audio connected'); assert.equal(app.capture.source, 'pc'); assert.equal(app.frames(3), 3); assert.equal(app.socket().audio().length, 3); assert.equal(app.$('audio-source').disabled, true);
+  app.click('pause'); await app.until('Captions paused'); assert.equal(app.capture.running, false); assert.equal(app.$('audio-source').disabled, true);
+  app.click('resume'); await sleep(10); assert.match(app.text(), /Share PC audio before resuming/); assert.equal(app.server.runs.get('run-1').state, 'paused');
+  app.$('share-pc-audio').onclick(); await waitFor(() => app.capture.prepared, 'reshare before Resume'); app.click('resume'); await app.until('Live PC audio connected'); assert.equal(app.server.runs.get('run-1').state, 'live');
+  const lost = app.socket(); lost.serverClose(); await app.until('Share PC audio, then press Reconnect captions'); assert.equal(app.enabled(), 'start,stop'); assert.equal(app.capture.running, false); assert.equal(app.capture.displayRequests, 2, 'automatic reconnect never opens the picker');
+  app.$('share-pc-audio').onclick(); await waitFor(() => app.capture.prepared, 'reshare before Reconnect'); app.click('start'); await app.until('Live PC audio connected'); assert.equal(app.capture.displayRequests, 3); assert.equal(app.server.runs.get('run-1').state, 'live');
+});
+
+test('browser stop-sharing and pagehide take the existing safe disconnect path for PC audio', async () => {
+  const stopped = await makeApp(); await stopped.sharePc(); stopped.click('start'); await stopped.until('Live PC audio connected');
+  stopped.capture.options.onDeviceEnded({ source: 'pc', active: true }); await stopped.capture.stop(); assert.match(stopped.text(), /PC audio sharing stopped/); assert.equal(stopped.enabled(), 'start,stop'); assert.equal(stopped.sockets.filter(socket => socket.readyState === 1).length, 0);
+  const left = await makeApp(); await left.sharePc(); left.click('start'); await left.until('Live PC audio connected'); left.pagehide(); assert.match(left.text(), /this page was left/); assert.equal(left.capture.running, false); assert.equal(left.sockets.filter(socket => socket.readyState === 1).length, 0);
+});
+
+test('prepared PC audio ending while a ticket is pending cancels connection and leaves the run recoverable', async () => {
+  const app = await makeApp(); await app.sharePc(); app.hold('ticket'); app.click('start'); await waitFor(() => app.held('ticket') === 1, 'pending ticket');
+  app.capture.prepared = false; app.capture.options.onDeviceEnded({ source: 'pc', active: false });
+  assert.match(app.text(), /PC audio sharing stopped/); assert.equal(app.enabled(), 'start,stop'); assert.equal(app.runs(), 'run-1:live');
+  app.release('ticket'); await sleep(20); assert.equal(app.sockets.length, 0, 'a late ticket cannot create or authenticate a WebSocket'); assert.equal(app.capture.starts, 0, 'capture cannot start after the prepared share ended');
+  app.$('share-pc-audio').onclick(); await waitFor(() => app.capture.prepared, 'replacement share'); app.click('start'); await app.until('Live PC audio connected'); assert.equal(app.runs(), 'run-1:live');
+});
+
+test('prepared PC audio ending while Start reply is pending fences and closes the late run', async () => {
+  const app = await makeApp(); await app.sharePc(); app.hold('start'); app.click('start'); await waitFor(() => app.held('start') === 1, 'pending Start reply');
+  app.capture.prepared = false; app.capture.options.onDeviceEnded({ source: 'pc', active: false }); app.release('start');
+  await app.until('Captions stopped'); assert.equal(app.runs(), 'run-1:stopped'); assert.equal(app.sockets.length, 0); assert.equal(app.capture.starts, 0); assert.equal(app.enabled(), 'start');
 });
 
 test('a browser that has not granted microphone access is asked first, then lists selectable devices', async () => {
