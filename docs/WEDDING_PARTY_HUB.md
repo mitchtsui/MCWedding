@@ -121,3 +121,12 @@ from the authorized workspace holding those files for future releases.
 - Synthetic browser fixtures are not proof of live guest assignments. Local checks do
   not establish Vercel routing, paid stream quality, physical phone/Safari behavior or
   venue/network readiness. Those are separate from a successful hub publication.
+
+## Share preview ? 13 October 2026
+
+The hub and public login page carry matching Open Graph and Twitter metadata. The public
+1200 ? 630 Paris wedding photo (`photos/og-preview.jpg`) is the key visual, with description
+?The day?s plans, familiar faces, and everything to keep close.? The title identifies the
+wedding party and couple. Unauthenticated share crawlers follow the existing login redirect;
+no crawler bypass grants access to private hub data. Actual WhatsApp rendering/cache refresh
+must be confirmed in WhatsApp; fetching the deployed metadata only verifies its availability.
