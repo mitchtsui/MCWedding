@@ -2,6 +2,17 @@
 
 ## Scope and current status
 
+Production release authorized on 13 October 2026: the user requested merging to
+main and making the caption service, including PC playback audio, live on Vercel.
+The release combines the caption branch with the latest published wedding rundown.
+This supersedes earlier preview-only authorization below. It does not establish
+venue, sustained-stream or language-quality acceptance. Production uses the
+existing designated caption project and the exact production origin
+`https://mc-wedding-ten.vercel.app`; no database migration or paid replay is part
+of this release. A read-only check confirmed the existing Supabase signup setting
+remains enabled; the previously documented account-policy issue is not changed by
+this publication. Production availability must be checked on the deployed URL.
+
 MCWedding is the application repository and Vercel deployment target. Supabase remains
 the existing MCWedding project. English, Japanese and Simplified Chinese captions share
 one central audio source. There is no TTS or guest microphone.
@@ -63,8 +74,9 @@ Build artifacts and the generated `vendor/` bundle are ignored by Git.
 
 ## Access
 
-`CAPTIONS_ENABLED=true` switches captions on for a deployment; production keeps it off
-until the release gates below. The operator signs in with the existing admin magic link.
+`CAPTIONS_ENABLED=true` switches captions on for a deployment. The user authorized
+production activation on 13 October; the remaining acceptance gaps below still
+apply. The operator signs in with the existing admin magic link.
 
 ### Guests: scan a QR code, no account (decided 2 October)
 
