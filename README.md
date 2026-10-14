@@ -7,7 +7,7 @@
 ## What's in this repo
 
 Current captions/hub status and cross-session integration plan:
-[consolidated handover](docs/CODEX_HANDOVER.md#current-state-v1-as-of-14-october-2026).
+[consolidated handover](docs/CODEX_HANDOVER.md#current-state-v2-as-of-14-october-2026).
 
 | File | Description |
 |------|-------------|

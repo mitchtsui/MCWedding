@@ -1,4 +1,42 @@
-# Caption implementation validation — 2026-10-02
+# Combined hub and prepared captions validation — 14 October 2026
+
+Integration branch: `codex/integrate-prepared-captions`. The implementation includes
+saved speeches, reviewed three-language prepared captions and manual Show / Next / Clear,
+while retaining hub/operator cookies, direct guest links and PT409 conflict handling.
+
+- Full local regression: **265/265 passed**, no failures or skips, using
+  `node --test --test-isolation=none tests/captions-*.test.cjs tests/captions-*.test.mjs tests/hub-session.test.cjs tests/seating-view.test.cjs tests/vip-assets.test.cjs tests/wedding-day-now.test.cjs`.
+- PGlite migration coverage includes the full current chain, repeated application of the
+  two corrected 14 October migrations, privileges/RLS, service-role ticket ownership,
+  PT409 stale conflicts and manual/live exclusivity.
+- `node tests/wedding-party-browser.cjs` passed at 344, 390, 744 and 1280 px with no
+  horizontal overflow or browser errors. Checks include passwords, logout, keyboard tabs,
+  iframe retention and fragment-only guest invites across tab changes/reload.
+- `npm run build` passed; private family data and server modules remain excluded from
+  public static output.
+
+- After the review-driven recovery fixes, the focused UI/guest/Clear suite passed
+  **27/27** again. The final production build also passed.
+- `node tests/captions-live-browser.cjs` passed in Chrome 154 at all four widths,
+  including the hub password/manual flow, Show / Next / Clear, session expiry and
+  restore, pending start activity lock, lost reply followed by a rejected retry,
+  and recovery of an already-created run. Screenshots were inspected locally;
+  the report and images are in the machine-local temporary `captions-live-Dh8cbh` folder.
+
+The full regression above preceded the review-driven UI recovery fixes; the focused
+suite and final browser checks cover those changes.
+- A separate read-only reviewer found and verified fixes for two manual lifecycle
+  defects: unlock could offer audio reconnect for a manual run, and an unresolved
+  manual start could release the hub activity lock. Final independent Chromium
+  reproduction on the frozen files passed at all four widths, plus 21 focused tests;
+  no substantive findings remain. The review began from requirements and artifacts,
+  then received fix summaries during follow-up; it was not a completely blind review.
+  The reviewer shared the filesystem but did not edit the implementation.
+All integration checks are local; speech/translation services are mocked. No hosted SQL,
+deployment, paid audio request or live activation was performed. These results do not
+establish venue performance or translation quality. Captions remain disabled.
+
+# Historical caption implementation validation — 2026-10-02
 
 ## Current status — 3 October 2026
 

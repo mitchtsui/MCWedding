@@ -49,6 +49,7 @@ function fakeStore(activity) {
     async consumeUplinkTicket() { return { eventId: 'event-1', runId: 'run-1', userId: 'operator',
       modeGeneration: 1, fencingToken: 9, channelEpoch: 'epoch-1' }; },
     async getRunState() { return this.state; },
+    async getSelectedScripts() { return this.state.scripts ?? this.state.scriptCues ?? []; },
     async recoverPending() { return { drafts: [], outbox: [] }; },
     async reserveMessageSequenceBlock() { return { channelEpoch: 'epoch-1', ranges: {
       en: { start: 1, end: 128 }, ja: { start: 1, end: 128 }, 'zh-CN': { start: 1, end: 128 },
@@ -102,6 +103,40 @@ test('gateway authenticates once, translates final source in independent lanes, 
   const batches = socket.sent.filter(message => message.type === 'caption.batch');
   assert.equal(batches.length, 3);
   assert(batches.every(batch => batch.updates[0].text.endsWith('-translation')));
+  session.stop('test_complete');
+});
+
+test('each finalized source snapshots the latest selected scripts, including a run that began with none, and fetch errors fail closed', async () => {
+  const activity = [], reviewed = [];
+  const store = fakeStore(activity);
+  store.state.scriptCues = [];
+  let selected = [], fetches = 0, fail = false;
+  store.getSelectedScripts = async () => {
+    fetches += 1;
+    if (fail) throw new Error('selection unavailable');
+    return selected.map(cue => ({ ...cue }));
+  };
+  const gateway = new CaptionGateway({ store, publisher:{ async publish() {} },
+    allowedOrigins:['https://wedding.example'],asrFactory:()=>new FakeAsr(),
+    translator:{ async translate(){ return { text:'translation' }; } },
+    scriptAssistant:{ async review({ rawText,scriptCues }) { reviewed.push({ rawText,scriptCues }); return null; } },
+    config:{ heartbeatMs:100000,rotateAfterMs:100000,shutdownAfterMs:110000 } });
+  const socket = new FakeClientSocket(), session = gateway.attach(socket,{ origin:'https://wedding.example' });
+  socket.emit('message',JSON.stringify({ type:'auth',ticket:'ticket' }));
+  await waitFor(()=>socket.sent.some(message=>message.type==='ready'));
+  const source = text => ({ segmentId:crypto.randomUUID(),segmentOrder:reviewed.length,sourceRevision:1,text,itemId:`item-${text}` });
+  await session.reviewScript(source('before selection'));
+  assert.equal(reviewed.length,0);
+  selected = [{ id:'script-a',sequence:1,text:'Selected A' }];
+  await session.reviewScript(source('after A'));
+  selected = [{ id:'script-b',sequence:1,text:'Selected B' }];
+  await session.reviewScript(source('after B'));
+  assert.deepEqual(reviewed.map(entry=>[entry.rawText,entry.scriptCues[0].id]),[['after A','script-a'],['after B','script-b']]);
+  fail = true;
+  await session.reviewScript(source('fetch failed'));
+  assert.equal(reviewed.length,2,'a failed refresh must not reuse the previous selection');
+  assert.equal(fetches,4);
+  assert(socket.sent.some(message=>message.type==='status' && message.status==='script.review_unavailable'));
   session.stop('test_complete');
 });
 

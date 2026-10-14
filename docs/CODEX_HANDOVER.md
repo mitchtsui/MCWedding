@@ -1,6 +1,6 @@
 # MCWedding consolidated captions and hub handover
 
-## Current state v1 as of 14 October 2026
+## Current state v2 as of 14 October 2026
 
 This section supersedes the historical handovers below for current status. It reconciles
 the saved-script caption work with the wedding-party hub and incident repairs.
@@ -26,7 +26,13 @@ repository. Continue coordination from the hub session, preserving the other che
   workspace containing ignored `hub-private/vip-data.json` and `photos/vip/` attachments.
   Keep those files out of Git and static output; preserve the missing-asset build guard.
 
-### Undeployed script and manual subtitle work
+### Integrated, undeployed script and manual subtitle work
+
+The feature is now integrated into `codex/integrate-prepared-captions` in MCWedding,
+including hub-cookie authorization, PT409 conflicts and consistent service-role ticket
+ownership. The original checkout below remains preserved. Integration validation is
+recorded in `CAPTIONS_TEST_REPORT.md`; this feature has not been applied to the hosted
+database or deployed. Captions remain disabled.
 
 The separate checkout is
 `C:/Users/mitch/Documents/Projects/git/wedding-live-captions/.cache/captions-production`,
@@ -51,8 +57,19 @@ Its historical evidence is a passing build, 224 full caption tests, 48 focused l
 checks after UI fixes, and mocked Chrome checks at 344/390/744/1280 px. The other session
 confirmed these records, but these tests were not rerun against a combined implementation.
 They do not establish hosted database retry safety or real speech/venue performance.
+The combined implementation now has its own validation in `CAPTIONS_TEST_REPORT.md`.
 
-### Migration conflicts that must be resolved before application
+### Corrected migration sequence
+
+Apply only these integrated files, in order, to the wedding Supabase project
+`szqydwvsjmaobkckrerl`, after reviewing the integration validation:
+
+1. `supabase/migrations/2026-10-14_saved_speech_scripts.sql`
+2. `supabase/migrations/2026-10-14_prepared_speech_cues.sql`
+
+These preserve PT409 and the password operator's consistent ticket ownership. Local
+PGlite tests exercised the full migration chain, repeated application, grants, RLS,
+manual/live exclusivity and stale conflicts. Hosted application remains pending.
 
 Do **not** apply the old checkout's raw migrations:
 
@@ -76,15 +93,12 @@ and logout behavior. Preserve the direct guest QR flow and public-key verificati
 
 ### Consolidated next sequence
 
-1. Integrate the saved-script/manual feature diff into a separate branch based on current
-   MCWedding; retain all hub, privacy, shutdown and PT409 changes. Preserve the original
-   uncommitted source until the integrated version is committed and verified.
-2. Prepare revised migrations and verify the whole sequence in PostgreSQL-compatible
-   tests, including repeated application, permissions, stale conflicts and password
-   operator ticket ownership. Run combined backend and four-width browser checks; get
-   a fresh read-only review of the combined result.
-3. Supply the reviewed SQL for the wedding project only, verify its application, then
-   deploy through CLI. Do not reuse the other session's earlier raw-SQL instructions.
+1. Integration checks and read-only review are complete on
+   `codex/integrate-prepared-captions`; the original source checkout is preserved.
+   See `CAPTIONS_TEST_REPORT.md` for validation evidence and local-test limits.
+2. The user applies the two corrected 14 October SQL files to the wedding project only.
+3. Verify their application, then merge and deploy through CLI with private assets.
+   Do not reuse the other session's earlier raw-SQL instructions. Keep captions disabled.
 4. Arrange a controlled caption enablement/test window. Verify Mac microphone/PC input,
    guest viewing, pause/end/stop, stream handoff, script selection, manual Show/Next/Clear,
    and no stale runs or recurring errors. Keep captions off until that window.

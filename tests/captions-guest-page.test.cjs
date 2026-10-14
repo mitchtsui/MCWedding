@@ -24,7 +24,7 @@ const env = { CAPTIONS_ENABLED: 'true', CAPTIONS_GUEST_LINKS: 'true', CAPTIONS_G
 const signer = createGuestSigner(env);
 let addresses = 0;
 
-function setup({ currentRun = RUN2 } = {}) {
+function setup({ currentRun = RUN2, cleared = false } = {}) {
   const db = { tokenValid: true, currentRun, failNext: 0, generation: { [RUN1]: 1, [RUN2]: 1 } };
   const update = (language, text, order) => ({ segmentId: 'seg-' + order, segmentOrder: order, sourceRevision: 1, captionRevision: 1, status: 'final', origin: 'ai_live', text, language });
   const reply = (status, body) => ({ ok: status < 300, status, text: async () => JSON.stringify(body) });
@@ -36,7 +36,8 @@ function setup({ currentRun = RUN2 } = {}) {
     if (url.endsWith('/rpc/caption_snapshot')) {
       if (!EPOCH[args.p_run_id]) return reply(400, { code: 'P0002' });
       return reply(200, { eventId: EVENT, runId: args.p_run_id, currentRunId: db.currentRun, modeGeneration: db.generation[args.p_run_id], channelEpoch: EPOCH[args.p_run_id],
-        messageSeq: 1, status: 'live', language: args.p_language, topic: 'caption:private', updates: [update(args.p_language, `Snapshot ${args.p_run_id === RUN1 ? 'one' : 'two'}`, 1)] });
+        messageSeq: cleared ? 2 : 1, status: 'live', language: args.p_language, topic: 'caption:private', updates: [update(args.p_language, `Snapshot ${args.p_run_id === RUN1 ? 'one' : 'two'}`, 1),
+          ...(cleared ? [{ ...update(args.p_language, '', 2), status: 'corrected', origin: 'system', clear: true }] : [])] });
     }
     throw new Error('unexpected request ' + url);
   };
@@ -84,7 +85,8 @@ function setup({ currentRun = RUN2 } = {}) {
     const deliver = (channelLanguage, event, envelope) => { for (const channel of channels) if (!channel.closed && channel.topic === signer.topicFor(EVENT, channelLanguage)) channel.handlers[event]?.({ payload: envelope }); };
     const page = { counts, buttons, listeners, location, storage, plan, topics: () => channels.filter(channel => !channel.closed).map(channel => channel.topic),
       emit: (language, event, value, ageMs = 0) => deliver(language, event, sealed(language, value, ageMs)), deliver,
-      view: () => ({ status: elements.statusLine?.dataset.status, notice: elements.statusNotice?.textContent || '', latest: elements.latestText?.textContent || '' }),
+      view: () => ({ status: elements.statusLine?.dataset.status, notice: elements.statusNotice?.textContent || '', latest: elements.latestText?.textContent || '',
+        cleared: elements.latestCaption?.dataset.cleared === 'true', latestEmptyHidden: elements.latestEmpty?.hidden, historyEmptyHidden: elements.historyEmpty?.hidden }),
       open: () => channels.filter(channel => !channel.closed).map(channel => channel.topic.split(':')[2]) };
     return page;
   }
@@ -92,6 +94,48 @@ function setup({ currentRun = RUN2 } = {}) {
 }
 const ready = page => until(() => page.view().latest.startsWith('Snapshot two'));
 const outageAfter = (ms, delay) => value => value === ms ? delay : value;
+
+test('signed Clear blanks the guest caption area and the next caption restores it', async () => {
+  const world = setup(), page = world.open(); assert.ok(await ready(page));
+  const cleared = world.batch(RUN2, 'en', 2, '', { updates: [{ segmentId: 'clear-2', segmentOrder: 2,
+    sourceRevision: 1, captionRevision: 1, status: 'corrected', origin: 'system', text: '', language: 'en', clear: true }] });
+  page.emit('en', 'caption.batch', cleared);
+  assert.ok(await until(() => page.view().cleared));
+  assert.equal(page.view().latest, '');
+  assert.equal(page.view().latestEmptyHidden, true);
+  assert.equal(page.view().historyEmptyHidden, true);
+  page.emit('en', 'caption.batch', world.batch(RUN2, 'en', 1, 'Old caption'));
+  await sleep(30); assert.equal(page.view().latest, '');
+  page.emit('en', 'caption.batch', world.batch(RUN2, 'en', 3, 'Next prepared caption'));
+  assert.ok(await until(() => page.view().latest === 'Next prepared caption'));
+  assert.equal(page.view().cleared, false);
+});
+
+test('a cleared snapshot stays blank on guest reload and language switch', async () => {
+  const world = setup({ cleared: true }), page = world.open();
+  assert.ok(await until(() => page.view().cleared));
+  assert.equal(page.view().latest, ''); assert.equal(page.view().latestEmptyHidden, true);
+  page.buttons[1].listeners.click();
+  assert.ok(await until(() => page.topics().join() === world.topic('ja') && page.view().cleared));
+  assert.equal(page.view().latest, ''); assert.equal(page.view().historyEmptyHidden, true);
+  const reloaded = world.open();
+  assert.ok(await until(() => reloaded.view().cleared));
+  assert.equal(reloaded.view().latest, '');
+});
+
+test('switching to a run without audio heartbeats cancels the previous live heartbeat timeout', async () => {
+  const world = setup({ currentRun: RUN1 }), page = world.open({ timeMap: ms => ms === 25000 ? 600 : ms });
+  assert.ok(await until(() => page.view().latest.startsWith('Snapshot one')));
+  await sleep(5100);
+  page.emit('en', 'heartbeat', world.heartbeat(RUN1, 'en', 1, 'live'));
+  await sleep(30);
+  world.db.currentRun = RUN2;
+  page.emit('en', 'caption.batch', world.batch(RUN2, 'en', 1, 'Prepared run started'));
+  assert.ok(await ready(page));
+  await sleep(650);
+  assert.equal(page.view().status, 'playing');
+  assert.equal(page.view().notice, '');
+});
 
 test('a guest reads signed captions with no account; unsigned and forged ones are ignored', async () => {
   const world = setup(), page = world.open();

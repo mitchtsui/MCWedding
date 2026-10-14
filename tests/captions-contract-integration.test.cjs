@@ -14,7 +14,9 @@ const ADMIN_ID = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
 const GUEST_ID = 'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
 const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions.sql');
 const guestLinksPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions_guest_links.sql');
-const jsonArguments = new Set(['p_settings','p_entry','p_script','p_source_segment','p_segment','p_captions','p_payloads','p_details_safe']);
+const savedScriptsPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-14_saved_speech_scripts.sql');
+const preparedSpeechPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-14_prepared_speech_cues.sql');
+const jsonArguments = new Set(['p_settings','p_entry','p_script','p_source_segment','p_segment','p_captions','p_payloads','p_details_safe','p_cues','p_translations']);
 const setFunctions = new Set(['caption_claim_http_outbox','caption_claim_outbox','caption_claim_approved_reviews']);
 
 function internalResponse(status, payload) {
@@ -53,6 +55,8 @@ async function bootstrap() {
   `);
   await db.exec(await fs.readFile(migrationPath, 'utf8'));
   await db.exec(await fs.readFile(guestLinksPath, 'utf8'));
+  await db.exec(await fs.readFile(savedScriptsPath, 'utf8'));
+  await db.exec(await fs.readFile(preparedSpeechPath, 'utf8'));
   return db;
 }
 
@@ -74,7 +78,7 @@ function rpcSql(name, args, returnsSet) {
   const values = [];
   const named = entries.map(([key, value], index) => {
     values.push(jsonArguments.has(key) ? JSON.stringify(value) : value);
-    const cast = jsonArguments.has(key) ? '::jsonb' : key === 'p_outbox_ids' ? '::uuid[]' : '';
+    const cast = jsonArguments.has(key) ? '::jsonb' : ['p_outbox_ids','p_script_ids'].includes(key) ? '::uuid[]' : '';
     return `${key} => $${index + 1}${cast}`;
   });
   return { text: `SELECT ${returnsSet ? '*' : `${name}(${named.join(',')}) AS value`} FROM ${returnsSet ? `${name}(${named.join(',')})` : ''}`.replace(/ FROM $/, ''), values };
@@ -168,12 +172,16 @@ test('browser client, API, store, real RPC SQL, Broadcast and reducer share one 
   clock += 5001;
   await assert.rejects(api.request('guestSnapshot', { ...guestLink, token: 'not-the-link', language: 'en' }), error => error.status === 403 && error.code === 'GUEST_LINK_INVALID');
 
-  const scriptShape = { title: 'Vows', content: '多謝大家今日來到。', sequence: 2, active: true };
+  const scriptShape = { title: 'Vows', content: '多謝大家今日來到。', sequence: 2 };
   const glossaryShape = { sourceTerm: 'Christy', aliases: ['芷晴'], en: 'Christy', ja: 'クリスティ', 'zh-CN': '芷晴', pronunciationNote: null, priority: 10 };
   const script = await api.request('script', { eventId: event.eventId, script: scriptShape }, 'admin-token');
   const glossary = await api.request('glossary', { eventId: event.eventId, entry: glossaryShape }, 'admin-token');
-  assert.ok(script.id && glossary.id);
-  const saved = await db.query(`SELECT s.title,s.content,s.sequence,g.source_term,g.en,g.ja,g."zh-CN",g.priority FROM caption_scripts s CROSS JOIN caption_glossary_entries g WHERE s.id=$1 AND g.id=$2`, [script.id, glossary.id]);
+  const savedScript = script.scripts[0];
+  assert.ok(savedScript.id && glossary.id);
+  assert.equal(savedScript.active,false);
+  const selectedScripts = await api.request('select-scripts',{ eventId:event.eventId,scriptIds:[savedScript.id] },'admin-token');
+  assert.equal(selectedScripts.scripts[0].active,true);
+  const saved = await db.query(`SELECT s.title,s.content,s.sequence,g.source_term,g.en,g.ja,g."zh-CN",g.priority FROM caption_scripts s CROSS JOIN caption_glossary_entries g WHERE s.id=$1 AND g.id=$2`, [savedScript.id, glossary.id]);
   assert.deepEqual(saved.rows[0], { title:'Vows',content:scriptShape.content,sequence:2,source_term:'Christy',en:'Christy',ja:'クリスティ','zh-CN':'芷晴',priority:10 });
 
   const empty = await api.request('guestSnapshot', { ...guestLink, language: 'en' });

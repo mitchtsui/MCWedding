@@ -12,6 +12,9 @@ const HUB_PASSWORD = 'door';
 const HUB_SECRET = 'abcdef0123456789abcdef0123456789abcdef0123456789';
 const EVENT_ID = '11111111-1111-4111-8111-111111111111';
 const RUN_ID = '22222222-2222-4222-8222-222222222222';
+const SCRIPT_ID = '33333333-3333-4333-8333-333333333333';
+const CUE_ID = '44444444-4444-4444-8444-444444444444';
+const OPERATION_ID = '55555555-5555-4555-8555-555555555555';
 const BASE_ENV = {
   CAPTIONS_ENABLED: 'true',
   CAPTIONS_ALLOWED_ORIGINS: 'https://wedding.test',
@@ -70,7 +73,17 @@ function serviceFetch(calls = []) {
       caption_manual_publish: { run_id: RUN_ID, delivery_outbox_ids: [] },
       caption_review_suggestion: { review_id: 'review-1' },
       caption_upsert_glossary: { id: 'glossary-1' },
-      caption_upsert_script: { id: 'script-1' },
+      caption_list_scripts: { scripts: [] },
+      caption_upsert_script: { scripts: [{ id: SCRIPT_ID, title: 'Speech', content: 'Welcome', sequence: 0, active: false, revision: 1 }] },
+      caption_select_scripts: { scripts: [] },
+      caption_prepared_context: { script_id: SCRIPT_ID, script_revision: 1, content: 'Welcome.', glossary: [], prepared: { status: 'empty', cues: [] } },
+      caption_sync_prepared_cues: { status: 'ready', cues: [] },
+      caption_update_prepared_cue: { status: 'ready', cues: [] },
+      caption_review_prepared_cue: { status: 'ready', cues: [] },
+      caption_select_prepared_script: { run_id: RUN_ID, script_id: SCRIPT_ID, script_revision: 1, state_revision: 1, cursor: -1 },
+      caption_get_prepared_run: { run_id: RUN_ID, script_id: SCRIPT_ID, script_revision: 1, state_revision: 1, cursor: -1 },
+      caption_publish_prepared_cue: { run_id: RUN_ID, script_id: SCRIPT_ID, script_revision: 1, state_revision: 2, cursor: 0, delivery_outbox_ids: [] },
+      caption_clear_prepared: { run_id: RUN_ID, script_id: SCRIPT_ID, script_revision: 1, state_revision: 3, cursor: 0, delivery_outbox_ids: [] },
       caption_recover_pending: { final_sources: [] },
     };
     if (!(name in bodies)) throw new Error(`unexpected ${url}`);
@@ -185,7 +198,21 @@ test('password session grants caption actions, snapshots and uplink tickets only
     { action: 'manual', runId: RUN_ID, language: 'en', text: 'Reviewed caption' },
     { action: 'review', reviewId: 'review-1', decision: 'approve' },
     { action: 'glossary', eventId: EVENT_ID, entry: { sourceTerm: 'Chambolle' } },
+    { action: 'scripts', eventId: EVENT_ID },
     { action: 'script', eventId: EVENT_ID, script: { title: 'Speech', content: 'Welcome' } },
+    { action: 'select-scripts', eventId: EVENT_ID, scriptIds: [SCRIPT_ID] },
+    { action: 'prepared-cues', eventId: EVENT_ID, scriptId: SCRIPT_ID },
+    { action: 'prepare-script', eventId: EVENT_ID, scriptId: SCRIPT_ID },
+    { action: 'prepared-cue', eventId: EVENT_ID, cue: { id: CUE_ID, revision: 1, en: 'English', ja: 'Japanese', 'zh-CN': 'Chinese' } },
+    { action: 'review-prepared-cue', eventId: EVENT_ID, cueId: CUE_ID, revision: 1 },
+    { action: 'select-prepared-script', runId: RUN_ID, scriptId: SCRIPT_ID },
+    { action: 'prepared-run', runId: RUN_ID },
+    { action: 'next-prepared', runId: RUN_ID, operationId: OPERATION_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
+    { action: 'publish-prepared-cue', runId: RUN_ID, operationId: OPERATION_ID, cueId: CUE_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
+    { action: 'clear-prepared', runId: RUN_ID, operationId: OPERATION_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
     { action: 'health' },
     { action: 'snapshot', eventId: EVENT_ID, runId: RUN_ID, language: 'en' },
   ];
@@ -193,7 +220,10 @@ test('password session grants caption actions, snapshots and uplink tickets only
   assert.deepEqual(calls.map(value => value.url.split('/').pop()), ['caption_health', 'caption_create_event', 'caption_start_run',
     'caption_transition_run', 'caption_transition_run', 'caption_transition_run', 'caption_recover_pending', 'caption_transition_run',
     'caption_issue_uplink_ticket', 'caption_create_invite', 'caption_manual_publish', 'caption_review_suggestion',
-    'caption_upsert_glossary', 'caption_upsert_script', 'caption_health', 'caption_snapshot']);
+    'caption_upsert_glossary', 'caption_list_scripts', 'caption_list_scripts', 'caption_upsert_script', 'caption_select_scripts',
+    'caption_prepared_context', 'caption_prepared_context', 'caption_sync_prepared_cues', 'caption_update_prepared_cue',
+    'caption_review_prepared_cue', 'caption_select_prepared_script', 'caption_get_prepared_run', 'caption_publish_prepared_cue',
+    'caption_publish_prepared_cue', 'caption_clear_prepared', 'caption_health', 'caption_snapshot']);
   assert(calls.every(value => value.options.headers.Authorization === 'Bearer server-secret'));
   assert.equal(calls.some(value => value.url.includes('/auth/v1/user') || value.url.includes('/rpc/is_admin')), false);
   const unknown = await call(handler, { method: 'POST', cookie, body: { action: 'guestAdmin' } });
@@ -243,6 +273,43 @@ test('caption password endpoints and actions require the independent hub session
     body: { action: 'health' } });
   assert.equal(bearer.status, 200, 'an explicit existing bearer session wins over a leftover password cookie');
   assert.deepEqual(bearerCalls.map(value => value.url.split('/').pop()), ['user', 'is_admin', 'caption_health']);
+});
+
+test('every saved-script and prepared-manual action requires both live hub and operator sessions', async () => {
+  let clock = Date.now();
+  const calls = [], handler = createHandler({ env: BASE_ENV, now: () => clock, fetchImpl: serviceFetch(calls) });
+  const hub = hubCookie(() => clock), signedIn = await login(handler, PASSWORD, { cookie: hub });
+  const operator = cookiePair(signedIn.headers['Set-Cookie']);
+  const requests = [
+    { action: 'scripts', eventId: EVENT_ID },
+    { action: 'script', eventId: EVENT_ID, script: { title: 'Speech', content: 'Welcome' } },
+    { action: 'select-scripts', eventId: EVENT_ID, scriptIds: [] },
+    { action: 'prepared-cues', eventId: EVENT_ID, scriptId: SCRIPT_ID },
+    { action: 'prepare-script', eventId: EVENT_ID, scriptId: SCRIPT_ID },
+    { action: 'prepared-cue', eventId: EVENT_ID, cue: { id: CUE_ID, revision: 1, en: 'E', ja: 'J', 'zh-CN': 'C' } },
+    { action: 'review-prepared-cue', eventId: EVENT_ID, cueId: CUE_ID, revision: 1 },
+    { action: 'select-prepared-script', runId: RUN_ID, scriptId: SCRIPT_ID },
+    { action: 'prepared-run', runId: RUN_ID },
+    { action: 'next-prepared', runId: RUN_ID, operationId: OPERATION_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
+    { action: 'publish-prepared-cue', runId: RUN_ID, operationId: OPERATION_ID, cueId: CUE_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
+    { action: 'clear-prepared', runId: RUN_ID, operationId: OPERATION_ID, expectedScriptId: SCRIPT_ID,
+      expectedScriptRevision: 1, expectedCursor: -1, expectedStateRevision: 1 },
+  ];
+  for (const body of requests) {
+    const missingHub = await call(handler, { method: 'POST', cookie: operator, body });
+    assert.equal(missingHub.status, 401, `${body.action} without hub`);
+    assert.equal(missingHub.body.error.code, 'HUB_UNAUTHENTICATED');
+  }
+  clock += SESSION_TTL_MS;
+  const renewedHub = hubCookie(() => clock);
+  for (const body of requests) {
+    const expiredOperator = await call(handler, { method: 'POST', cookie: both(renewedHub, operator), body });
+    assert.equal(expiredOperator.status, 401, `${body.action} with expired operator`);
+    assert.equal(expiredOperator.body.error.code, 'UNAUTHENTICATED');
+  }
+  assert.equal(calls.length, 0, 'authorization failures must not reach Supabase or the translation provider');
 });
 
 test('three-language snapshot polling is limited per password session instead of the shared database actor', async () => {

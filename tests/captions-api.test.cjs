@@ -104,6 +104,12 @@ async function post(fetchImpl, body) {
   return { status: res.statusCode, body: JSON.parse(res.body) };
 }
 
+async function postWithEnv(env, fetchImpl, body) {
+  const res = mockRes();
+  await createHandler({ env, fetchImpl })(mockReq({ method: 'POST', body }), res);
+  return { status: res.statusCode, body: JSON.parse(res.body) };
+}
+
 test('a run that refuses the action answers 409 RUN_NOT_OPEN, unlike throttling or a missing run', async () => {
   const refused = { status: 400, body: { code: '22023', message: 'invalid run transition' } };
   const stopped = await post(adminFetch({ '/rpc/caption_transition_run': refused }), { action: 'stop', runId: RUN_ID });
@@ -120,10 +126,11 @@ test('a run that refuses the action answers 409 RUN_NOT_OPEN, unlike throttling 
 test('start reveals the run that is already open instead of only refusing', async () => {
   const conflict = { status: 409, body: { code: '23505', message: 'event already has an open run' } }, urls = [];
   const revealed = await post(adminFetch({ '/rpc/caption_start_run': conflict,
+    '/rpc/caption_run_state': { status: 200, body: { mode:'live',state:'live' } },
     '/rest/v1/caption_events?': { status: 200, body: [{ current_run_id: RUN_ID }] } }, urls), { action: 'start', eventId: EVENT_ID });
   assert.equal(revealed.status, 200);
-  assert.deepEqual(revealed.body.data, { eventId: EVENT_ID, runId: RUN_ID, alreadyOpen: true });
-  assert.equal(urls.at(-1), `https://test.supabase.co/rest/v1/caption_events?id=eq.${EVENT_ID}&select=current_run_id`);
+  assert.deepEqual(revealed.body.data, { eventId: EVENT_ID, runId: RUN_ID, mode:'live',state:'live',alreadyOpen: true });
+  assert(urls.some(url=>url.endsWith('/rpc/caption_run_state')));
   for (const lookup of [{ status: 200, body: [] }, { status: 200, body: [{ current_run_id: null }] }, { status: 503, body: {} }]) {
     const refused = await post(adminFetch({ '/rpc/caption_start_run': conflict, '/rest/v1/caption_events?': lookup }), { action: 'start', eventId: EVENT_ID });
     assert.equal(refused.status, 409); assert.equal(refused.body.error.code, 'CONFLICT');
@@ -140,6 +147,153 @@ test('a normal start is unchanged and a non-UUID event id never reaches the look
     { action: 'start', eventId: `${EVENT_ID}&select=*` });
   assert.equal(injected.status, 409); assert.equal(injected.body.error.code, 'CONFLICT');
   assert.equal(urls.some(url => url.includes('/rest/v1/caption_events')), false);
+});
+
+test('saved script actions require admin auth, preserve the response contract and sanitize writes', async () => {
+  const denied = await post(fetchFor({ admin:false }),{ action:'scripts',eventId:EVENT_ID });
+  assert.equal(denied.status,403);
+  const calls = [];
+  const fetchImpl = async (url,options = {}) => {
+    if (url.endsWith('/auth/v1/user')) return { ok:true,status:200,text:async()=>JSON.stringify({id:'admin'}) };
+    if (url.endsWith('/rpc/is_admin')) return { ok:true,status:200,text:async()=> 'true' };
+    const name = url.split('/').pop(), body = JSON.parse(options.body || '{}');
+    calls.push({ name,body });
+    if (name === 'caption_list_scripts') return { ok:true,status:200,text:async()=>JSON.stringify({scripts:[]}) };
+    if (name === 'caption_upsert_script') return { ok:true,status:200,text:async()=>JSON.stringify({scripts:[{
+      id:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',title:'Vows',content:'Words',sequence:3,active:false,revision:1
+    }]}) };
+    if (name === 'caption_select_scripts') return { ok:true,status:200,text:async()=>JSON.stringify({scripts:[]}) };
+    throw new Error(`unexpected ${url}`);
+  };
+  const saved = await post(fetchImpl,{ action:'script',eventId:EVENT_ID,
+    script:{ title:' Vows ',content:' Words ',sequence:3,active:true } });
+  assert.equal(saved.status,200);
+  assert.deepEqual(saved.body.data.scripts.map(script=>({active:script.active,revision:script.revision})),[{active:false,revision:1}]);
+  assert.deepEqual(calls.map(call=>call.name),['caption_list_scripts','caption_upsert_script']);
+  assert.deepEqual(calls[1].body.p_script,{ title:'Vows',content:'Words',sequence:3 });
+  const selected = await post(fetchImpl,{ action:'select-scripts',eventId:EVENT_ID,scriptIds:[] });
+  assert.equal(selected.status,200);
+  assert.deepEqual(calls.at(-1).body.p_script_ids,[]);
+});
+
+test('saved scripts fail safely before their migration and report the formatted reference limit', async () => {
+  const urls = [];
+  const missing = await post(adminFetch({ '/rpc/caption_list_scripts':{ status:404,body:{code:'PGRST202'} } },urls),
+    { action:'script',eventId:EVENT_ID,script:{title:'Vows',content:'Words',sequence:0} });
+  assert.equal(missing.status,503);
+  assert.equal(missing.body.error.code,'CAPTIONS_MIGRATION_REQUIRED');
+  assert.equal(urls.some(url=>url.includes('caption_upsert_script')),false,'the legacy write must not run before migration');
+  const tooLarge = await post(adminFetch({ '/rpc/caption_select_scripts':{ status:400,body:{code:'22001'} } }),
+    { action:'select-scripts',eventId:EVENT_ID,scriptIds:['aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'] });
+  assert.equal(tooLarge.status,400);
+  assert.equal(tooLarge.body.error.code,'SCRIPT_REFERENCE_TOO_LARGE');
+  assert.match(tooLarge.body.error.message,/12,000-character/);
+});
+
+test('saved script request validation rejects oversized content, duplicate IDs and stale revision shapes', async () => {
+  const fetchImpl = fetchFor({ admin:true });
+  const oversized = await post(fetchImpl,{ action:'script',eventId:EVENT_ID,
+    script:{title:'Long',content:'x'.repeat(12001),sequence:0} });
+  assert.equal(oversized.status,400);
+  assert.match(oversized.body.error.message,/1-12000/);
+  const id = 'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa';
+  const duplicates = await post(fetchImpl,{ action:'select-scripts',eventId:EVENT_ID,scriptIds:[id,id] });
+  assert.equal(duplicates.status,400);
+  const revision = await post(fetchImpl,{ action:'script',eventId:EVENT_ID,
+    script:{id,title:'Edit',content:'Words',sequence:0,revision:0} });
+  assert.equal(revision.status,400);
+});
+
+test('prepared speech translates exactly one pending cue in all locales and stores only a complete result', async () => {
+  const scriptId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', cueId='bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb';
+  const calls=[];
+  const fetchImpl=async (url,options={})=>{
+    if (url.endsWith('/auth/v1/user')) return {ok:true,status:200,text:async()=>JSON.stringify({id:'admin'})};
+    if (url.endsWith('/rpc/is_admin')) return {ok:true,status:200,text:async()=>'true'};
+    if (url.startsWith('https://api.openai.com/')) {
+      const request=JSON.parse(options.body); calls.push({name:'provider',request});
+      return {ok:true,status:200,json:async()=>({status:'completed',output_text:`translated-${calls.length}`})};
+    }
+    const name=url.split('/').pop(),args=JSON.parse(options.body||'{}'); calls.push({name,args});
+    if (name==='caption_prepared_context') return {ok:true,status:200,text:async()=>JSON.stringify({
+      script_id:scriptId,script_revision:1,content:'First sentence. Second sentence.',glossary:[],prepared:{status:'empty',cues:[]}
+    })};
+    if (name==='caption_sync_prepared_cues') return {ok:true,status:200,text:async()=>JSON.stringify({status:'preparing',cues:[
+      {id:cueId,sequence:0,source_text:'First sentence.',status:'pending',revision:1},
+      {id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',sequence:1,source_text:'Second sentence.',status:'pending',revision:1}
+    ]})};
+    if (name==='caption_store_prepared_translation') return {ok:true,status:200,text:async()=>JSON.stringify({status:'preparing',cues:[
+      {id:cueId,sequence:0,source_text:'First sentence.',status:'review_pending',revision:2},
+      {id:'cccccccc-cccc-4ccc-8ccc-cccccccccccc',sequence:1,source_text:'Second sentence.',status:'pending',revision:1}
+    ]})};
+    throw new Error(`unexpected ${url}`);
+  };
+  const reply=await postWithEnv({...baseEnv,OPENAI_API_KEY:'test-key'},fetchImpl,
+    {action:'prepare-script',eventId:EVENT_ID,scriptId});
+  assert.equal(reply.status,200); assert.equal(reply.body.data.done,false);
+  assert.equal(calls.filter(call=>call.name==='provider').length,3,'one cue makes exactly three locale requests');
+  assert.deepEqual(calls.find(call=>call.name==='caption_sync_prepared_cues').args.p_cues,['First sentence.','Second sentence.']);
+  const stored=calls.find(call=>call.name==='caption_store_prepared_translation').args;
+  assert.deepEqual(Object.keys(stored.p_translations).sort(),['en','ja','zh-CN']);
+  assert(Object.values(stored.p_translations).every(Boolean));
+
+  const failedCalls=[];
+  const failing=async (url,options={})=>{
+    if (url.endsWith('/auth/v1/user')) return {ok:true,status:200,text:async()=>JSON.stringify({id:'admin'})};
+    if (url.endsWith('/rpc/is_admin')) return {ok:true,status:200,text:async()=>'true'};
+    if (url.startsWith('https://api.openai.com/')) {
+      const language=/TARGET_LANGUAGE: ([^\n]+)/.exec(JSON.parse(options.body).input)?.[1];
+      failedCalls.push(`provider:${language}`);
+      return language==='ja' ? {ok:false,status:500,json:async()=>({})}
+        : {ok:true,status:200,json:async()=>({status:'completed',output_text:'ok'})};
+    }
+    const name=url.split('/').pop(); failedCalls.push(name);
+    if (name==='caption_prepared_context') return {ok:true,status:200,text:async()=>JSON.stringify({
+      script_id:scriptId,script_revision:1,content:'First sentence.',glossary:[],prepared:{status:'empty',cues:[]}
+    })};
+    if (name==='caption_sync_prepared_cues') return {ok:true,status:200,text:async()=>JSON.stringify({status:'preparing',cues:[
+      {id:cueId,sequence:0,source_text:'First sentence.',status:'pending',revision:1}
+    ]})};
+    throw new Error(`unexpected ${url}`);
+  };
+  const failed=await postWithEnv({...baseEnv,OPENAI_API_KEY:'test-key'},failing,
+    {action:'prepare-script',eventId:EVENT_ID,scriptId});
+  assert.equal(failed.status,502); assert.equal(failed.body.error.code,'PREPARATION_FAILED');
+  assert.equal(failedCalls.includes('caption_store_prepared_translation'),false,'partial provider output is never stored');
+});
+
+test('prepared manual actions require a complete optimistic token and never call the translation provider', async () => {
+  const scriptId='aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa', operationId='dddddddd-dddd-4ddd-8ddd-dddddddddddd';
+  const calls=[];
+  const fetchImpl=async (url,options={})=>{
+    assert.equal(url.startsWith('https://api.openai.com/'),false,'Next must not make a paid provider call');
+    if (url.endsWith('/auth/v1/user')) return {ok:true,status:200,text:async()=>JSON.stringify({id:'admin'})};
+    if (url.endsWith('/rpc/is_admin')) return {ok:true,status:200,text:async()=>'true'};
+    const name=url.split('/').pop(),args=JSON.parse(options.body||'{}'); calls.push({name,args});
+    if (name==='caption_publish_prepared_cue') return {ok:true,status:200,text:async()=>JSON.stringify({
+      run_id:RUN_ID,script_id:scriptId,script_revision:1,state_revision:8,cursor:0,current_cue_id:null,
+      delivery_outbox_ids:[]
+    })};
+    throw new Error(`unexpected ${url}`);
+  };
+  const input={action:'next-prepared',runId:RUN_ID,operationId,expectedScriptId:scriptId,
+    expectedScriptRevision:1,expectedCursor:-1,expectedStateRevision:7};
+  const reply=await post(fetchImpl,input);
+  assert.equal(reply.status,200); assert.equal(reply.body.data.stateRevision,8);
+  assert.deepEqual(calls.find(call=>call.name==='caption_publish_prepared_cue').args,{
+    p_run_id:RUN_ID,p_operation_id:operationId,p_cue_id:null,p_expected_script_id:scriptId,
+    p_expected_cursor:-1,p_script_revision:1,p_expected_state_revision:7
+  });
+  const invalid=await post(fetchImpl,{...input,operationId:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee',expectedStateRevision:undefined});
+  assert.equal(invalid.status,400); assert.equal(invalid.body.error.code,'INVALID_REQUEST');
+  assert.equal(calls.filter(call=>call.name==='caption_publish_prepared_cue').length,1);
+});
+
+test('prepared speech reports a required migration before use', async () => {
+  const missing=await post(adminFetch({'/rpc/caption_prepared_context':{status:404,body:{code:'PGRST202'}}}),{
+    action:'prepared-cues',eventId:EVENT_ID,scriptId:'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'
+  });
+  assert.equal(missing.status,503); assert.equal(missing.body.error.code,'CAPTIONS_MIGRATION_REQUIRED');
 });
 
 test('End reports recognized final sources still missing a target translation but excludes manual target-only captions', async () => {

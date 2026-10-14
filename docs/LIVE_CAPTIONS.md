@@ -2,6 +2,14 @@
 
 ## Scope and current status
 
+**14 October 2026:** captions are intentionally disabled after the PostgREST retry
+incident. The database now uses nonretrying PT409 caption conflicts and the production
+application preserves HTTP 409 handling. The hub remains available. See
+`CODEX_HANDOVER.md` for the consolidated release state and `WEDDING_PARTY_HUB.md` for
+incident evidence. The script-library/manual-subtitle integration described below is
+validated locally; see `CAPTIONS_TEST_REPORT.md`. Hosted SQL application and deployment
+remain pending. Do not treat this document as approval to activate captions.
+
 Production release authorized on 13 October 2026: the user requested merging to
 main and making the caption service, including PC playback audio, live on Vercel.
 The release combines the caption branch with the latest published wedding rundown.
@@ -74,9 +82,44 @@ Build artifacts and the generated `vendor/` bundle are ignored by Git.
 
 ## Access
 
-`CAPTIONS_ENABLED=true` switches captions on for a deployment. The user authorized
-production activation on 13 October; the remaining acceptance gaps below still
-apply. The operator signs in with the existing admin magic link.
+`CAPTIONS_ENABLED=true` switches captions on for a deployment. Keep it false during
+the current integration and migration rollout. The separate wedding-party hub uses
+its shared entrance password plus a caption-operator password; the standalone admin
+route retains its existing magic-link authentication. New preparation and playback
+actions must work through both existing authorization paths without weakening them.
+
+### Saved speech library and prepared manual subtitles
+
+Prepare or reopen an event before starting audio. Save each speech with its own title
+and programme sequence, edit the existing entry for corrections, and select the current
+speech references explicitly. A newly saved script is not selected automatically;
+choose No script for unscripted portions. Selection updates guide later recognized
+segments and do not rewrite prior captions or force a speaker to follow the script.
+
+Prepare translations explicitly, then review English, Japanese and Simplified Chinese
+for every block before marking it reviewed. Saving a speech does not call the translation
+provider. Preparation does; the current tests use synthetic providers. Editing the
+source speech invalidates its earlier prepared version. No real speeches or reviewed
+translations have yet been supplied.
+
+For the manual backup, end the automatic audio run first, select a prepared speech,
+and use Show for a specific block, Next to advance, or Clear to blank the guest display.
+These actions publish stored reviewed translations without a translation-provider call.
+Clear also persists for guests who reload. This backup still needs a working caption
+service and guest internet; it cannot translate unscripted ad-libs. Match the displayed
+block to the words actually spoken, and clear it when the speaker goes off-script.
+
+The integrated feature requires the corrected migrations, in order:
+
+1. `supabase/migrations/2026-10-14_saved_speech_scripts.sql`
+2. `supabase/migrations/2026-10-14_prepared_speech_cues.sql`
+
+Apply only after combined validation and review, to the wedding database. The old
+checkout's 13 October versions are superseded and must not be applied. Keep captions
+disabled and script editing paused between SQL application and matching application
+deployment. Preserve the current PT409 conflicts, consistent service-role publisher
+identity, and manual-mode rejection of audio tickets. Use the CLI release path with
+the private VIP attachments; automatic Git deployment is disabled.
 
 ### Guests: scan a QR code, no account (decided 2 October)
 

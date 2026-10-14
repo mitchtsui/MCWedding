@@ -205,7 +205,8 @@
     $('latestCaption').dataset.segmentId = latest ? String(latest.id) : '';
     if (latest) $('latestCaption').setAttribute('data-segment-id', String(latest.id));
     else $('latestCaption').removeAttribute('data-segment-id');
-    $('latestEmpty').hidden = Boolean(latest);
+    $('latestEmpty').hidden = Boolean(latest) || Boolean(snapshot.cleared);
+    $('latestCaption').dataset.cleared = String(Boolean(snapshot.cleared));
     $('sampleLink').hidden = Boolean(preview.enabled);
 
     const history = $('historyList');
@@ -219,7 +220,7 @@
       item.append(text);
       history.append(item);
     });
-    $('historyEmpty').hidden = segments.length > 1;
+    $('historyEmpty').hidden = segments.length > 1 || Boolean(snapshot.cleared);
     restoreReadingAnchor(anchor);
   }
 
@@ -344,7 +345,7 @@
     const noticeFromBatch = value => ['publisher.expired', 'disconnected'].includes(value) ? 'The live caption connection paused. Waiting for the operator to reconnect.' :
       value === 'stream.gap' ? 'Some captions were delayed. Catching up.' : '';
     const renderStore = value => {
-      snapshot = { status: statusFromBatch(value?.status), revision: value?.messageSeq || 0,
+      snapshot = { status: statusFromBatch(value?.status), revision: value?.messageSeq || 0, cleared: store.isCleared(language),
         segments: store.segments(language).map(item => ({ id: item.segmentId, order: item.segmentOrder, text: { [language]: item.text } })), notice: noticeFromBatch(value?.status) };
       renderStatus(); renderSegments({ preserveAnchor: isReadingHistory() });
       if (['paused', 'ended'].includes(snapshot.status)) watchHeartbeat(snapshot.status);
@@ -352,7 +353,7 @@
     const remember = () => { try { localStorage.setItem(savedKey, JSON.stringify({ eventId, runId, token: guestToken })); } catch (_) { /* A fresh scan restores access. */ } };
     function adoptRun(value) {
       if (!value.runId || value.runId === runId) return;
-      runId = value.runId; lastHeartbeatAt = 0;
+      runId = value.runId; lastHeartbeatAt = 0; clearTimeout(heartbeatTimer); heartbeatTimer = null;
       store = new window.CaptionsLive.CaptionStore(() => requestResync()); store.eventId = eventId;
       remember();
     }

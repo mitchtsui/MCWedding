@@ -61,13 +61,29 @@ test('hub operator mode stays captions-only and reports session and invite state
   assert.match(admin, /setTimeout\(poll, 2000\)/,
     'three language polls stay below the shared 120 requests per minute limit');
   assert.doesNotMatch(admin, /setTimeout\(poll, 1000\)/);
-  assert.match(admin, /\$\('hub-logout'\)\.disabled = \['connecting', 'sharing'\]\.includes\(state\) \|\| Boolean\(pendingRunId\)/,
+  assert.match(admin, /\$\('hub-logout'\)\.disabled = manualStartUnknown \|\| \['connecting', 'sharing'\]\.includes\(state\) \|\| Boolean\(pendingRunId\)/,
     'logout is disabled while a lifecycle transition can still create or change a run');
-  assert.match(admin, /if \(\['connecting', 'sharing'\]\.includes\(phase\) \|\| pendingRunId\)/,
+  assert.match(admin, /if \(manualStartUnknown \|\| \['connecting', 'sharing'\]\.includes\(phase\) \|\| pendingRunId\)/,
     'the logout handler also guards programmatic activation during a transition');
-  assert.match(admin, /emitHubState\(Boolean\(runId \|\| pendingRunId \|\| \['connecting', 'sharing'\]\.includes\(state\)\)\)/,
+  assert.match(admin, /emitHubState\(Boolean\(runId \|\| pendingRunId \|\| manualStartUnknown\)\); return;/,
+    'a restored hub awaiting the caption password keeps an unresolved manual start active for the parent');
+  assert.match(admin, /emitHubState\(Boolean\(runId \|\| pendingRunId \|\| manualStartUnknown \|\| \['connecting', 'sharing'\]\.includes\(state\)\)\)/,
     'the parent locks its shared logout before a pending lifecycle action allocates ids');
-  assert.doesNotMatch(admin, /localStorage|sessionStorage/);
+  assert.match(admin, /preparedBusy = true; buttons\(runId \? 'manual' : 'connecting'\)/,
+    'initial prepared-run allocation enters a navigation-locking phase before the request');
+  assert.match(admin, /manualStartUnknown = true; buttons\('connecting'\)/,
+    'a lost prepared-start reply stays locked until the operator retries and recovers the open run');
+  assert.match(admin, /buttons\(runId \? \(runMode === 'manual' \? 'manual' : 'detached'\) : 'ready'\)/,
+    'a restored prepared run stays in manual mode and never exposes live-audio reconnect');
+  assert.match(admin, /if \(runId && runMode === 'manual'\) \{ status\('Prepared captions are open\./,
+    'programmatic Start cannot convert a prepared run into a live-audio run');
+  assert.match(admin, /localStorage\.setItem\(key, eventId\)/,
+    'only the last event id is remembered for hub operator reload recovery');
+  assert.match(admin, /if \(hub\) operatorUserId = 'hub-operator'/,
+    'the password-cookie operator uses a separate event-restore namespace');
+  assert.doesNotMatch(admin, /(?:localStorage|sessionStorage)\.setItem\([^\n]*(?:password|token|access)/i,
+    'passwords and session tokens are never written to browser storage');
+  assert.doesNotMatch(admin, /sessionStorage/);
 });
 
 test('hub reauthentication retries transient status and preflight failures while preserving a held run', async () => {

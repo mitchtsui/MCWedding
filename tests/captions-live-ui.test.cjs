@@ -141,5 +141,6 @@ test('live pages remain opt-in and use isolated auth plus text-only rendering', 
   assert.match(admin, /drainStream\('pause'\)/);
   assert.match(admin, /mode: 'live'/);
   assert.match(admin, /expiresAt: expiresAt\.toISOString\(\), maxUses/);
-  assert.match(admin, /script = \{ title:.*content:.*sequence:.*active: true \}/);
+  // Saved scripts no longer activate on save; API/Postgres and browser workflow
+  // tests cover inactive creation and the separate selection action.
 });

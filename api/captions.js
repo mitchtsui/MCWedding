@@ -4,13 +4,17 @@ const { createHash } = require('node:crypto');
 const { CaptionStore, CaptionStoreError } = require('../lib/captions/store.cjs');
 const { CaptionDelivery } = require('../lib/captions/delivery.cjs');
 const { createGuestSigner, guestLinksReady } = require('../lib/captions/guest-link.cjs');
+const { OpenAITranslationClient } = require('../lib/captions/translation.cjs');
+const { splitSpeech, translateCue, PreparedSpeechError } = require('../lib/captions/prepared-speech.cjs');
 const { createOperatorAuth, assertSameOrigin } = require('../lib/captions/operator-auth.cjs');
 const { HubAuthError, verifyHubSession } = require('../lib/hub-auth.cjs');
 const { MAX_BODY_BYTES, requestId, bearerToken, assertOrigin, parseBody, rateLimit, guestRateLimit, takeGuestFailureSlot, returnGuestFailureSlot,
-  sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
+  scriptInput, scriptSelection, preparedRevision, preparedCursor, preparedTranslations, sendJson, sendError, allowedOrigins } = require('../lib/captions/http.cjs');
 
 const LANGUAGES = new Set(['en', 'ja', 'zh-CN']);
-const ADMIN_ACTIONS = new Set(['preflight','createEvent','start','pause','resume','end','stop','ticket','invite','manual','review','glossary','script','health']);
+const ADMIN_ACTIONS = new Set(['preflight','createEvent','start','pause','resume','end','stop','ticket','invite','manual','review','glossary',
+  'scripts','script','select-scripts','prepared-cues','prepare-script','prepared-cue','review-prepared-cue',
+  'select-prepared-script','prepared-run','next-prepared','publish-prepared-cue','clear-prepared','health']);
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function envEnabled(env) { return env.CAPTIONS_ENABLED === 'true'; }
@@ -137,6 +141,33 @@ async function guestSnapshot({ store, signer, request, reads, valid, budget, now
 function runNotOpen(error) {
   if (!(error instanceof CaptionStoreError) || error.details !== '22023') return error;
   return new CaptionStoreError('RUN_NOT_OPEN', 'Caption run is not open for that action', 409, '22023');
+}
+
+function scriptFeatureError(error) {
+  if (!(error instanceof CaptionStoreError)) return error;
+  if (error.details === 'PGRST202') {
+    return new CaptionStoreError('CAPTIONS_MIGRATION_REQUIRED', 'Saved speech scripts need the latest database migration', 503);
+  }
+  if (error.details === '22001') {
+    return new CaptionStoreError('SCRIPT_REFERENCE_TOO_LARGE', 'Selected scripts exceed the 12,000-character reference limit', 400);
+  }
+  return error;
+}
+
+function preparedFeatureError(error) {
+  const migration = scriptFeatureError(error);
+  if (migration !== error) return migration;
+  if (error instanceof PreparedSpeechError) {
+    const status = error.code === 'INVALID_REQUEST' ? 400 : error.code === 'PREPARATION_CANCELLED' ? 409 : 502;
+    return new CaptionStoreError(error.code, error.message, status);
+  }
+  return error;
+}
+
+function preparedTranslator(env, fetchImpl) {
+  const apiKey = String(env.OPENAI_API_KEY || '').trim();
+  if (!apiKey) throw new CaptionStoreError('PREPARATION_DISABLED', 'Prepared translation is not configured', 503);
+  return new OpenAITranslationClient({ apiKey, model: env.OPENAI_TRANSLATION_MODEL || 'gpt-4.1-mini', fetchImpl });
 }
 
 function queryBody(req) {
@@ -302,7 +333,9 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
             const runId = error instanceof CaptionStoreError && error.details === '23505'
               ? await store.getEventCurrentRun({ eventId: input.eventId }).catch(() => null) : null;
             if (!runId) throw error;
-            data = { eventId: input.eventId, runId, alreadyOpen: true };
+            const existing = await store.getRunState({ runId }).catch(() => null);
+            data = { eventId: input.eventId, runId, mode: existing?.mode ?? null,
+              state: existing?.state ?? existing?.status ?? null, alreadyOpen: true };
           }
           break;
         case 'pause': case 'resume': case 'end': case 'stop': {
@@ -363,9 +396,91 @@ function createHandler({ env = process.env, fetchImpl = global.fetch, now = Date
         case 'glossary':
           data = await store.upsertGlossary({ eventId: input.eventId, entry: input.entry && { ...input.entry, sourceTerm: input.entry.sourceTerm || input.entry.text } });
           break;
-        case 'script':
-          data = await store.upsertScript({ eventId: input.eventId, script: input.script });
+        case 'scripts':
+          data = await store.listScripts({ eventId: requiredUuid(input.eventId, 'eventId') }).catch(error => { throw scriptFeatureError(error); });
           break;
+        case 'script': {
+          const eventId = requiredUuid(input.eventId, 'eventId');
+          // Guard before the write: an older database has caption_upsert_script but
+          // lacks the saved/selected split and could otherwise activate a new script.
+          await store.listScripts({ eventId }).catch(error => { throw scriptFeatureError(error); });
+          data = await store.upsertScript({ eventId, script: scriptInput(input.script) }).catch(error => { throw scriptFeatureError(error); });
+          break;
+        }
+        case 'select-scripts':
+          data = await store.selectScripts({ eventId: requiredUuid(input.eventId, 'eventId'),
+            scriptIds: scriptSelection(input.scriptIds) }).catch(error => { throw scriptFeatureError(error); });
+          break;
+        case 'prepared-cues': {
+          const context = await store.getPreparedContext({ eventId: requiredUuid(input.eventId, 'eventId'),
+            scriptId: requiredUuid(input.scriptId, 'scriptId') }).catch(error => { throw preparedFeatureError(error); });
+          data = context.prepared;
+          break;
+        }
+        case 'prepare-script': {
+          const eventId = requiredUuid(input.eventId, 'eventId'), scriptId = requiredUuid(input.scriptId, 'scriptId');
+          const context = await store.getPreparedContext({ eventId, scriptId }).catch(error => { throw preparedFeatureError(error); });
+          let blocks;
+          try { blocks = splitSpeech(context.content); } catch (error) { throw preparedFeatureError(error); }
+          let prepared = await store.syncPreparedCues({ eventId, scriptId, scriptRevision: context.scriptRevision, cues: blocks })
+            .catch(error => { throw preparedFeatureError(error); });
+          const cue = prepared.cues.find(candidate => candidate.status === 'pending');
+          if (!cue) { data = { ...prepared, done: true }; break; }
+          let translated;
+          try {
+            translated = await translateCue({ translator: preparedTranslator(env, fetchImpl), source: cue.sourceText,
+              prior: prepared.cues.filter(candidate => candidate.sequence < cue.sequence).map(candidate => candidate.sourceText),
+              glossary: context.glossary });
+          } catch (error) { throw preparedFeatureError(error); }
+          prepared = await store.storePreparedTranslation({ eventId, cueId: cue.id, revision: cue.revision,
+            translations: translated.translations }).catch(error => { throw preparedFeatureError(error); });
+          data = { ...prepared, done: !prepared.cues.some(candidate => candidate.status === 'pending') };
+          break;
+        }
+        case 'prepared-cue': {
+          const cue = input.cue || {};
+          data = await store.updatePreparedCue({ eventId: requiredUuid(input.eventId, 'eventId'),
+            cueId: requiredUuid(cue.id, 'cue.id'), revision: preparedRevision(cue.revision, 'cue.revision'),
+            translations: preparedTranslations(cue) }).catch(error => { throw preparedFeatureError(error); });
+          break;
+        }
+        case 'review-prepared-cue':
+          data = await store.reviewPreparedCue({ eventId: requiredUuid(input.eventId, 'eventId'),
+            cueId: requiredUuid(input.cueId, 'cueId'), revision: preparedRevision(input.revision) })
+            .catch(error => { throw preparedFeatureError(error); });
+          break;
+        case 'select-prepared-script':
+          data = await store.selectPreparedScript({ runId: requiredUuid(input.runId, 'runId'),
+            scriptId: requiredUuid(input.scriptId, 'scriptId') }).catch(error => { throw preparedFeatureError(error); });
+          break;
+        case 'prepared-run':
+          data = await store.getPreparedRun({ runId: requiredUuid(input.runId, 'runId') })
+            .catch(error => { throw preparedFeatureError(error); });
+          break;
+        case 'next-prepared': case 'publish-prepared-cue': case 'clear-prepared': {
+          const runId = requiredUuid(input.runId, 'runId'), operationId = requiredUuid(input.operationId, 'operationId');
+          const expectedScriptId = requiredUuid(input.expectedScriptId, 'expectedScriptId');
+          const expectedCursor = preparedCursor(input.expectedCursor);
+          const scriptRevision = preparedRevision(input.expectedScriptRevision, 'expectedScriptRevision');
+          const expectedStateRevision = preparedRevision(input.expectedStateRevision, 'expectedStateRevision');
+          const prepared = action === 'clear-prepared'
+            ? await store.clearPrepared({ runId, operationId, expectedScriptId, expectedCursor, scriptRevision, expectedStateRevision })
+              .catch(error => { throw preparedFeatureError(error); })
+            : await store.publishPreparedCue({ runId, operationId,
+              cueId: action === 'publish-prepared-cue' ? requiredUuid(input.cueId, 'cueId') : null,
+              expectedScriptId, expectedCursor, scriptRevision, expectedStateRevision })
+              .catch(error => { throw preparedFeatureError(error); });
+          const outboxIds = prepared.deliveryOutboxIds || [];
+          delete prepared.deliveryOutboxIds;
+          const replayed = prepared.replayed === true;
+          delete prepared.replayed;
+          const delivered = await dispatchHttpOutbox({ store, delivery, outboxIds, workerId: `${id}:http` });
+          if (replayed && delivered.errorCode === 'STALE_OUTBOX') {
+            Object.assign(delivered, { queued: 0, errorCode: null, replayed: true });
+          }
+          data = { ...prepared, delivery: delivered };
+          break;
+        }
         case 'health':
           data = await store.health();
           break;

@@ -35,10 +35,10 @@
   class CaptionStore {
     constructor(onGap) {
       this.onGap = onGap || function () {};
-      this.values = new Map(); this.eventId = ''; this.runId = '';
+      this.values = new Map(); this.clearedThrough = new Map(); this.eventId = ''; this.runId = '';
       this.modeGeneration = -1; this.channelEpoch = ''; this.retiredEpochs = new Set(); this.messageSeq = -1; this.status = '';
     }
-    reset() { this.values.clear(); this.runId = ''; this.modeGeneration = -1; this.channelEpoch = ''; this.retiredEpochs.clear(); this.messageSeq = -1; this.status = ''; }
+    reset() { this.values.clear(); this.clearedThrough.clear(); this.runId = ''; this.modeGeneration = -1; this.channelEpoch = ''; this.retiredEpochs.clear(); this.messageSeq = -1; this.status = ''; }
     merge(batch) {
       if (!batch || typeof batch !== 'object' || !Array.isArray(batch.updates)) return false;
       const generation = Number(batch.modeGeneration), epoch = batch.channelEpoch, seq = Number(batch.messageSeq);
@@ -62,6 +62,17 @@
           || typeof update.segmentId !== 'string' || !Number.isSafeInteger(update.segmentOrder)
           || !Number.isSafeInteger(update.sourceRevision) || !Number.isSafeInteger(update.captionRevision)
           || typeof update.text !== 'string') return false;
+      if (update.clear === true) {
+        if (update.origin !== 'system' || update.status !== 'corrected' || update.text !== '') return false;
+        const previous = this.clearedThrough.get(update.language) ?? -1;
+        if (update.segmentOrder <= previous) return false;
+        this.clearedThrough.set(update.language, update.segmentOrder);
+        // A delayed Clear must not erase a later Next. Its watermark also stops
+        // old snapshots and delayed broadcasts from bringing cleared text back.
+        for (const [key, value] of this.values) if (value.language === update.language && value.segmentOrder <= update.segmentOrder) this.values.delete(key);
+        return true;
+      }
+      if (update.segmentOrder <= (this.clearedThrough.get(update.language) ?? -1)) return false;
       const key = update.segmentId + ':' + update.language, current = this.values.get(key);
       if (current?.status === 'corrected' && current.origin === 'manual'
           && (update.status !== 'corrected' || update.origin !== 'manual')) return false;
@@ -75,6 +86,7 @@
       return [...this.values.values()].filter(value => value.language === language)
         .sort((a, b) => a.segmentOrder - b.segmentOrder);
     }
+    isCleared(language) { return this.clearedThrough.has(language) && this.segments(language).length === 0; }
   }
 
   function create(options) {

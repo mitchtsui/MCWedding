@@ -63,6 +63,21 @@
 
       <div class="operator-grid">
         <div class="control-stack">
+          <section class="paper live-only" id="live-event-panel" hidden aria-labelledby="event-title">
+            <p class="section-label" id="event-title">Prepared event</p>
+            <p class="subtitle">Prepare or open the event before audio starts, then load and select its saved speech scripts.</p>
+            <p class="event-current"><span>Current event</span><code id="current-event-id">None prepared</code></p>
+            <div class="event-open-row">
+              <label class="field-label" for="open-event-id">Open event ID</label>
+              <input id="open-event-id" autocomplete="off" spellcheck="false" placeholder="Paste an existing event ID">
+            </div>
+            <div class="control-row">
+              <button class="button button-primary" id="prepare-event" type="button" disabled>Prepare new event</button>
+              <button class="button button-quiet" id="open-event" type="button" disabled>Open event</button>
+            </div>
+            <p class="notice" id="event-status" aria-live="polite">No event is prepared yet.</p>
+          </section>
+
           <section class="paper" aria-labelledby="controls-title">
             <div>
               <p class="section-label" id="controls-title">Sample controls</p>
@@ -191,11 +206,55 @@
             <label class="field-label" for="glossary-ja">日本語</label><input id="glossary-ja" maxlength="1000">
             <label class="field-label" for="glossary-zh-cn">简体中文</label><input id="glossary-zh-cn" maxlength="1000">
             <button class="button button-quiet" id="save-glossary" type="button" disabled>Save glossary</button>
-            <label class="field-label" for="script-title">Script title</label><input id="script-title" maxlength="240" value="Wedding advance script">
-            <label class="field-label" for="script-sequence">Sequence</label><input id="script-sequence" type="number" min="0" value="0">
-            <label class="field-label" for="script-text">Advance script</label><textarea id="script-text" rows="8" maxlength="40000"></textarea>
-            <button class="button button-quiet" id="save-script" type="button" disabled>Save script</button>
+
+            <div class="script-section">
+              <h3>Saved speech scripts</h3>
+              <p class="subtitle">Tick one or more scripts, then use the explicit action below. Selection changes apply to subsequent finalized speech.</p>
+              <p class="script-selection-summary" id="script-selection-summary">Prepare an event to load scripts.</p>
+              <div class="script-list" id="script-list" aria-live="polite"></div>
+              <div class="control-row">
+                <button class="button button-primary" id="use-selected-scripts" type="button" disabled>Use selected scripts</button>
+                <button class="button button-quiet" id="use-no-script" type="button" disabled>No script</button>
+              </div>
+            </div>
+
+            <div class="script-editor" id="script-editor">
+              <h3 id="script-editor-title">Add a saved script</h3>
+              <p class="subtitle" id="script-editor-help">New scripts are saved inactive. Select and apply them separately when they are ready.</p>
+              <label class="field-label" for="script-title">Script title</label><input id="script-title" maxlength="240" value="Wedding advance script">
+              <label class="field-label" for="script-sequence">Sequence</label><input id="script-sequence" type="number" min="0" value="0">
+              <label class="field-label" for="script-text">Speech script</label><textarea id="script-text" rows="8" maxlength="12000"></textarea>
+              <div class="control-row">
+                <button class="button button-quiet" id="save-script" type="button" disabled>Save new script</button>
+                <button class="button button-quiet" id="cancel-script-edit" type="button" hidden>Cancel edit</button>
+              </div>
+            </div>
             <p class="notice" id="content-tools-status" aria-live="polite"></p>
+          </section>
+
+          <section class="paper live-only" id="prepared-captions" hidden aria-labelledby="prepared-captions-title">
+            <p class="section-label" id="prepared-captions-title">Prepared guest captions</p>
+            <p class="subtitle">Open a saved speech, prepare its translations, review every caption, then publish each one with Next. Guests keep their chosen language.</p>
+            <div id="prepared-empty" class="empty-state">Choose <strong>Open captions</strong> on a saved speech.</div>
+            <div id="prepared-workspace" hidden>
+              <h3 id="prepared-script-title">Saved speech</h3>
+              <p class="prepared-readiness" id="prepared-readiness">Not prepared</p>
+              <div class="control-row">
+                <button class="button button-quiet" id="prepare-translations" type="button" disabled>Prepare translations</button>
+                <button class="button button-primary" id="start-prepared" type="button" disabled>Start prepared captions</button>
+              </div>
+              <p class="subtitle">Preparing translations may use the configured translation provider. Generated captions are not ready until each block is marked Reviewed.</p>
+              <div class="prepared-live-controls">
+                <p id="prepared-live-position">Prepared captions are not running.</p>
+                <div class="control-row">
+                  <button class="button button-primary" id="next-prepared" type="button" disabled>Next caption</button>
+                  <button class="button button-quiet" id="clear-prepared" type="button" disabled>Clear guest captions</button>
+                  <button class="button button-quiet" id="end-prepared" type="button" disabled>End prepared captions</button>
+                </div>
+              </div>
+              <div class="prepared-cue-list" id="prepared-cue-list"></div>
+            </div>
+            <p class="notice" id="prepared-status" aria-live="polite"></p>
           </section>
         </div>
       </div>

@@ -12,6 +12,10 @@ const { CaptionGateway, GatewaySession } = require('../lib/captions/gateway.cjs'
 
 const migrationPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions.sql');
 const guestLinksPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-02_live_captions_guest_links.sql');
+const passwordOperatorPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-13_caption_password_operator.sql');
+const nonRetryingPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-14_caption_nonretrying_conflicts.sql');
+const savedScriptsPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-14_saved_speech_scripts.sql');
+const preparedSpeechPath = path.join(__dirname, '..', 'supabase', 'migrations', '2026-10-14_prepared_speech_cues.sql');
 
 async function database({ supabaseExtensions = false, supabaseDefaultPrivileges = false } = {}) {
   const db = new PGlite({ extensions: { pgcrypto } });
@@ -48,11 +52,17 @@ async function database({ supabaseExtensions = false, supabaseDefaultPrivileges 
   `);
   await db.exec(await fs.readFile(migrationPath, 'utf8'));
   await db.exec(await fs.readFile(guestLinksPath, 'utf8'));
+  await db.exec(await fs.readFile(passwordOperatorPath, 'utf8'));
+  await db.exec(await fs.readFile(nonRetryingPath, 'utf8'));
+  await db.exec(await fs.readFile(savedScriptsPath, 'utf8'));
+  await db.exec(await fs.readFile(preparedSpeechPath, 'utf8'));
   return db;
 }
 
 async function asService(db) {
-  await db.exec(`SELECT set_config('request.jwt.claim.role','service_role',false);`);
+  await db.exec(`SELECT set_config('request.jwt.claim.role','service_role',false);
+    SELECT set_config('request.jwt.claim.sub','',false);
+    SELECT set_config('request.jwt.claim.email','',false);`);
 }
 
 function storeResponse(status, payload) {
@@ -61,7 +71,7 @@ function storeResponse(status, payload) {
 }
 
 function makeStoreFetch(db) {
-  const jsonArguments = new Set(['p_source_segment','p_segment','p_captions','p_payloads','p_details_safe']);
+  const jsonArguments = new Set(['p_source_segment','p_segment','p_captions','p_payloads','p_details_safe','p_cues','p_translations']);
   const setFunctions = new Set(['caption_claim_outbox','caption_claim_approved_reviews']);
   return async (url, options = {}) => {
     const match = /^\/rest\/v1\/rpc\/([a-z_]+)$/.exec(new URL(url).pathname);
@@ -92,7 +102,267 @@ test('migration installs on a real local PostgreSQL engine and is idempotent', a
   t.after(() => db.close());
   await db.exec(await fs.readFile(migrationPath, 'utf8'));
   const tables = await db.query(`SELECT count(*)::int AS count FROM information_schema.tables WHERE table_schema='public' AND table_name LIKE 'caption_%'`);
-  assert.equal(tables.rows[0].count, 14);
+  assert.equal(tables.rows[0].count, 17);
+});
+
+test('combined speech migrations preserve non-retrying conflicts, service ticket ownership and least-privilege grants', async t => {
+  const db = await database({ supabaseDefaultPrivileges: true });
+  t.after(() => db.close());
+  await db.exec(await fs.readFile(savedScriptsPath, 'utf8'));
+  await db.exec(await fs.readFile(preparedSpeechPath, 'utf8'));
+
+  const retrying = await db.query(`SELECT p.proname
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND left(p.proname,8)='caption_'
+      AND p.prosrc ~* 'ERRCODE\\s*=\\s*''40001'''`);
+  assert.deepEqual(retrying.rows, []);
+
+  const privileges = (await db.query(`SELECT
+    has_function_privilege('anon','public.caption_list_scripts(uuid)','EXECUTE') AS anon_scripts,
+    has_function_privilege('authenticated','public.caption_list_scripts(uuid)','EXECUTE') AS authenticated_scripts,
+    has_function_privilege('service_role','public.caption_list_scripts(uuid)','EXECUTE') AS service_scripts,
+    has_function_privilege('anon','public.caption_publish_prepared_cue(uuid,uuid,uuid,uuid,integer,integer,integer)','EXECUTE') AS anon_manual,
+    has_function_privilege('authenticated','public.caption_publish_prepared_cue(uuid,uuid,uuid,uuid,integer,integer,integer)','EXECUTE') AS authenticated_manual,
+    has_function_privilege('service_role','public.caption_publish_prepared_cue(uuid,uuid,uuid,uuid,integer,integer,integer)','EXECUTE') AS service_manual,
+    has_function_privilege('anon','public.caption_issue_uplink_ticket(uuid,text)','EXECUTE') AS anon_ticket,
+    has_function_privilege('authenticated','public.caption_issue_uplink_ticket(uuid,text)','EXECUTE') AS authenticated_ticket,
+    has_function_privilege('service_role','public.caption_issue_uplink_ticket(uuid,text)','EXECUTE') AS service_ticket`)).rows[0];
+  assert.deepEqual(privileges, {
+    anon_scripts:false, authenticated_scripts:false, service_scripts:true,
+    anon_manual:false, authenticated_manual:false, service_manual:true,
+    anon_ticket:false, authenticated_ticket:true, service_ticket:true
+  });
+  const unexpectedFunctionGrants = await db.query(`SELECT p.proname,
+      has_function_privilege('anon',p.oid,'EXECUTE') anon,
+      has_function_privilege('authenticated',p.oid,'EXECUTE') authenticated,
+      has_function_privilege('service_role',p.oid,'EXECUTE') service
+    FROM pg_proc p JOIN pg_namespace n ON n.oid=p.pronamespace
+    WHERE n.nspname='public' AND p.proname=ANY($1::text[])
+      AND (has_function_privilege('anon',p.oid,'EXECUTE')
+        OR has_function_privilege('authenticated',p.oid,'EXECUTE') IS DISTINCT FROM
+          (p.proname IN ('caption_snapshot','caption_issue_uplink_ticket'))
+        OR NOT has_function_privilege('service_role',p.oid,'EXECUTE'))`, [[
+      'caption_utf16_length','caption_script_reference_length','caption_scripts_payload','caption_list_scripts',
+      'caption_selected_scripts','caption_upsert_script','caption_select_scripts','caption_runtime_context',
+      'caption_prepared_payload','caption_prepared_context','caption_sync_prepared_cues',
+      'caption_store_prepared_translation','caption_update_prepared_cue','caption_review_prepared_cue',
+      'caption_prepared_run_payload','caption_select_prepared_script','caption_get_prepared_run',
+      'caption_publish_prepared_cue','caption_clear_prepared','caption_issue_uplink_ticket','caption_snapshot'
+    ]]);
+  assert.deepEqual(unexpectedFunctionGrants.rows, []);
+
+  await db.exec(`SELECT set_config('request.jwt.claim.role','authenticated',false);
+    SELECT set_config('request.jwt.claim.sub','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',false);
+    SELECT set_config('request.jwt.claim.email','guest@example.com',false);
+    SET ROLE authenticated`);
+  await assert.rejects(db.query(`SELECT caption_list_scripts('00000000-0000-0000-0000-000000000000')`),
+    /permission denied/);
+  assert.equal((await db.query(`SELECT count(*)::int count FROM caption_prepared_cues`)).rows[0].count, 0);
+  await assert.rejects(db.query(`INSERT INTO caption_prepared_cues(script_id,script_revision,cue_order,source_text)
+    VALUES('00000000-0000-0000-0000-000000000000',1,0,'denied')`), /row-level security policy|foreign key/);
+  await db.exec(`RESET ROLE`);
+
+  await asService(db);
+  const event = (await db.query(`SELECT caption_create_event('Combined rollout','{}') AS value`)).rows[0].value;
+  const scripts = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`, [event.event_id,
+    JSON.stringify({ title:'Selected context',content:'Reference text',sequence:0 })])).rows[0].value;
+  const scriptId = scripts.scripts[0].id;
+  await db.query(`SELECT caption_select_scripts($1,$2::uuid[])`, [event.event_id,[scriptId]]);
+  const live = (await db.query(`SELECT caption_start_run($1,'live') AS value`, [event.event_id])).rows[0].value;
+  const ticket = (await db.query(`SELECT caption_issue_uplink_ticket($1,'https://wedding.test') AS value`, [live.run_id])).rows[0].value;
+  const ownership = (await db.query(`SELECT r.publisher_id::text,t.user_id::text
+    FROM caption_runs r JOIN caption_uplink_tickets t ON t.run_id=r.id
+    WHERE r.id=$1 AND t.fencing_token=$2`, [live.run_id,ticket.fencing_token])).rows[0];
+  assert.deepEqual(ownership, {
+    publisher_id:'00000000-0000-0000-0000-000000000000',
+    user_id:'00000000-0000-0000-0000-000000000000'
+  });
+  const context = (await db.query(`SELECT caption_runtime_context($1,$2,$3) AS value`, [
+    live.run_id,ticket.mode_generation,ticket.fencing_token])).rows[0].value;
+  assert.deepEqual(context.scripts.map(script => ({ id:script.id,text:script.text })), [
+    { id:scriptId,text:'Reference text' }
+  ]);
+
+  await db.query(`SELECT caption_transition_run($1,'stop')`, [live.run_id]);
+  const manual = (await db.query(`SELECT caption_start_run($1,'manual') AS value`, [event.event_id])).rows[0].value;
+  await assert.rejects(db.query(`SELECT caption_issue_uplink_ticket($1,'https://wedding.test')`, [manual.run_id]),
+    error => error.code === '22023' && /not accepting audio/.test(error.message));
+});
+
+test('saved script migration is idempotent and selection is event-scoped, atomic, revisioned and UTF-16 bounded', async t => {
+  const db = await database();
+  t.after(() => db.close());
+  await db.exec(await fs.readFile(savedScriptsPath, 'utf8'));
+  await db.exec(await fs.readFile(savedScriptsPath, 'utf8'));
+  await asService(db);
+  assert.equal((await db.query(`SELECT caption_utf16_length('A😀B') AS length`)).rows[0].length, 4);
+  const event = (await db.query(`SELECT caption_create_event('Scripts','{}') AS value`)).rows[0].value;
+  const other = (await db.query(`SELECT caption_create_event('Other scripts','{}') AS value`)).rows[0].value;
+  const first = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`, [event.event_id,
+    JSON.stringify({ title:'First',content:'Opening',sequence:2,active:true })])).rows[0].value;
+  assert.deepEqual(first.scripts.map(script => ({ title:script.title,active:script.active,revision:script.revision })),
+    [{ title:'First',active:false,revision:1 }]);
+  const firstId = first.scripts[0].id;
+  const second = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`, [event.event_id,
+    JSON.stringify({ title:'Second',content:'😀'.repeat(5980),sequence:1 })])).rows[0].value;
+  const secondId = second.scripts.find(script => script.title === 'Second').id;
+  const selected = (await db.query(`SELECT caption_select_scripts($1,$2::uuid[]) AS value`, [event.event_id,[firstId,secondId]])).rows[0].value;
+  assert.deepEqual(selected.scripts.filter(script => script.active).map(script => script.id).sort(),[firstId,secondId].sort());
+  const cues = (await db.query(`SELECT caption_selected_scripts($1) AS value`,[event.event_id])).rows[0].value;
+  assert.deepEqual(cues.map(cue => cue.sequence),[1,2]);
+
+  const edited = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`, [event.event_id,
+    JSON.stringify({ id:firstId,title:'First revised',content:'Opening revised',sequence:2,revision:1,active:false })])).rows[0].value;
+  const editedFirst = edited.scripts.find(script => script.id === firstId);
+  assert.deepEqual({ active:editedFirst.active,revision:editedFirst.revision,title:editedFirst.title },
+    { active:true,revision:2,title:'First revised' });
+  await assert.rejects(db.query(`SELECT caption_upsert_script($1,$2::jsonb)`,[event.event_id,
+    JSON.stringify({ id:firstId,title:'Stale',content:'stale',sequence:2,revision:1 })]), error => error.code === 'PT409');
+  assert.equal((await db.query(`SELECT title,revision FROM caption_scripts WHERE id=$1`,[firstId])).rows[0].title,'First revised');
+
+  const foreign = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`,[other.event_id,
+    JSON.stringify({ title:'Foreign',content:'Foreign script',sequence:0 })])).rows[0].value.scripts[0].id;
+  await assert.rejects(db.query(`SELECT caption_select_scripts($1,$2::uuid[])`,[event.event_id,[foreign]]), error => error.code === 'P0002');
+  assert.equal((await db.query(`SELECT count(*)::int count FROM caption_scripts WHERE event_id=$1 AND active`,[event.event_id])).rows[0].count,2);
+
+  const noScript = (await db.query(`SELECT caption_select_scripts($1,'{}'::uuid[]) AS value`,[event.event_id])).rows[0].value;
+  assert.equal(noScript.scripts.some(script => script.active),false);
+  const tooLong = (await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`,[event.event_id,
+    JSON.stringify({ title:'Boundary',content:'😀'.repeat(5999),sequence:0 })])).rows[0].value.scripts.find(script => script.title === 'Boundary').id;
+  await assert.rejects(db.query(`SELECT caption_select_scripts($1,$2::uuid[])`,[event.event_id,[tooLong]]), error => error.code === '22001');
+  assert.equal((await db.query(`SELECT count(*)::int count FROM caption_scripts WHERE event_id=$1 AND active`,[event.event_id])).rows[0].count,0);
+});
+
+test('prepared cues require current reviewed translations and publish or clear all locales atomically in manual mode', async t => {
+  const db = await database();
+  t.after(() => db.close());
+  await db.exec(await fs.readFile(preparedSpeechPath,'utf8'));
+  await db.exec(await fs.readFile(preparedSpeechPath,'utf8'));
+  await asService(db);
+  const event=(await db.query(`SELECT caption_create_event('Prepared','{}') AS value`)).rows[0].value;
+  const saved=(await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`,[event.event_id,
+    JSON.stringify({title:'Prepared speech',content:'First sentence. Second sentence.',sequence:0})])).rows[0].value.scripts[0];
+  let prepared=(await db.query(`SELECT caption_sync_prepared_cues($1,$2,1,$3::jsonb) AS value`,[
+    event.event_id,saved.id,JSON.stringify(['First sentence.','Second sentence.'])])).rows[0].value;
+  assert.equal(prepared.status,'preparing');
+  const [first,second]=prepared.cues;
+  await assert.rejects(db.query(`SELECT caption_store_prepared_translation($1,$2,1,$3::jsonb)`,[
+    event.event_id,first.id,JSON.stringify({en:'First',ja:'最初'})]),error=>error.code==='22023');
+  prepared=(await db.query(`SELECT caption_store_prepared_translation($1,$2,1,$3::jsonb) AS value`,[
+    event.event_id,first.id,JSON.stringify({en:'First',ja:'最初','zh-CN':'第一'})])).rows[0].value;
+  assert.equal(prepared.cues[0].status,'review_pending');
+  await assert.rejects(db.query(`SELECT caption_review_prepared_cue($1,$2,1)`,[event.event_id,first.id]),error=>error.code==='PT409');
+  prepared=(await db.query(`SELECT caption_review_prepared_cue($1,$2,2) AS value`,[event.event_id,first.id])).rows[0].value;
+  prepared=(await db.query(`SELECT caption_store_prepared_translation($1,$2,1,$3::jsonb) AS value`,[
+    event.event_id,second.id,JSON.stringify({en:'Second',ja:'次','zh-CN':'第二'})])).rows[0].value;
+  prepared=(await db.query(`SELECT caption_review_prepared_cue($1,$2,2) AS value`,[event.event_id,second.id])).rows[0].value;
+  assert.equal(prepared.status,'ready');
+  prepared=(await db.query(`SELECT caption_update_prepared_cue($1,$2,3,$3::jsonb) AS value`,[event.event_id,first.id,
+    JSON.stringify({en:'First edited',ja:'最初・編集','zh-CN':'第一（编辑）'})])).rows[0].value;
+  assert.equal(prepared.status,'review_pending');
+  assert.equal(prepared.cues[0].status,'review_pending','an edit always requires explicit review again');
+
+  const live=(await db.query(`SELECT caption_start_run($1,'live') AS value`,[event.event_id])).rows[0].value;
+  const oldTicket=(await db.query(`SELECT caption_issue_uplink_ticket($1,'https://wedding.test') AS value`,[live.run_id])).rows[0].value;
+  await assert.rejects(db.query(`SELECT caption_select_prepared_script($1,$2)`,[live.run_id,saved.id]),
+    /active manual run/);
+  await db.query(`SELECT caption_transition_run($1,'stop')`,[live.run_id]);
+  const manual=(await db.query(`SELECT caption_start_run($1,'manual') AS value`,[event.event_id])).rows[0].value;
+  await assert.rejects(db.query(`SELECT caption_issue_uplink_ticket($1,'https://wedding.test')`,[manual.run_id]),/not accepting audio/);
+  await assert.rejects(db.query(`SELECT caption_start_run($1,'live')`,[event.event_id]),/already has an open run/);
+  await assert.rejects(db.query(`SELECT caption_consume_uplink_ticket($1,'https://wedding.test')`,[oldTicket.token]),/publisher lease unavailable/);
+  await assert.rejects(db.query(`SELECT caption_select_prepared_script($1,$2)`,[manual.run_id,saved.id]),/reviewed and ready/);
+  prepared=(await db.query(`SELECT caption_review_prepared_cue($1,$2,4) AS value`,[event.event_id,first.id])).rows[0].value;
+  assert.equal(prepared.status,'ready');
+  let state=(await db.query(`SELECT caption_select_prepared_script($1,$2) AS value`,[manual.run_id,saved.id])).rows[0].value;
+  assert.deepEqual({mode:state.mode,cursor:state.cursor,total:Number(state.total)},{mode:'manual',cursor:-1,total:2});
+  const selectedAgain=(await db.query(`SELECT caption_select_prepared_script($1,$2) AS value`,[manual.run_id,saved.id])).rows[0].value;
+  assert.equal(selectedAgain.cursor,-1);
+
+  const alternate=(await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`,[event.event_id,
+    JSON.stringify({title:'Alternate speech',content:'Alternate sentence.',sequence:1})])).rows[0].value.scripts
+    .find(script=>script.title==='Alternate speech');
+  let alternatePrepared=(await db.query(`SELECT caption_sync_prepared_cues($1,$2,1,$3::jsonb) AS value`,[
+    event.event_id,alternate.id,JSON.stringify(['Alternate sentence.'])])).rows[0].value;
+  alternatePrepared=(await db.query(`SELECT caption_store_prepared_translation($1,$2,1,$3::jsonb) AS value`,[
+    event.event_id,alternatePrepared.cues[0].id,JSON.stringify({en:'Alternate',ja:'代替','zh-CN':'替代'})])).rows[0].value;
+  await db.query(`SELECT caption_review_prepared_cue($1,$2,2)`,[event.event_id,alternatePrepared.cues[0].id]);
+  const selectedAlternate=(await db.query(`SELECT caption_select_prepared_script($1,$2) AS value`,[manual.run_id,alternate.id])).rows[0].value;
+  assert.equal(selectedAlternate.stateRevision,2);
+  await assert.rejects(db.query(`SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6)`,[
+    manual.run_id,'10101010-1010-4010-8010-101010101010',saved.id,-1,1,1]),error=>error.code==='PT409');
+  state=(await db.query(`SELECT caption_select_prepared_script($1,$2) AS value`,[manual.run_id,saved.id])).rows[0].value;
+  assert.deepEqual({cursor:state.cursor,stateRevision:state.stateRevision},{cursor:-1,stateRevision:3});
+
+  const op1='11111111-1111-4111-8111-111111111111';
+  const competing='14141414-1414-4414-8414-141414141414';
+  const simultaneous=await Promise.allSettled([op1,competing].map(operationId=>db.query(
+    `SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6) AS value`,[manual.run_id,operationId,saved.id,-1,1,3])));
+  assert.deepEqual(simultaneous.map(result=>result.status).sort(),['fulfilled','rejected']);
+  assert.equal(simultaneous.find(result=>result.status==='rejected').reason.code,'PT409');
+  const winningOperation=simultaneous.findIndex(result=>result.status==='fulfilled')===0?op1:competing;
+  const shownFirst=simultaneous.find(result=>result.status==='fulfilled').value.rows[0].value;
+  assert.equal(shownFirst.cursor,0); assert.equal(shownFirst.delivery_outbox_ids.length,3);
+  const op2='12121212-1212-4212-8212-121212121212';
+  const shown=(await db.query(`SELECT caption_publish_prepared_cue($1,$2,$3,$4,$5,$6,$7) AS value`,[
+    manual.run_id,op2,second.id,saved.id,0,1,4])).rows[0].value;
+  assert.equal(shown.cursor,1); assert.equal(shown.delivery_outbox_ids.length,3);
+  const delayedFirst=(await db.query(`SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6) AS value`,[
+    manual.run_id,winningOperation,saved.id,-1,1,3])).rows[0].value;
+  assert.equal(delayedFirst.replayed,true);
+  assert.equal(delayedFirst.operationSegmentId,shownFirst.currentSegmentId);
+  assert.equal(delayedFirst.currentSegmentId,shown.currentSegmentId,'replay returns fresh run state');
+  assert.equal((await db.query(`SELECT count(*)::int count FROM caption_source_segments WHERE run_id=$1`,[manual.run_id])).rows[0].count,2);
+  assert.equal((await db.query(`SELECT caption_get_prepared_run($1) AS value`,[manual.run_id])).rows[0].value.cursor,1,
+    'a delayed retry must not rewind or advance durable run state');
+  await assert.rejects(db.query(`SELECT caption_publish_prepared_cue($1,$2,$3,$4,$5,$6,$7)`,[
+    manual.run_id,winningOperation,second.id,saved.id,-1,1,3]),
+    /operation id was already used for different input/);
+  await assert.rejects(db.query(`SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6)`,[
+    manual.run_id,'13131313-1313-4313-8313-131313131313',saved.id,0,1,4]),error=>error.code==='PT409');
+  const published=await db.query(`SELECT language,text,segment_id FROM caption_captions WHERE run_id=$1 ORDER BY language`,[manual.run_id]);
+  assert.equal(new Set(published.rows.map(row=>row.segment_id)).size,2);
+  assert.deepEqual(published.rows.map(row=>row.language).sort(),['en','en','ja','ja','zh-CN','zh-CN']);
+
+  state=(await db.query(`SELECT caption_select_prepared_script($1,$2) AS value`,[manual.run_id,saved.id])).rows[0].value;
+  assert.equal(state.cursor,1,'re-selecting the same revision must not replay from the beginning');
+  const clearOp='22222222-2222-4222-8222-222222222222';
+  const cleared=(await db.query(`SELECT caption_clear_prepared($1,$2,$3,$4,$5,$6) AS value`,[
+    manual.run_id,clearOp,saved.id,1,1,5])).rows[0].value;
+  assert.equal(cleared.cleared,true); assert.equal(cleared.delivery_outbox_ids.length,3);
+  assert.notEqual(cleared.currentSegmentId,shown.currentSegmentId,'clear is a distinct ordered source marker');
+  const clearPayloads=await db.query(`SELECT payload FROM caption_outbox_events WHERE id=ANY($1::uuid[])`,[cleared.delivery_outbox_ids]);
+  assert.equal(clearPayloads.rows.length,3);
+  assert(clearPayloads.rows.every(row=>row.payload.updates[0].clear===true && row.payload.updates[0].origin==='system'));
+  const replayedClear=(await db.query(`SELECT caption_clear_prepared($1,$2,$3,$4,$5,$6) AS value`,[
+    manual.run_id,clearOp,saved.id,1,1,5])).rows[0].value;
+  assert.equal(replayedClear.replayed,true);
+  await assert.rejects(db.query(`SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6)`,[
+    manual.run_id,clearOp,saved.id,1,1,5]),
+    /operation id was already used for different input/);
+  const snapshot=(await db.query(`SELECT caption_snapshot($1,$2,'en') AS value`,[event.event_id,manual.run_id])).rows[0].value;
+  assert.equal(snapshot.status,'live');
+  assert.equal(snapshot.updates.at(-1).clear,true);
+
+  const jumpBack=(await db.query(`SELECT caption_publish_prepared_cue($1,$2,$3,$4,$5,$6,$7) AS value`,[
+    manual.run_id,'33333333-3333-4333-8333-333333333333',first.id,saved.id,1,1,6])).rows[0].value;
+  assert.equal(jumpBack.cursor,0); assert.equal(jumpBack.currentCueId,first.id);
+  const delayedClear=(await db.query(`SELECT caption_clear_prepared($1,$2,$3,$4,$5,$6) AS value`,[
+    manual.run_id,clearOp,saved.id,1,1,5])).rows[0].value;
+  assert.equal(delayedClear.replayed,true); assert.equal(delayedClear.cleared,false);
+  assert.equal(delayedClear.currentSegmentId,jumpBack.currentSegmentId,'a delayed Clear response reports the newer shown cue');
+  assert.equal((await db.query(`SELECT count(*)::int count FROM caption_source_segments WHERE run_id=$1`,[manual.run_id])).rows[0].count,4);
+  const restored=(await db.query(`SELECT caption_get_prepared_run($1) AS value`,[manual.run_id])).rows[0].value;
+  assert.deepEqual({cursor:restored.cursor,scriptId:restored.scriptId,mode:restored.mode},{cursor:0,scriptId:saved.id,mode:'manual'});
+
+  await db.query(`SELECT caption_transition_run($1,'stop')`,[manual.run_id]);
+  await assert.rejects(db.query(`SELECT caption_publish_prepared_cue($1,$2,NULL,$3,$4,$5,$6)`,[
+    manual.run_id,'44444444-4444-4444-8444-444444444444',saved.id,0,1,7]),/active manual run/);
+  const edited=(await db.query(`SELECT caption_upsert_script($1,$2::jsonb) AS value`,[event.event_id,
+    JSON.stringify({id:saved.id,title:'Edited',content:'Changed.',sequence:0,revision:1})])).rows[0].value;
+  assert.equal(edited.scripts[0].revision,2);
+  const nextManual=(await db.query(`SELECT caption_start_run($1,'manual') AS value`,[event.event_id])).rows[0].value;
+  await assert.rejects(db.query(`SELECT caption_select_prepared_script($1,$2)`,[nextManual.run_id,saved.id]),/reviewed and ready/);
 });
 
 test('tickets and invites work with pgcrypto in the extensions schema, as Supabase installs it', async t => {
