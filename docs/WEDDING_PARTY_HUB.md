@@ -165,4 +165,17 @@ reported command result, not error cessation. The permanent migration is
 supabase/migrations/2026-10-14_caption_nonretrying_conflicts.sql; 11 combined local
 checks passed. Independent read-only review compared 37 functions and found only the
 three intended error-code changes, preserving ownership, grants and security settings.
-Live migration application and fresh-log confirmation remain pending.
+The couple subsequently reported successful migration application and no recurrence of
+the error stream. See the production verification below.
+
+### Production verification after correction - 14 October 2026
+
+Source efc98fd was deployed to production (dpl_GYeLqbfTC1DVq7x2kJN883LSkENi).
+A single live claim against an already stopped run promptly returned HTTP 409 / PT409;
+no run or audio was started. This deliberately rejected check may leave one expected
+PT409 log entry. A separate read confirmed zero open caption runs. The combined
+store and real-Postgres-compatible PGlite regressions passed 11/11. Production caption
+config and stream endpoints remain disabled; hub authentication, 22 VIP portraits,
+seven rows, seating field limits and logout checks passed after deployment. This
+verifies conflict handling, not sustained audio/translation quality. Captions remain
+disabled pending an explicitly scheduled operational test.
