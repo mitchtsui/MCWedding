@@ -140,3 +140,29 @@ was redeployed to block new caption connections while retaining the hub. Histori
 deployment URLs retain their own environment snapshots; this does not revoke those
 deployments. The reported stale-publisher error stream still needs diagnosis; stopping
 open runs does not establish the source of the full error count or prove it has ceased.
+
+## PostgREST retry incident - 14 October 2026
+
+Fresh logs after shutdown showed caption_claim_outbox rejected by caption_assert_fence
+with custom SQLSTATE 40001. API logs in the same period showed no new claim request,
+only successful shutdown and unrelated invitation reads. The caption SQL incorrectly
+used PostgreSQL serialization_failure (40001) for application-level stale-session
+conditions. Supabase documents internal unbounded PostgREST retries for this pattern:
+https://supabase.com/docs/guides/troubleshooting/high-cpu-and-infinite-transaction-retries-when-using-custom-error-codes-in-rpc-functions-77326b
+
+The correction uses PT409 for these caption conflicts, retaining HTTP conflict handling
+and all existing fence checks. Existing looping backends require separate targeted
+termination; applying a function replacement alone does not stop in-flight transactions.
+The user was given a conditional pg_terminate_backend query matching the specific logged
+PID, authenticator role, client backend type and caption_claim_outbox query. Execution
+and cessation of errors are not yet confirmed. Do not re-enable captions until the SQL
+correction and fresh-log verification are complete. A plan upgrade is not the remedy
+for this application error-code defect.
+
+The couple clarified that the conditional termination returned no rows in their Dash
+database, and returned true for PID 374041 in the wedding database. This confirms the
+reported command result, not error cessation. The permanent migration is
+supabase/migrations/2026-10-14_caption_nonretrying_conflicts.sql; 11 combined local
+checks passed. Independent read-only review compared 37 functions and found only the
+three intended error-code changes, preserving ownership, grants and security settings.
+Live migration application and fresh-log confirmation remain pending.

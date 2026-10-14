@@ -68,6 +68,22 @@ test('Postgres conflicts become sanitized 409 store errors', async () => {
   });
 });
 
+test('non-retrying caption conflicts retain HTTP 409 without a client retry', async () => {
+  let calls = 0;
+  const store = new CaptionStore({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'server-secret', fetchImpl: async () => {
+    calls += 1;
+    return response(409, { code: 'PT409', message: 'private database detail' });
+  }});
+  await assert.rejects(store.claimOutbox({ runId: 'run-1', workerId: 'worker', modeGeneration: 1, fencingToken: 1 }), error => {
+    assert.equal(error.code, 'CONFLICT');
+    assert.equal(error.status, 409);
+    assert.equal(error.details, 'PT409');
+    assert.doesNotMatch(error.message, /private/);
+    return true;
+  });
+  assert.equal(calls, 1);
+});
+
 test('getEventCurrentRun reads one event row with the service role and only ever sends a UUID', async () => {
   const calls = [], eventId = '11111111-1111-4111-8111-111111111111'; let rows = [{ current_run_id: 'run-1' }];
   const store = new CaptionStore({ supabaseUrl: 'https://test.supabase.co', serviceRoleKey: 'server-secret', fetchImpl: async (url, options) => {
