@@ -7,8 +7,10 @@ incident. The database now uses nonretrying PT409 caption conflicts and the prod
 application preserves HTTP 409 handling. The hub remains available. See
 `CODEX_HANDOVER.md` for the consolidated release state and `WEDDING_PARTY_HUB.md` for
 incident evidence. The script-library/manual-subtitle integration described below is
-validated locally; see `CAPTIONS_TEST_REPORT.md`. Hosted SQL application and deployment
-remain pending. Do not treat this document as approval to activate captions.
+validated locally and deployed as `e1ab495` after the user applied both corrected SQL
+migrations; hosted table/RPC availability checks passed. See `CAPTIONS_TEST_REPORT.md`.
+Captions remain disabled, including operator preparation/playback, until the controlled
+test window. Do not treat this document as approval to activate captions.
 
 Production release authorized on 13 October 2026: the user requested merging to
 main and making the caption service, including PC playback audio, live on Vercel.

@@ -1,6 +1,6 @@
 # MCWedding consolidated captions and hub handover
 
-## Current state v2 as of 14 October 2026
+## Current state v3 as of 14 October 2026
 
 This section supersedes the historical handovers below for current status. It reconciles
 the saved-script caption work with the wedding-party hub and incident repairs.
@@ -13,8 +13,9 @@ repository. Continue coordination from the hub session, preserving the other che
 - The [wedding-party hub](https://mc-wedding-ten.vercel.app/wedding-party.html) is live:
   Wedding Day, VIP portraits, read-only seating and the caption tab. Hub entry and caption
   operation use separate server-side passwords. Do not record their values in Git.
-- Latest verified production source: `a3cb634`, deployment
-  `dpl_4TzH4LRVdqsP3rJHokAHEZB1j1n2`, READY. The PC playback input is included.
+- Latest verified production source: `e1ab495`, deployment
+  `dpl_9nr9jvndicJSAbMbdVqqKnrQKN8J`, READY. Saved speeches and manual captions are
+  included alongside PC playback input. Main was fast-forwarded and pushed.
 - Live captions are deliberately disabled. Production config and stream rejection were
   verified; the last database read found zero open runs. Do not interpret a live hub as
   a currently enabled caption service.
@@ -26,13 +27,16 @@ repository. Continue coordination from the hub session, preserving the other che
   workspace containing ignored `hub-private/vip-data.json` and `photos/vip/` attachments.
   Keep those files out of Git and static output; preserve the missing-asset build guard.
 
-### Integrated, undeployed script and manual subtitle work
+### Deployed script and manual subtitle work
 
 The feature is now integrated into `codex/integrate-prepared-captions` in MCWedding,
 including hub-cookie authorization, PT409 conflicts and consistent service-role ticket
 ownership. The original checkout below remains preserved. Integration validation is
-recorded in `CAPTIONS_TEST_REPORT.md`; this feature has not been applied to the hosted
-database or deployed. Captions remain disabled.
+recorded in `CAPTIONS_TEST_REPORT.md`. The user confirmed both corrected migrations were
+applied. Hosted read-only checks confirmed the new tables/columns and both feature RPCs
+in the wedding project, with zero open runs. The production caption assets match the
+tested source. Captions remain disabled, so operator login/preparation/playback are
+intentionally unavailable until the controlled test window.
 
 The separate checkout is
 `C:/Users/mitch/Documents/Projects/git/wedding-live-captions/.cache/captions-production`,
@@ -69,7 +73,10 @@ Apply only these integrated files, in order, to the wedding Supabase project
 
 These preserve PT409 and the password operator's consistent ticket ownership. Local
 PGlite tests exercised the full migration chain, repeated application, grants, RLS,
-manual/live exclusivity and stale conflicts. Hosted application remains pending.
+manual/live exclusivity and stale conflicts. Hosted schema/RPC availability was checked
+after the user's application; full hosted SQL source inspection is unavailable with
+the service-role API credential. Missing-record probes returned expected P0002 errors
+(PostgREST HTTP 500), without creating data or audio sessions.
 
 Do **not** apply the old checkout's raw migrations:
 
@@ -96,9 +103,11 @@ and logout behavior. Preserve the direct guest QR flow and public-key verificati
 1. Integration checks and read-only review are complete on
    `codex/integrate-prepared-captions`; the original source checkout is preserved.
    See `CAPTIONS_TEST_REPORT.md` for validation evidence and local-test limits.
-2. The user applies the two corrected 14 October SQL files to the wedding project only.
-3. Verify their application, then merge and deploy through CLI with private assets.
-   Do not reuse the other session's earlier raw-SQL instructions. Keep captions disabled.
+2. Completed: the user applied both corrected migrations; hosted availability checks
+   passed. Do not reuse the other session's earlier raw-SQL instructions.
+3. Completed: main was merged and deployed through CLI with private assets. Hosted
+   hub gates, portraits, seating projection, guest viewer and logout passed. Keep
+   captions disabled until a controlled test window.
 4. Arrange a controlled caption enablement/test window. Verify Mac microphone/PC input,
    guest viewing, pause/end/stop, stream handoff, script selection, manual Show/Next/Clear,
    and no stale runs or recurring errors. Keep captions off until that window.

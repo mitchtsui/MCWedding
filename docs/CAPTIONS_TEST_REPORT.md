@@ -1,5 +1,39 @@
 # Combined hub and prepared captions validation — 14 October 2026
 
+## Production release and final checks
+
+The user confirmed application of both corrected migrations. Read-only checks on wedding
+project `szqydwvsjmaobkckrerl` confirmed saved-script columns, all three prepared tables,
+and the saved-script/prepared-context RPCs. Missing-record probes deliberately used a
+zero UUID and returned P0002 (HTTP 500); no data was created. Zero open runs were found.
+This checks hosted availability, not a privileged inspection of every function body.
+
+Source `e1ab495` was fast-forwarded to main, pushed and deployed through Vercel CLI:
+`dpl_9nr9jvndicJSAbMbdVqqKnrQKN8J`, READY, aliased to
+`https://mc-wedding-ten.vercel.app`. Captions were explicitly kept disabled.
+
+Final release verification:
+
+- All **265/265** tests passed on the final source, no failures/skips:
+  `node --test --test-isolation=none tests/*.test.cjs tests/*.test.mjs`.
+- Caption and hub Chromium suites passed at 344/390/744/1280 px. Read-only seating
+  browser smoke passed. Synthetic PC audio passed through the real AudioContext/worklet
+  with 24 kHz PCM frames, no pre-start frames or microphone fallback, and track cleanup.
+- Hosted hub gates, login/logout, all 22 portraits/seven rows, seating field limits and
+  direct guest viewer passed. Five deployed caption HTML/JS/CSS assets matched the
+  tested local content. Unauthenticated private assets remained inaccessible.
+- Hosted config/stream and operator/start/prepare/Next requests were blocked by the
+  disabled switch before work. No audio run or translation-provider call was made.
+
+The production build passed. The final caption browser artifacts are in the local
+temporary folder `captions-live-2D34Oe`. Real Mac microphone/native share picker,
+YouTube/WhatsApp playback, hotel mixer/interface, linguistic quality and sustained live
+provider operation still require a controlled test. Hosted operator login and manual
+playback were not exercised while captions were disabled; those paths passed locally
+with mocked providers. The earlier integration-only record below is historical.
+
+## Integration validation before publication
+
 Integration branch: `codex/integrate-prepared-captions`. The implementation includes
 saved speeches, reviewed three-language prepared captions and manual Show / Next / Clear,
 while retaining hub/operator cookies, direct guest links and PT409 conflict handling.
