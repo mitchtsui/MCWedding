@@ -6,6 +6,9 @@
 
 ## What's in this repo
 
+Current captions/hub status and cross-session integration plan:
+[consolidated handover](docs/CODEX_HANDOVER.md#current-state-v1-as-of-14-october-2026).
+
 | File | Description |
 |------|-------------|
 | `wedding-invitation.html` | Main guest site — one HTML entry (~1 MB). Photos live under `photos/` and the Supabase credentials come from `/api/config.js`; English in the DOM, 繁體中文 + 日本語 via the built-in i18n block |

@@ -1,4 +1,104 @@
-# MCWedding live captions — Claude → Codex handover
+# MCWedding consolidated captions and hub handover
+
+## Current state v1 as of 14 October 2026
+
+This section supersedes the historical handovers below for current status. It reconciles
+the saved-script caption work with the wedding-party hub and incident repairs.
+The sessions exchanged read-only handovers on 14 October; both source checkouts were
+inspected. MCWedding is the canonical integration
+repository. Continue coordination from the hub session, preserving the other checkout.
+
+### Production and operating state
+
+- The [wedding-party hub](https://mc-wedding-ten.vercel.app/wedding-party.html) is live:
+  Wedding Day, VIP portraits, read-only seating and the caption tab. Hub entry and caption
+  operation use separate server-side passwords. Do not record their values in Git.
+- Latest verified production source: `a3cb634`, deployment
+  `dpl_4TzH4LRVdqsP3rJHokAHEZB1j1n2`, READY. The PC playback input is included.
+- Live captions are deliberately disabled. Production config and stream rejection were
+  verified; the last database read found zero open runs. Do not interpret a live hub as
+  a currently enabled caption service.
+- The user applied the nonretrying-conflict migration and reported no further error
+  stream after terminating the identified backend. One controlled stopped-run claim
+  promptly returned HTTP 409 / PT409. Eleven local regression checks passed; the patch
+  received separate read-only review. Details are in `WEDDING_PARTY_HUB.md`.
+- Automatic Git deployments are disabled. Release via Vercel CLI from the authorized
+  workspace containing ignored `hub-private/vip-data.json` and `photos/vip/` attachments.
+  Keep those files out of Git and static output; preserve the missing-asset build guard.
+
+### Undeployed script and manual subtitle work
+
+The separate checkout is
+`C:/Users/mitch/Documents/Projects/git/wedding-live-captions/.cache/captions-production`,
+branch `codex/captions-production-20261013`, base commit
+`c69550cba53f50618d941804e3a344f7d8e01d37`. Its feature is **uncommitted**: 19 modified
+and seven untracked files at reconciliation. There is no feature commit to cherry-pick.
+Do not overwrite current MCWedding files with this older checkout or remove the checkout.
+
+That work implements pre-audio event preparation, separate saved speeches with edit and
+selection, no-script mode, prepared translations in English/Japanese/Simplified Chinese,
+explicit review, and manual Show / Next / Clear. Manual playback uses a separate run
+from automatic audio captions, with durable operation IDs and stale-action guards.
+No actual wedding speeches or reviewed translations have been supplied.
+
+Main integration paths are `api/captions.js`, `live-captions-admin.html/js`,
+`live-captions-client.js`, `live-captions-guest.js`, `live-captions.css`, and
+`lib/captions/{prepared-speech,store,http,gateway,delivery,protocol}.cjs`, with their
+caption tests. The source checkout's `docs/SPEECH_SCRIPTS.md` and
+`docs/SPEECH_SCRIPTS_TEST_REPORT.md` describe the workflow and prior validation.
+
+Its historical evidence is a passing build, 224 full caption tests, 48 focused lifecycle
+checks after UI fixes, and mocked Chrome checks at 344/390/744/1280 px. The other session
+confirmed these records, but these tests were not rerun against a combined implementation.
+They do not establish hosted database retry safety or real speech/venue performance.
+
+### Migration conflicts that must be resolved before application
+
+Do **not** apply the old checkout's raw migrations:
+
+1. `2026-10-13_saved_speech_scripts.sql`
+2. `2026-10-13_prepared_speech_cues.sql`
+
+Inspection found one and nine custom SQLSTATE `40001` raises respectively. These would
+reintroduce the PostgREST retry defect. All application-level conflicts must follow the
+current nonretrying PT409 convention, with matching tests and API mapping.
+
+The prepared-cue migration also replaces `caption_issue_uplink_ticket`, restoring
+`publisher_id=auth.uid()` while its ticket user falls back to a zero UUID. That would
+undo `2026-10-13_caption_password_operator.sql`. Merge the manual-mode restriction with
+the current consistent operator identity instead. The migrations also replace
+`caption_upsert_script`, `caption_runtime_context` and `caption_snapshot`; compare their
+live/current definitions before preparing the final migration sequence.
+
+The feature API predates hub cookie authentication and assumes Bearer authorization.
+Integrate all new operator actions with existing hub/operator checks, session recovery
+and logout behavior. Preserve the direct guest QR flow and public-key verification.
+
+### Consolidated next sequence
+
+1. Integrate the saved-script/manual feature diff into a separate branch based on current
+   MCWedding; retain all hub, privacy, shutdown and PT409 changes. Preserve the original
+   uncommitted source until the integrated version is committed and verified.
+2. Prepare revised migrations and verify the whole sequence in PostgreSQL-compatible
+   tests, including repeated application, permissions, stale conflicts and password
+   operator ticket ownership. Run combined backend and four-width browser checks; get
+   a fresh read-only review of the combined result.
+3. Supply the reviewed SQL for the wedding project only, verify its application, then
+   deploy through CLI. Do not reuse the other session's earlier raw-SQL instructions.
+4. Arrange a controlled caption enablement/test window. Verify Mac microphone/PC input,
+   guest viewing, pause/end/stop, stream handoff, script selection, manual Show/Next/Clear,
+   and no stale runs or recurring errors. Keep captions off until that window.
+5. Enter the actual speeches and explicitly prepare/review translations. The earlier
+   70–80% Cantonese recognition estimate was user feedback, not a measured guarantee.
+
+The user will use a MacBook Pro and has not bought an interface. The hotel confirmed a
+line-level mixer feed containing all three wireless handhelds and two XLR M/F cables.
+The proposed interface is a Scarlett 2i2 4th Gen via its TRS line input and an appropriate
+XLR-female-to-TRS-male cable; purchase is not confirmed. No advance venue rehearsal is
+available: test locally beforehand and arrange the hotel signal check on the day.
+High-resolution VIP portrait replacements are also pending.
+
+## Historical handovers
 
 Written 2026-10-03 by Claude Code on the main Windows PC. Codex holds the branch from here;
 Claude has stopped and holds nothing.
