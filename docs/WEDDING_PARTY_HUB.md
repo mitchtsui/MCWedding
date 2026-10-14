@@ -130,3 +130,13 @@ The hub and public login page carry matching Open Graph and Twitter metadata. Th
 wedding party and couple. Unauthenticated share crawlers follow the existing login redirect;
 no crawler bypass grants access to private hub data. Actual WhatsApp rendering/cache refresh
 must be confirmed in WhatsApp; fetching the deployed metadata only verifies its availability.
+
+## Caption shutdown - 14 October 2026
+
+At the couple's request, five open caption runs were stopped through the existing
+caption_transition_run RPC; a second read returned zero open runs. CAPTIONS_ENABLED
+was set to false in production, preview defaults and local configuration. Production
+was redeployed to block new caption connections while retaining the hub. Historical
+deployment URLs retain their own environment snapshots; this does not revoke those
+deployments. The reported stale-publisher error stream still needs diagnosis; stopping
+open runs does not establish the source of the full error count or prove it has ceased.
