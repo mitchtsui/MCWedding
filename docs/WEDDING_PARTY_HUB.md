@@ -179,3 +179,13 @@ config and stream endpoints remain disabled; hub authentication, 22 VIP portrait
 seven rows, seating field limits and logout checks passed after deployment. This
 verifies conflict handling, not sustained audio/translation quality. Captions remain
 disabled pending an explicitly scheduled operational test.
+
+### Deployment routing correction - 14 October 2026
+
+Automatic Git builds failed as designed because the public repository excludes the
+private family attachments. The CLI production releases include those attachments and
+remain the supported release path. Set git.deploymentEnabled=false in vercel.json to
+stop automatic Git deployments on all branches; Git remains the source version-control
+channel. Continue releasing through Vercel CLI from the authorized workspace. Keep the
+private-asset build guard and Git exclusions. This follows Vercel Git configuration:
+https://vercel.com/docs/project-configuration/git-configuration
